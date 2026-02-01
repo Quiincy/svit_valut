@@ -12,7 +12,7 @@ const getApiUrl = () => {
   return '/api';
 };
 
-const API_BASE_URL = getApiUrl();
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -469,5 +469,9 @@ export const servicesService = {
   update: (id, data) => api.put(`/admin/services/${id}`, data),
   delete: (id) => api.delete(`/admin/services/${id}`),
 };
+export async function getCurrencies() {
+  const res = await fetch(`${API_BASE}/api/currencies`);
+  return res.json();
+}
 
 export default api;
