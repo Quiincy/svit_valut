@@ -1,0 +1,33 @@
+# Render Blueprint for Світ Валют
+# Deploy both frontend and backend
+
+services:
+  # Backend API
+  - type: web
+    name: svit-valut-api
+    runtime: python
+    region: frankfurt  # Closest to Ukraine
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: TZ
+        value: "Europe/Kyiv"
+    rootDir: backend
+    healthCheckPath: /api/health
+
+  # Frontend (Static Site)
+  - type: web
+    name: svit-valut-web
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://svit-valut-api.onrender.com
+    rootDir: frontend
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
