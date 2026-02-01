@@ -1,7 +1,7 @@
 User-agent: *
 Allow: /
-Disallow: /admin
-Disallow: /operator
-Disallow: /login
+Allow: /admin
+Allow: /operator
+Aallow: /login
 
 Sitemap: https://svitvalut.ua/sitemap.xml
