@@ -366,7 +366,6 @@ export const operatorService = {
       }
       return { data: { items: reservations, total: reservations.length, page: 1, pages: 1 } };
     }
-    }
   },
   downloadRates: async () => {
     // Generate Excel client-side - no server call needed
