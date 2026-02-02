@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Upload, Download, LogOut, RefreshCw, CheckCircle, 
   XCircle, Clock, DollarSign, TrendingUp, FileSpreadsheet,
   AlertCircle, ChevronDown, Search, Building2, ArrowRightLeft,
-  MapPin
+  MapPin, Bell
 } from 'lucide-react';
 import { adminService, currencyService } from '../services/api';
 import SettingsPage from './SettingsPage';
@@ -50,14 +50,11 @@ export default function AdminDashboard({ user, onLogout }) {
   const [uploadResult, setUploadResult] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
+  const [newReservationAlert, setNewReservationAlert] = useState(false);
+  const [lastReservationCount, setLastReservationCount] = useState(0);
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = useCallback(async () => {
     try {
       const [dashboardRes, currenciesRes, reservationsRes] = await Promise.all([
         adminService.getDashboard(),
@@ -66,7 +63,15 @@ export default function AdminDashboard({ user, onLogout }) {
       ]);
       setDashboard(dashboardRes.data);
       setCurrencies(currenciesRes.data);
-      setReservations(reservationsRes.data.items || []);
+      const items = reservationsRes.data.items || [];
+      
+      // Check for new reservations
+      if (items.length > lastReservationCount && lastReservationCount > 0) {
+        setNewReservationAlert(true);
+        setTimeout(() => setNewReservationAlert(false), 5000);
+      }
+      setLastReservationCount(items.length);
+      setReservations(items);
       
       try {
         const allRatesRes = await adminService.getAllRates();
@@ -87,7 +92,14 @@ export default function AdminDashboard({ user, onLogout }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [lastReservationCount]);
+
+  // Initial fetch and auto-refresh every 15 seconds
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 15000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -156,20 +168,30 @@ export default function AdminDashboard({ user, onLogout }) {
     // Generate Excel template on client side
     const workbook = XLSX.utils.book_new();
     
-    // Sheet 1: Base rates
+    // Currency flags mapping
+    const FLAGS = {
+      USD: '🇺🇸', EUR: '🇪🇺', PLN: '🇵🇱', GBP: '🇬🇧', CHF: '🇨🇭',
+      CAD: '🇨🇦', AUD: '🇦🇺', CZK: '🇨🇿', TRY: '🇹🇷', JPY: '🇯🇵',
+      CNY: '🇨🇳', INR: '🇮🇳', EGP: '🇪🇬', AED: '🇦🇪', SAR: '🇸🇦',
+      THB: '🇹🇭', KRW: '🇰🇷', SEK: '🇸🇪', NOK: '🇳🇴', DKK: '🇩🇰',
+      HUF: '🇭🇺', RON: '🇷🇴', BGN: '🇧🇬', ILS: '🇮🇱', UAH: '🇺🇦',
+    };
+    
+    // Sheet 1: Base rates with flags
     const currencyData = (currencies.length > 0 ? currencies : DEFAULT_CURRENCIES.map(c => ({
       code: c.code, name_uk: c.name, buy_rate: c.buy, sell_rate: c.sell
     }))).map(c => ({
+      'Прапор': FLAGS[c.code] || '🏳️',
       'Код валюти': c.code,
       'Назва': c.name_uk || c.name,
       'Купівля': c.buy_rate || c.buy,
       'Продаж': c.sell_rate || c.sell,
     }));
     const ws1 = XLSX.utils.json_to_sheet(currencyData);
-    ws1['!cols'] = [{ wch: 12 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
+    ws1['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(workbook, ws1, 'Курси');
     
-    // Sheet 2: Branch rates
+    // Sheet 2: Branch rates with flags
     const branchData = [];
     DEFAULT_BRANCHES.forEach(branch => {
       ['USD', 'EUR', 'PLN', 'GBP', 'CHF'].forEach(code => {
@@ -177,6 +199,7 @@ export default function AdminDashboard({ user, onLogout }) {
         branchData.push({
           'Відділення': branch.id,
           'Адреса': branch.address,
+          'Прапор': FLAGS[code] || '🏳️',
           'Код валюти': code,
           'Купівля': curr?.buy_rate || curr?.buy || 0,
           'Продаж': curr?.sell_rate || curr?.sell || 0,
@@ -184,7 +207,7 @@ export default function AdminDashboard({ user, onLogout }) {
       });
     });
     const ws2 = XLSX.utils.json_to_sheet(branchData);
-    ws2['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+    ws2['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(workbook, ws2, 'Відділення');
     
     // Sheet 3: Cross rates
@@ -220,6 +243,12 @@ export default function AdminDashboard({ user, onLogout }) {
               <h1 className="font-bold text-lg">Адмін-панель</h1>
               <p className="text-xs text-text-secondary">Світ Валют</p>
             </div>
+            {newReservationAlert && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/20 border border-yellow-500/50 rounded-lg animate-pulse">
+                <Bell className="w-4 h-4 text-yellow-400" />
+                <span className="text-sm text-yellow-400 font-medium">Нове бронювання!</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-4">

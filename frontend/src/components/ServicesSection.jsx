@@ -50,7 +50,7 @@ export default function ServicesSection({ services }) {
         </div>
 
         <Link 
-          to="/services/all"
+          to="/services"
           className="block w-full mt-6 py-4 bg-accent-blue rounded-xl text-white font-medium hover:bg-accent-blue/90 transition-colors text-center"
         >
           Відкрити всі →

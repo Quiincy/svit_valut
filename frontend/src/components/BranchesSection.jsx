@@ -1,24 +1,81 @@
 import { useState } from 'react';
-import { MapPin, Phone, MessageSquare, ChevronDown, Navigation, Clock } from 'lucide-react';
+import { MapPin, Phone, MessageSquare, ChevronDown, Navigation, Clock, Locate } from 'lucide-react';
 
 // Kyiv branch coordinates
 const BRANCH_COORDS = {
-  1: { lat: 50.4401, lng: 30.4876, query: 'вул.+Старовокзальна+23+Київ' },
-  2: { lat: 50.4089, lng: 30.5234, query: 'вул.+Васильківська+110+Київ' },
-  3: { lat: 50.4056, lng: 30.5201, query: 'вул.+Васильківська+130+Київ' },
-  4: { lat: 50.4298, lng: 30.5411, query: 'вул.+Раїси+Окіпної+2+Київ' },
-  5: { lat: 50.4367, lng: 30.5012, query: 'вул.+Саксаганського+69+Київ' },
+  1: { lat: 50.4401, lng: 30.4876, address: 'вул. Старовокзальна, 23' },
+  2: { lat: 50.4168, lng: 30.5087, address: 'вул. В. Васильківська, 110' },
+  3: { lat: 50.4098, lng: 30.5067, address: 'вул. В. Васильківська, 130' },
+  4: { lat: 50.4358, lng: 30.5598, address: 'вул. Р. Окіпної, 2' },
+  5: { lat: 50.4378, lng: 30.5028, address: 'вул. Саксаганського, 69' },
+};
+
+// Calculate distance between two points using Haversine formula
+const getDistance = (lat1, lng1, lat2, lng2) => {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 };
 
 export default function BranchesSection({ branches = [], settings }) {
   const [expandedBranch, setExpandedBranch] = useState(null);
   const [mapCenter, setMapCenter] = useState({ lat: 50.4501, lng: 30.5234 });
+  const [findingNearest, setFindingNearest] = useState(false);
+  const [nearestBranch, setNearestBranch] = useState(null);
+
+  const handleFindNearest = () => {
+    setFindingNearest(true);
+    
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLat = position.coords.latitude;
+          const userLng = position.coords.longitude;
+          
+          // Find nearest branch
+          let nearest = null;
+          let minDistance = Infinity;
+          
+          branches.forEach((branch, idx) => {
+            const coords = BRANCH_COORDS[branch.id];
+            if (coords) {
+              const distance = getDistance(userLat, userLng, coords.lat, coords.lng);
+              if (distance < minDistance) {
+                minDistance = distance;
+                nearest = { branch, idx, distance };
+              }
+            }
+          });
+          
+          if (nearest) {
+            setNearestBranch(nearest);
+            setExpandedBranch(nearest.idx);
+            setMapCenter(BRANCH_COORDS[nearest.branch.id]);
+            document.getElementById('branches-map')?.scrollIntoView({ behavior: 'smooth' });
+          }
+          
+          setFindingNearest(false);
+        },
+        (error) => {
+          alert('Не вдалося визначити вашу геолокацію. Дозвольте доступ до місцезнаходження.');
+          setFindingNearest(false);
+        }
+      );
+    } else {
+      alert('Геолокація не підтримується вашим браузером');
+      setFindingNearest(false);
+    }
+  };
 
   const handleShowOnMap = (branch) => {
     const coords = BRANCH_COORDS[branch.id];
     if (coords) {
       setMapCenter(coords);
-      // Scroll to map on mobile
       document.getElementById('branches-map')?.scrollIntoView({ behavior: 'smooth' });
     }
   };
@@ -36,19 +93,10 @@ export default function BranchesSection({ branches = [], settings }) {
   const handleDirections = (branch) => {
     const coords = BRANCH_COORDS[branch.id];
     if (coords) {
-      window.open(`https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`, '_blank');
+      // Use address for better Google Maps routing
+      const address = encodeURIComponent(coords.address + ', Київ, Україна');
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${address}&travelmode=driving`, '_blank');
     }
-  };
-
-  // Generate map URL with markers
-  const generateMapUrl = () => {
-    const markers = branches.map((branch, idx) => {
-      const coords = BRANCH_COORDS[branch.id];
-      if (!coords) return '';
-      return `markers=color:blue%7Clabel:${idx + 1}%7C${coords.lat},${coords.lng}`;
-    }).filter(Boolean).join('&');
-    
-    return `https://www.google.com/maps/embed/v1/view?key=AIzaSyBFw0Qbyq9zTFTd-tUY6cEB-lx_V8WfwZQ&center=${mapCenter.lat},${mapCenter.lng}&zoom=12&maptype=roadmap`;
   };
 
   // Fallback map with OpenStreetMap
@@ -76,9 +124,9 @@ export default function BranchesSection({ branches = [], settings }) {
               {branches.map((branch, idx) => {
                 const coords = BRANCH_COORDS[branch.id];
                 if (!coords) return null;
-                // Simple positioning based on coords (approximate)
                 const left = ((coords.lng - 30.35) / 0.3) * 100;
                 const top = ((50.52 - coords.lat) / 0.14) * 100;
+                const isNearest = nearestBranch?.idx === idx;
                 return (
                   <div
                     key={branch.id}
@@ -86,10 +134,9 @@ export default function BranchesSection({ branches = [], settings }) {
                     style={{ left: `${left}%`, top: `${top}%` }}
                     onClick={() => setExpandedBranch(expandedBranch === idx ? null : idx)}
                   >
-                    <div className="w-8 h-8 bg-accent-blue rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg group-hover:scale-110 transition-transform">
+                    <div className={`w-8 h-8 ${isNearest ? 'bg-accent-yellow' : 'bg-accent-blue'} rounded-full flex items-center justify-center text-${isNearest ? 'primary' : 'white'} font-bold text-sm shadow-lg group-hover:scale-110 transition-transform ${isNearest ? 'ring-4 ring-accent-yellow/50' : ''}`}>
                       {idx + 1}
                     </div>
-                    {/* Tooltip */}
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                       <div className="bg-primary-light px-3 py-2 rounded-lg text-xs whitespace-nowrap border border-white/10">
                         {branch.address}
@@ -103,24 +150,44 @@ export default function BranchesSection({ branches = [], settings }) {
 
           {/* Branch List */}
           <div className="space-y-3">
-            <button className="w-full py-3 bg-accent-blue rounded-xl text-white font-medium flex items-center justify-center gap-2 hover:bg-accent-blue/90 transition-colors">
-              <Navigation className="w-5 h-5" />
-              Знайти найближче відділення
+            <button 
+              onClick={handleFindNearest}
+              disabled={findingNearest}
+              className="w-full py-3 bg-accent-blue rounded-xl text-white font-medium flex items-center justify-center gap-2 hover:bg-accent-blue/90 transition-colors disabled:opacity-50"
+            >
+              {findingNearest ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Визначення...
+                </>
+              ) : (
+                <>
+                  <Locate className="w-5 h-5" />
+                  Знайти найближче відділення
+                </>
+              )}
             </button>
+
+            {nearestBranch && (
+              <div className="p-3 bg-accent-yellow/10 border border-accent-yellow/30 rounded-xl text-sm">
+                <span className="text-accent-yellow font-medium">Найближче до вас:</span>{' '}
+                {nearestBranch.branch.address} ({nearestBranch.distance.toFixed(1)} км)
+              </div>
+            )}
 
             {branches.map((branch, idx) => (
               <div
                 key={branch.id}
                 className={`bg-primary rounded-xl border transition-all ${
-                  expandedBranch === idx ? 'border-accent-blue' : 'border-white/10'
+                  expandedBranch === idx ? 'border-accent-blue' : nearestBranch?.idx === idx ? 'border-accent-yellow' : 'border-white/10'
                 }`}
               >
                 <button
                   onClick={() => setExpandedBranch(expandedBranch === idx ? null : idx)}
                   className="w-full p-4 flex items-center gap-4 text-left"
                 >
-                  <div className="w-10 h-10 rounded-full bg-accent-blue/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-accent-blue font-bold">{idx + 1}</span>
+                  <div className={`w-10 h-10 rounded-full ${nearestBranch?.idx === idx ? 'bg-accent-yellow/20' : 'bg-accent-blue/20'} flex items-center justify-center flex-shrink-0`}>
+                    <span className={nearestBranch?.idx === idx ? 'text-accent-yellow' : 'text-accent-blue'} style={{ fontWeight: 'bold' }}>{idx + 1}</span>
                   </div>
                   <div className="flex-1">
                     <div className="font-medium">{branch.address}</div>
@@ -136,13 +203,11 @@ export default function BranchesSection({ branches = [], settings }) {
 
                 {expandedBranch === idx && (
                   <div className="px-4 pb-4 pt-0 border-t border-white/10 mt-0">
-                    {/* Phone */}
                     <div className="flex items-center gap-2 py-2 text-sm">
                       <Phone className="w-4 h-4 text-text-secondary" />
                       <span>{branch.phone || settings?.phone || '(096) 048-88-84'}</span>
                     </div>
                     
-                    {/* Action Buttons */}
                     <div className="grid grid-cols-2 gap-2 mt-3">
                       <button
                         onClick={() => handleShowOnMap(branch)}
@@ -167,7 +232,7 @@ export default function BranchesSection({ branches = [], settings }) {
                       </button>
                       <button
                         onClick={() => handleDirections(branch)}
-                        className="flex items-center justify-center gap-2 py-2.5 bg-white/5 rounded-lg text-sm hover:bg-white/10 transition-colors"
+                        className="flex items-center justify-center gap-2 py-2.5 bg-green-500/10 text-green-400 rounded-lg text-sm hover:bg-green-500/20 transition-colors"
                       >
                         <Navigation className="w-4 h-4" />
                         Маршрут

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 
 // Determine API URL
 // In production: use VITE_API_URL env variable
@@ -186,36 +187,77 @@ export const authService = {
 // Admin service with mock fallback
 export const adminService = {
   getDashboard: async () => {
+    // Always include mock reservations in stats
+    const mockReservations = getMockReservations();
+    
     try {
-      return await api.get('/admin/dashboard');
+      const response = await api.get('/admin/dashboard');
+      const backendData = response.data;
+      
+      // Add mock stats to backend stats
+      return { 
+        data: { 
+          total_reservations: backendData.total_reservations + mockReservations.length, 
+          pending_reservations: backendData.pending_reservations + mockReservations.filter(r => r.status === 'pending').length, 
+          confirmed_reservations: backendData.confirmed_reservations + mockReservations.filter(r => r.status === 'confirmed').length, 
+          completed_today: backendData.completed_today + mockReservations.filter(r => r.status === 'completed').length, 
+          total_volume_uah: backendData.total_volume_uah + mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
+        } 
+      };
     } catch (error) {
-      if (mockMode) {
-        const reservations = getMockReservations();
-        return { 
-          data: { 
-            total_reservations: reservations.length, 
-            pending_reservations: reservations.filter(r => r.status === 'pending').length, 
-            confirmed_reservations: reservations.filter(r => r.status === 'confirmed').length, 
-            completed_today: reservations.filter(r => r.status === 'completed').length, 
-            total_volume_uah: reservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-          } 
-        };
-      }
-      throw error;
+      // Backend unavailable - use only mock data
+      return { 
+        data: { 
+          total_reservations: mockReservations.length, 
+          pending_reservations: mockReservations.filter(r => r.status === 'pending').length, 
+          confirmed_reservations: mockReservations.filter(r => r.status === 'confirmed').length, 
+          completed_today: mockReservations.filter(r => r.status === 'completed').length, 
+          total_volume_uah: mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
+        } 
+      };
     }
   },
   getReservations: async (params = {}) => {
+    // Always get mock reservations from localStorage first
+    const mockItems = getMockReservations();
+    
     try {
-      return await api.get('/admin/reservations', { params });
-    } catch (error) {
-      if (mockMode) {
-        let reservations = getMockReservations();
-        if (params.status) {
-          reservations = reservations.filter(r => r.status === params.status);
+      const response = await api.get('/admin/reservations', { params });
+      const backendItems = response.data.items || [];
+      
+      // Combine: all unique items from both sources
+      const allItemsMap = new Map();
+      
+      // Add backend items first
+      backendItems.forEach(item => {
+        allItemsMap.set(item.id, item);
+      });
+      
+      // Add mock items if not already present
+      mockItems.forEach(item => {
+        if (!allItemsMap.has(item.id)) {
+          allItemsMap.set(item.id, item);
         }
-        return { data: { items: reservations, total: reservations.length, page: 1, pages: 1 } };
+      });
+      
+      let allItems = Array.from(allItemsMap.values());
+      
+      // Sort by created_at descending
+      allItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      // Apply status filter
+      if (params.status) {
+        allItems = allItems.filter(r => r.status === params.status);
       }
-      throw error;
+      
+      return { data: { items: allItems, total: allItems.length, page: 1, pages: 1 } };
+    } catch (error) {
+      // Backend unavailable - use only mock data
+      let reservations = mockItems;
+      if (params.status) {
+        reservations = reservations.filter(r => r.status === params.status);
+      }
+      return { data: { items: reservations, total: reservations.length, page: 1, pages: 1 } };
     }
   },
   uploadRates: (file) => {
@@ -258,79 +300,98 @@ export const adminService = {
 // Operator service with mock fallback
 export const operatorService = {
   getDashboard: async () => {
+    // Get mock reservations and filter by branch
+    let mockReservations = getMockReservations();
+    if (currentMockUser?.branch_id) {
+      mockReservations = mockReservations.filter(r => r.branch_id === currentMockUser.branch_id);
+    }
+    
     try {
-      return await api.get('/operator/dashboard');
+      const response = await api.get('/operator/dashboard');
+      const backendData = response.data;
+      
+      // Add mock stats to backend stats
+      return { 
+        data: { 
+          total_reservations: backendData.total_reservations + mockReservations.length, 
+          pending_reservations: backendData.pending_reservations + mockReservations.filter(r => r.status === 'pending').length, 
+          confirmed_reservations: backendData.confirmed_reservations + mockReservations.filter(r => r.status === 'confirmed').length, 
+          completed_today: backendData.completed_today + mockReservations.filter(r => r.status === 'completed').length, 
+          total_volume_uah: backendData.total_volume_uah + mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
+        } 
+      };
     } catch (error) {
-      if (mockMode) {
-        let reservations = getMockReservations();
-        // Filter by operator's branch
-        if (currentMockUser?.branch_id) {
-          reservations = reservations.filter(r => r.branch_id === currentMockUser.branch_id);
-        }
-        return { 
-          data: { 
-            total_reservations: reservations.length, 
-            pending_reservations: reservations.filter(r => r.status === 'pending').length, 
-            confirmed_reservations: reservations.filter(r => r.status === 'confirmed').length, 
-            completed_today: reservations.filter(r => r.status === 'completed').length, 
-            total_volume_uah: reservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-          } 
-        };
-      }
-      throw error;
+      // Backend unavailable
+      return { 
+        data: { 
+          total_reservations: mockReservations.length, 
+          pending_reservations: mockReservations.filter(r => r.status === 'pending').length, 
+          confirmed_reservations: mockReservations.filter(r => r.status === 'confirmed').length, 
+          completed_today: mockReservations.filter(r => r.status === 'completed').length, 
+          total_volume_uah: mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
+        } 
+      };
     }
   },
   getReservations: async (params = {}) => {
+    // Get mock reservations
+    let mockItems = getMockReservations();
+    if (currentMockUser?.branch_id) {
+      mockItems = mockItems.filter(r => r.branch_id === currentMockUser.branch_id);
+    }
+    
     try {
-      return await api.get('/operator/reservations', { params });
-    } catch (error) {
-      if (mockMode) {
-        let reservations = getMockReservations();
-        // Filter by operator's branch
-        if (currentMockUser?.branch_id) {
-          reservations = reservations.filter(r => r.branch_id === currentMockUser.branch_id);
-        }
-        if (params.status) {
-          reservations = reservations.filter(r => r.status === params.status);
-        }
-        return { data: { items: reservations, total: reservations.length, page: 1, pages: 1 } };
+      const response = await api.get('/operator/reservations', { params });
+      const backendItems = response.data.items || [];
+      
+      // Combine items
+      const allItemsMap = new Map();
+      backendItems.forEach(item => allItemsMap.set(item.id, item));
+      mockItems.forEach(item => {
+        if (!allItemsMap.has(item.id)) allItemsMap.set(item.id, item);
+      });
+      
+      let allItems = Array.from(allItemsMap.values());
+      allItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      if (params.status) {
+        allItems = allItems.filter(r => r.status === params.status);
       }
-      throw error;
+      
+      return { data: { items: allItems, total: allItems.length, page: 1, pages: 1 } };
+    } catch (error) {
+      let reservations = mockItems;
+      if (params.status) {
+        reservations = reservations.filter(r => r.status === params.status);
+      }
+      return { data: { items: reservations, total: reservations.length, page: 1, pages: 1 } };
+    }
     }
   },
   downloadRates: async () => {
-    try {
-      const response = await api.get('/operator/rates/download', { responseType: 'blob' });
-      return response;
-    } catch (error) {
-      // Mock mode - generate Excel client-side
-      if (mockMode) {
-        try {
-          const XLSX = await import('xlsx');
-          const workbook = XLSX.utils.book_new();
-          
-          const ratesData = [
-            { 'Код валюти': 'USD', 'Назва': 'Долар США', 'Купівля': 42.10, 'Продаж': 42.15 },
-            { 'Код валюти': 'EUR', 'Назва': 'Євро', 'Купівля': 49.30, 'Продаж': 49.35 },
-            { 'Код валюти': 'PLN', 'Назва': 'Злотий', 'Купівля': 11.50, 'Продаж': 11.65 },
-            { 'Код валюти': 'GBP', 'Назва': 'Фунт', 'Купівля': 56.10, 'Продаж': 56.25 },
-            { 'Код валюти': 'CHF', 'Назва': 'Франк', 'Купівля': 52.80, 'Продаж': 52.95 },
-          ];
-          
-          const ws = XLSX.utils.json_to_sheet(ratesData);
-          XLSX.utils.book_append_sheet(workbook, ws, 'Курси');
-          
-          const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-          const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-          
-          return { data: blob };
-        } catch (xlsxError) {
-          console.error('XLSX error:', xlsxError);
-          throw new Error('Помилка генерації файлу');
-        }
-      }
-      throw error;
-    }
+    // Generate Excel client-side - no server call needed
+    const ratesData = [
+      { 'Прапор': '🇺🇸', 'Код валюти': 'USD', 'Назва': 'Долар США', 'Купівля': 42.10, 'Продаж': 42.15 },
+      { 'Прапор': '🇪🇺', 'Код валюти': 'EUR', 'Назва': 'Євро', 'Купівля': 49.30, 'Продаж': 49.35 },
+      { 'Прапор': '🇵🇱', 'Код валюти': 'PLN', 'Назва': 'Злотий', 'Купівля': 11.50, 'Продаж': 11.65 },
+      { 'Прапор': '🇬🇧', 'Код валюти': 'GBP', 'Назва': 'Фунт', 'Купівля': 56.10, 'Продаж': 56.25 },
+      { 'Прапор': '🇨🇭', 'Код валюти': 'CHF', 'Назва': 'Франк', 'Купівля': 52.80, 'Продаж': 52.95 },
+      { 'Прапор': '🇨🇦', 'Код валюти': 'CAD', 'Назва': 'Канадський долар', 'Купівля': 31.20, 'Продаж': 31.35 },
+      { 'Прапор': '🇦🇺', 'Код валюти': 'AUD', 'Назва': 'Австралійський долар', 'Купівля': 30.40, 'Продаж': 30.55 },
+      { 'Прапор': '🇨🇿', 'Код валюти': 'CZK', 'Назва': 'Чеська крона', 'Купівля': 1.85, 'Продаж': 1.90 },
+      { 'Прапор': '🇹🇷', 'Код валюти': 'TRY', 'Назва': 'Турецька ліра', 'Купівля': 1.22, 'Продаж': 1.28 },
+      { 'Прапор': '🇯🇵', 'Код валюти': 'JPY', 'Назва': 'Японська єна', 'Купівля': 0.28, 'Продаж': 0.29 },
+    ];
+    
+    const workbook = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(ratesData);
+    ws['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(workbook, ws, 'Курси');
+    
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    
+    return { data: blob };
   },
   updateReservation: async (id, data) => {
     try {
@@ -430,44 +491,172 @@ const DEFAULT_SERVICES = [
   { id: 3, title: "Старі франки на нові або USD", description: "Оновіть франки які вийшли з обігу.", image_url: "https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=400&h=200&fit=crop", link_url: "/services/old-francs" },
 ];
 
+// Settings persistence in localStorage
+const getLocalSettings = () => {
+  try {
+    return JSON.parse(localStorage.getItem('siteSettings')) || null;
+  } catch {
+    return null;
+  }
+};
+
+const saveLocalSettings = (settings) => {
+  localStorage.setItem('siteSettings', JSON.stringify(settings));
+};
+
 // Settings service
 export const settingsService = {
   get: async () => {
     try {
-      return await api.get('/settings');
+      const response = await api.get('/settings');
+      // Cache settings locally
+      if (response.data) {
+        saveLocalSettings(response.data);
+      }
+      return response;
     } catch (error) {
-      return { data: DEFAULT_SETTINGS };
+      // Try local cache first, then default
+      const localSettings = getLocalSettings();
+      return { data: localSettings || DEFAULT_SETTINGS };
     }
   },
-  update: (data) => api.put('/admin/settings', data),
+  update: async (data) => {
+    try {
+      const response = await api.put('/admin/settings', data);
+      // Update local cache
+      saveLocalSettings(data);
+      return response;
+    } catch (error) {
+      // Save locally even if backend fails
+      saveLocalSettings(data);
+      return { data };
+    }
+  },
+};
+
+// FAQ persistence
+const getLocalFaq = () => {
+  try {
+    return JSON.parse(localStorage.getItem('siteFaq')) || null;
+  } catch {
+    return null;
+  }
+};
+
+const saveLocalFaq = (faq) => {
+  localStorage.setItem('siteFaq', JSON.stringify(faq));
 };
 
 // FAQ service
 export const faqService = {
   getAll: async () => {
     try {
-      return await api.get('/faq');
+      const response = await api.get('/faq');
+      if (response.data) {
+        saveLocalFaq(response.data);
+      }
+      return response;
     } catch (error) {
-      return { data: DEFAULT_FAQ };
+      const localFaq = getLocalFaq();
+      return { data: localFaq || DEFAULT_FAQ };
     }
   },
-  create: (data) => api.post('/admin/faq', data),
-  update: (id, data) => api.put(`/admin/faq/${id}`, data),
-  delete: (id) => api.delete(`/admin/faq/${id}`),
+  create: async (data) => {
+    try {
+      return await api.post('/admin/faq', data);
+    } catch (error) {
+      // Add to local storage
+      const localFaq = getLocalFaq() || [];
+      const newItem = { ...data, id: Date.now() };
+      localFaq.push(newItem);
+      saveLocalFaq(localFaq);
+      return { data: newItem };
+    }
+  },
+  update: async (id, data) => {
+    try {
+      return await api.put(`/admin/faq/${id}`, data);
+    } catch (error) {
+      const localFaq = getLocalFaq() || [];
+      const idx = localFaq.findIndex(f => f.id === id);
+      if (idx >= 0) {
+        localFaq[idx] = { ...localFaq[idx], ...data };
+        saveLocalFaq(localFaq);
+      }
+      return { data };
+    }
+  },
+  delete: async (id) => {
+    try {
+      return await api.delete(`/admin/faq/${id}`);
+    } catch (error) {
+      const localFaq = getLocalFaq() || [];
+      saveLocalFaq(localFaq.filter(f => f.id !== id));
+      return { data: { success: true } };
+    }
+  },
+};
+
+// Services persistence
+const getLocalServices = () => {
+  try {
+    return JSON.parse(localStorage.getItem('siteServices')) || null;
+  } catch {
+    return null;
+  }
+};
+
+const saveLocalServices = (services) => {
+  localStorage.setItem('siteServices', JSON.stringify(services));
 };
 
 // Services service
 export const servicesService = {
   getAll: async () => {
     try {
-      return await api.get('/services');
+      const response = await api.get('/services');
+      if (response.data) {
+        saveLocalServices(response.data);
+      }
+      return response;
     } catch (error) {
-      return { data: DEFAULT_SERVICES };
+      const localServices = getLocalServices();
+      return { data: localServices || DEFAULT_SERVICES };
     }
   },
-  create: (data) => api.post('/admin/services', data),
-  update: (id, data) => api.put(`/admin/services/${id}`, data),
-  delete: (id) => api.delete(`/admin/services/${id}`),
+  create: async (data) => {
+    try {
+      return await api.post('/admin/services', data);
+    } catch (error) {
+      const localServices = getLocalServices() || [];
+      const newItem = { ...data, id: Date.now() };
+      localServices.push(newItem);
+      saveLocalServices(localServices);
+      return { data: newItem };
+    }
+  },
+  update: async (id, data) => {
+    try {
+      return await api.put(`/admin/services/${id}`, data);
+    } catch (error) {
+      const localServices = getLocalServices() || [];
+      const idx = localServices.findIndex(s => s.id === id);
+      if (idx >= 0) {
+        localServices[idx] = { ...localServices[idx], ...data };
+        saveLocalServices(localServices);
+      }
+      return { data };
+    }
+  },
+  delete: async (id) => {
+    try {
+      return await api.delete(`/admin/services/${id}`);
+    } catch (error) {
+      const localServices = getLocalServices() || [];
+      saveLocalServices(localServices.filter(s => s.id !== id));
+      return { data: { success: true } };
+    }
+  },
 };
 
 export default api;

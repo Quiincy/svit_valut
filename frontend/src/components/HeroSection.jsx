@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, RefreshCw, Phone, Loader2, User, MapPin } from 'lucide-react';
+import { ChevronDown, RefreshCw, Loader2, X, MapPin, User, Phone, Check, ArrowRight } from 'lucide-react';
 
 export default function HeroSection({
   giveAmount,
@@ -13,17 +13,12 @@ export default function HeroSection({
   branches = [],
   settings,
 }) {
+  const [bookingStep, setBookingStep] = useState(null); // null, 'branch', 'name', 'phone'
   const [phone, setPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (branches.length > 0 && !selectedBranch) {
-      setSelectedBranch(branches[0]);
-    }
-  }, [branches]);
 
   const formatPhone = (value) => {
     let digits = value.replace(/\D/g, '');
@@ -41,30 +36,33 @@ export default function HeroSection({
     return formatted;
   };
 
-  const handlePhoneChange = (e) => {
-    setPhone(formatPhone(e.target.value));
-    setError('');
-  };
-
-  const handleReserve = async () => {
-    const phoneDigits = phone.replace(/\D/g, '');
-    if (phoneDigits.length < 12) {
-      setError('Введіть коректний номер телефону');
+  const handleStartBooking = () => {
+    if (giveAmount <= 0) {
+      setError('Введіть суму');
       return;
     }
+    setError('');
+    setBookingStep('branch');
+  };
 
+  const handleSelectBranch = (branch) => {
+    setSelectedBranch(branch);
+    setBookingStep('name');
+  };
+
+  const handleNameSubmit = () => {
     if (!customerName.trim()) {
       setError("Введіть ваше ім'я");
       return;
     }
+    setError('');
+    setBookingStep('phone');
+  };
 
-    if (!selectedBranch) {
-      setError('Оберіть відділення');
-      return;
-    }
-
-    if (giveAmount <= 0) {
-      setError('Введіть суму');
+  const handlePhoneSubmit = async () => {
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 12) {
+      setError('Введіть коректний номер телефону');
       return;
     }
 
@@ -80,13 +78,21 @@ export default function HeroSection({
         customer_name: customerName.trim(),
         branch_id: selectedBranch.id,
       });
+      // Reset form
       setPhone('');
       setCustomerName('');
+      setSelectedBranch(null);
+      setBookingStep(null);
     } catch (err) {
       setError(err.message || 'Помилка бронювання');
     } finally {
       setLoading(false);
     }
+  };
+
+  const closeModal = () => {
+    setBookingStep(null);
+    setError('');
   };
 
   return (
@@ -119,15 +125,7 @@ export default function HeroSection({
                 getAmount={getAmount}
                 onOpenCurrencyModal={onOpenCurrencyModal}
                 onSwapCurrencies={onSwapCurrencies}
-                onReserve={handleReserve}
-                phone={phone}
-                onPhoneChange={handlePhoneChange}
-                customerName={customerName}
-                setCustomerName={setCustomerName}
-                branches={branches}
-                selectedBranch={selectedBranch}
-                setSelectedBranch={setSelectedBranch}
-                loading={loading}
+                onReserve={handleStartBooking}
                 error={error}
                 settings={settings}
               />
@@ -146,24 +144,187 @@ export default function HeroSection({
           getAmount={getAmount}
           onOpenCurrencyModal={onOpenCurrencyModal}
           onSwapCurrencies={onSwapCurrencies}
-          onReserve={handleReserve}
-          phone={phone}
-          onPhoneChange={handlePhoneChange}
-          customerName={customerName}
-          setCustomerName={setCustomerName}
-          branches={branches}
-          selectedBranch={selectedBranch}
-          setSelectedBranch={setSelectedBranch}
-          loading={loading}
+          onReserve={handleStartBooking}
           error={error}
           settings={settings}
           isMobile
         />
       </div>
+
+      {/* Step 1: Branch Selection Modal */}
+      {bookingStep === 'branch' && (
+        <BookingModal onClose={closeModal} step={1} totalSteps={3}>
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-accent-blue/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MapPin className="w-8 h-8 text-accent-blue" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Оберіть відділення</h3>
+            <p className="text-text-secondary text-sm">Куди вам зручніше приїхати?</p>
+          </div>
+
+          <div className="space-y-3 max-h-[300px] overflow-y-auto">
+            {branches.map((branch) => (
+              <button
+                key={branch.id}
+                onClick={() => handleSelectBranch(branch)}
+                className="w-full p-4 bg-primary rounded-xl border border-white/10 hover:border-accent-blue/50 transition-all text-left flex items-center gap-4"
+              >
+                <div className="w-10 h-10 rounded-full bg-accent-blue/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-accent-blue font-bold">{branch.id}</span>
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium">{branch.address}</div>
+                  <div className="text-sm text-text-secondary">{branch.hours}</div>
+                  {branch.phone && <div className="text-sm text-accent-yellow">{branch.phone}</div>}
+                </div>
+                <ArrowRight className="w-5 h-5 text-text-secondary" />
+              </button>
+            ))}
+          </div>
+        </BookingModal>
+      )}
+
+      {/* Step 2: Name Modal */}
+      {bookingStep === 'name' && (
+        <BookingModal onClose={closeModal} step={2} totalSteps={3}>
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-accent-yellow/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <User className="w-8 h-8 text-accent-yellow" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Як вас звати?</h3>
+            <p className="text-text-secondary text-sm">Щоб оператор міг до вас звернутися</p>
+          </div>
+
+          <div className="space-y-4">
+            <input
+              type="text"
+              value={customerName}
+              onChange={(e) => { setCustomerName(e.target.value); setError(''); }}
+              placeholder="Ваше ім'я"
+              autoFocus
+              className="w-full px-4 py-4 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center text-lg"
+            />
+
+            {error && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                <p className="text-sm text-red-400 text-center">{error}</p>
+              </div>
+            )}
+
+            <button
+              onClick={handleNameSubmit}
+              className="w-full py-4 bg-accent-yellow rounded-xl text-primary font-bold text-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+            >
+              Далі
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          </div>
+        </BookingModal>
+      )}
+
+      {/* Step 3: Phone Modal */}
+      {bookingStep === 'phone' && (
+        <BookingModal onClose={closeModal} step={3} totalSteps={3}>
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Phone className="w-8 h-8 text-green-400" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Ваш номер телефону</h3>
+            <p className="text-text-secondary text-sm">Ми зателефонуємо для підтвердження</p>
+          </div>
+
+          <div className="space-y-4">
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => { setPhone(formatPhone(e.target.value)); setError(''); }}
+              placeholder="+38 (0XX) XXX-XX-XX"
+              autoFocus
+              className="w-full px-4 py-4 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center text-lg font-mono"
+            />
+
+            {/* Summary */}
+            <div className="p-4 bg-primary rounded-xl border border-white/10">
+              <div className="text-sm text-text-secondary mb-2">Ваше бронювання:</div>
+              <div className="flex justify-between mb-1">
+                <span>Сума:</span>
+                <span className="font-bold">{giveAmount} {giveCurrency.code} → {getAmount.toLocaleString()} {getCurrency.code}</span>
+              </div>
+              <div className="flex justify-between mb-1">
+                <span>Відділення:</span>
+                <span className="font-medium text-sm">{selectedBranch?.address}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Ім'я:</span>
+                <span className="font-medium">{customerName}</span>
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                <p className="text-sm text-red-400 text-center">{error}</p>
+              </div>
+            )}
+
+            <button
+              onClick={handlePhoneSubmit}
+              disabled={loading}
+              className="w-full py-4 bg-gradient-gold rounded-xl text-primary font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Бронювання...
+                </>
+              ) : (
+                <>
+                  <Check className="w-5 h-5" />
+                  Забронювати
+                </>
+              )}
+            </button>
+          </div>
+        </BookingModal>
+      )}
     </section>
   );
 }
 
+// Booking Modal Component
+function BookingModal({ children, onClose, step, totalSteps }) {
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={onClose}>
+      <div 
+        className="bg-primary-light rounded-3xl p-6 max-w-md w-full border border-white/10 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 hover:bg-white/5 rounded-lg transition-colors"
+        >
+          <X className="w-5 h-5 text-text-secondary" />
+        </button>
+
+        {/* Progress Indicator */}
+        <div className="flex items-center justify-center gap-2 mb-6">
+          {[1, 2, 3].map((s) => (
+            <div
+              key={s}
+              className={`h-2 rounded-full transition-all ${
+                s === step ? 'w-8 bg-accent-yellow' : s < step ? 'w-2 bg-accent-yellow/50' : 'w-2 bg-white/20'
+              }`}
+            />
+          ))}
+        </div>
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Exchange Card Component
 function ExchangeCard({
   giveAmount,
   setGiveAmount,
@@ -173,19 +334,10 @@ function ExchangeCard({
   onOpenCurrencyModal,
   onSwapCurrencies,
   onReserve,
-  phone,
-  onPhoneChange,
-  customerName,
-  setCustomerName,
-  branches,
-  selectedBranch,
-  setSelectedBranch,
-  loading,
   error,
   settings,
   isMobile = false,
 }) {
-  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const minAmount = settings?.min_wholesale_amount || 1000;
   const reservationTime = settings?.reservation_time_minutes || 60;
 
@@ -257,71 +409,6 @@ function ExchangeCard({
         </button>
       </div>
 
-      {/* Branch Selection */}
-      <div className="mb-3 relative">
-        <button
-          onClick={() => setBranchDropdownOpen(!branchDropdownOpen)}
-          className="w-full px-4 py-3 bg-primary-light rounded-xl border border-white/10 flex items-center justify-between hover:border-accent-yellow/50 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <MapPin className="w-5 h-5 text-accent-blue" />
-            <span className="text-sm">{selectedBranch?.address || 'Оберіть відділення'}</span>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${branchDropdownOpen ? 'rotate-180' : ''}`} />
-        </button>
-        
-        {branchDropdownOpen && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-primary-light border border-white/10 rounded-xl overflow-hidden z-50 max-h-48 overflow-y-auto">
-            {branches.map((branch) => (
-              <button
-                key={branch.id}
-                onClick={() => {
-                  setSelectedBranch(branch);
-                  setBranchDropdownOpen(false);
-                }}
-                className={`w-full px-4 py-3 text-left text-sm hover:bg-white/5 transition-colors flex items-center gap-3 ${
-                  selectedBranch?.id === branch.id ? 'bg-accent-blue/10 text-accent-blue' : ''
-                }`}
-              >
-                <MapPin className="w-4 h-4 flex-shrink-0" />
-                <div>
-                  <div>{branch.address}</div>
-                  <div className="text-xs text-text-secondary">{branch.hours}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Customer Name */}
-      <div className="mb-3">
-        <div className="relative">
-          <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-secondary" />
-          <input
-            type="text"
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="Ваше ім'я"
-            className="w-full pl-12 pr-4 py-3 bg-primary-light rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none transition-colors"
-          />
-        </div>
-      </div>
-
-      {/* Phone Input */}
-      <div className="mb-4">
-        <div className="relative">
-          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-secondary" />
-          <input
-            type="tel"
-            value={phone}
-            onChange={onPhoneChange}
-            placeholder="+38 (0XX) XXX-XX-XX"
-            className="w-full pl-12 pr-4 py-3 bg-primary-light rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none transition-colors"
-          />
-        </div>
-      </div>
-
       {/* Error Message */}
       {error && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
@@ -332,17 +419,9 @@ function ExchangeCard({
       {/* Reserve Button */}
       <button
         onClick={onReserve}
-        disabled={loading}
-        className="w-full py-4 bg-gradient-gold rounded-xl text-primary font-bold text-base hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full py-4 bg-gradient-gold rounded-xl text-primary font-bold text-base hover:opacity-90 transition-opacity"
       >
-        {loading ? (
-          <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            Бронювання...
-          </>
-        ) : (
-          'Забронювати'
-        )}
+        Забронювати
       </button>
 
       {/* Notes */}

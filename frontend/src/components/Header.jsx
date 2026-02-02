@@ -1,6 +1,6 @@
 import { Menu, MessageSquare } from 'lucide-react';
 
-export default function Header({ onMenuToggle }) {
+export default function Header({ onMenuToggle, onOpenChat }) {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-primary/95 backdrop-blur-xl border-b border-white/10">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
@@ -13,12 +13,15 @@ export default function Header({ onMenuToggle }) {
             <Menu className="w-6 h-6" />
           </button>
 
-          {/* Logo */}
-          <a href="#" className="flex items-center gap-2">
-            <div className="w-8 h-8 lg:w-10 lg:h-10 bg-accent-blue rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm lg:text-base">$</span>
+          {/* Logo - same as LoginPage */}
+          <a href="/" className="flex items-center gap-2 lg:gap-3">
+            <div className="w-9 h-9 lg:w-11 lg:h-11 bg-accent-yellow rounded-xl flex items-center justify-center font-extrabold text-primary text-lg lg:text-xl">
+              $
             </div>
-            <span className="font-bold text-base lg:text-lg text-white">ВАЛЮТ</span>
+            <div className="text-left">
+              <div className="font-bold text-base lg:text-xl leading-tight">СВІТ</div>
+              <div className="text-[9px] lg:text-[10px] font-medium text-text-secondary tracking-[2px] lg:tracking-[3px] uppercase">ВАЛЮТ</div>
+            </div>
           </a>
 
           {/* Desktop Navigation */}
@@ -43,7 +46,10 @@ export default function Header({ onMenuToggle }) {
               <div className="text-text-secondary">щодня: 8:00-20:00</div>
             </div>
             
-            <button className="flex items-center gap-2 px-3 py-2 lg:px-4 lg:py-2.5 border border-accent-yellow/50 rounded-full text-accent-yellow text-sm font-medium hover:bg-accent-yellow/10 transition-colors">
+            <button 
+              onClick={onOpenChat}
+              className="flex items-center gap-2 px-3 py-2 lg:px-4 lg:py-2.5 border border-accent-yellow/50 rounded-full text-accent-yellow text-sm font-medium hover:bg-accent-yellow/10 transition-colors"
+            >
               <MessageSquare className="w-4 h-4" />
               <span className="hidden sm:inline">Чат</span>
             </button>

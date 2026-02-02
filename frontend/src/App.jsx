@@ -11,11 +11,13 @@ import Footer from './components/Footer';
 import CurrencyModal from './components/CurrencyModal';
 import SuccessModal from './components/SuccessModal';
 import MobileNav from './components/MobileNav';
+import LiveChat from './components/LiveChat';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import OperatorDashboard from './pages/OperatorDashboard';
 import RatesPage from './pages/RatesPage';
 import ServicePage from './pages/ServicePage';
+import AllServicesPage from './pages/AllServicesPage';
 import { 
   currencyService, branchService, settingsService, faqService, servicesService,
   reservationService, authService, restoreAuth, clearAuthCredentials 
@@ -30,6 +32,7 @@ function PublicSite() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [currencyModalType, setCurrencyModalType] = useState('give');
@@ -127,7 +130,7 @@ function PublicSite() {
 
   return (
     <div className="min-h-screen bg-primary">
-      <Header onMenuToggle={() => setMobileMenuOpen(true)} settings={settings} />
+      <Header onMenuToggle={() => setMobileMenuOpen(true)} onOpenChat={() => setChatOpen(true)} settings={settings} />
       <MobileNav isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} settings={settings} />
       
       <main>
@@ -164,6 +167,23 @@ function PublicSite() {
         isOpen={successModalOpen}
         onClose={() => setSuccessModalOpen(false)}
       />
+      
+      <LiveChat
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+      />
+      
+      {/* Chat FAB when chat is closed */}
+      {!chatOpen && (
+        <button
+          onClick={() => setChatOpen(true)}
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
+        >
+          <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -217,6 +237,7 @@ function App() {
       <Routes>
         <Route path="/" element={<PublicSite />} />
         <Route path="/rates" element={<RatesPage />} />
+        <Route path="/services" element={<AllServicesPage />} />
         <Route path="/services/:slug" element={<ServicePage />} />
         <Route path="/login" element={user ? <Navigate to="/panel" replace /> : <LoginPage onLogin={handleLogin} />} />
         <Route path="/panel" element={
