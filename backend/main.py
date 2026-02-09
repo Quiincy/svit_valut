@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from typing import Optional, List, Dict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import enum
 import random
 import secrets
@@ -28,7 +28,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=[*""],
 )
 
 # ============== SITE SETTINGS ==============
@@ -642,7 +642,7 @@ async def create_reservation(request: ReservationRequest, db: Session = Depends(
         get_amount = request.give_amount * from_curr.buy_rate
         rate = from_curr.buy_rate
     
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=60)
     
     db_res = models.Reservation(
