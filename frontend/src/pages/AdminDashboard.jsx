@@ -19,6 +19,19 @@ const STATUS_CONFIG = {
   expired: { label: 'Прострочено', color: 'text-gray-400 bg-gray-400/10', icon: XCircle },
 };
 
+// Kyiv timezone helper
+const formatKyivTime = (isoString) => {
+  if (!isoString) return '—';
+  const date = new Date(isoString);
+  return date.toLocaleString('uk-UA', {
+    timeZone: 'Europe/Kyiv',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 // Default currencies for template
 const DEFAULT_CURRENCIES = [
   { code: 'USD', name: 'Долар США', buy: 42.10, sell: 42.15 },
@@ -55,7 +68,9 @@ export default function AdminDashboard({ user, onLogout }) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [newReservationAlert, setNewReservationAlert] = useState(false);
+
   const [lastReservationCount, setLastReservationCount] = useState(0);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const fileInputRef = useRef(null);
 
   const [branches, setBranches] = useState([]);
@@ -120,6 +135,12 @@ export default function AdminDashboard({ user, onLogout }) {
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  // Update time every minute (Kyiv time)
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -298,6 +319,12 @@ export default function AdminDashboard({ user, onLogout }) {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Kyiv Time */}
+            <div className="hidden sm:block text-right text-sm text-text-secondary mr-4">
+              <div>Київ</div>
+              <div className="font-mono">{currentTime.toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit' })}</div>
+            </div>
+
             <div className="text-right">
               <div className="font-medium text-sm">{user.name}</div>
               <div className="text-xs text-accent-yellow">Адміністратор</div>
@@ -778,7 +805,7 @@ export default function AdminDashboard({ user, onLogout }) {
                             </span>
                           </td>
                           <td className="py-4 pr-4 text-xs text-text-secondary">
-                            {new Date(res.created_at).toLocaleString('uk-UA')}
+                            {formatKyivTime(res.created_at)}
                           </td>
                           <td className="py-4">
                             <div className="flex gap-2">
