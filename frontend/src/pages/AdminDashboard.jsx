@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Upload, Download, LogOut, RefreshCw, CheckCircle, 
+import {
+  Upload, Download, LogOut, RefreshCw, CheckCircle,
   XCircle, Clock, DollarSign, TrendingUp, FileSpreadsheet,
   AlertCircle, ChevronDown, Search, Building2, ArrowRightLeft,
-  MapPin, Bell
+  MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X
 } from 'lucide-react';
+import BranchRateCard from '../components/admin/BranchRateCard';
 import { adminService, currencyService } from '../services/api';
 import SettingsPage from './SettingsPage';
 import * as XLSX from 'xlsx';
 
 const STATUS_CONFIG = {
-  pending: { label: 'Очікує', color: 'text-yellow-400 bg-yellow-400/10', icon: Clock },
+  pending_admin: { label: 'Очікує адміна', color: 'text-orange-400 bg-orange-400/10', icon: AlertCircle },
+  pending: { label: 'Очікує оператора', color: 'text-yellow-400 bg-yellow-400/10', icon: Clock },
   confirmed: { label: 'Підтверджено', color: 'text-blue-400 bg-blue-400/10', icon: CheckCircle },
   completed: { label: 'Завершено', color: 'text-green-400 bg-green-400/10', icon: CheckCircle },
   cancelled: { label: 'Скасовано', color: 'text-red-400 bg-red-400/10', icon: XCircle },
@@ -50,21 +52,39 @@ export default function AdminDashboard({ user, onLogout }) {
   const [uploadResult, setUploadResult] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [newReservationAlert, setNewReservationAlert] = useState(false);
   const [lastReservationCount, setLastReservationCount] = useState(0);
   const fileInputRef = useRef(null);
+
+  const [branches, setBranches] = useState([]);
+
+  // Reservation edit state
+  const [editingReservation, setEditingReservation] = useState(null);
+  const [resForm, setResForm] = useState({ give_amount: '', get_amount: '', rate: '', branch_id: '' });
+  const [resSaving, setResSaving] = useState(false);
+
+  // Rate management state
+  const [rateModal, setRateModal] = useState({ open: false, branchId: null, currency: null });
+  const [rateForm, setRateForm] = useState({ currency: 'USD', buy: '', sell: '', is_active: true });
+
 
   const fetchData = useCallback(async () => {
     try {
       const [dashboardRes, currenciesRes, reservationsRes] = await Promise.all([
         adminService.getDashboard(),
-        currencyService.getAll(),
-        adminService.getReservations({ limit: 50 }),
+        adminService.getCurrencies(),
+        adminService.getReservations({
+          limit: 50,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined
+        }),
       ]);
       setDashboard(dashboardRes.data);
       setCurrencies(currenciesRes.data);
       const items = reservationsRes.data.items || [];
-      
+
       // Check for new reservations
       if (items.length > lastReservationCount && lastReservationCount > 0) {
         setNewReservationAlert(true);
@@ -72,7 +92,7 @@ export default function AdminDashboard({ user, onLogout }) {
       }
       setLastReservationCount(items.length);
       setReservations(items);
-      
+
       try {
         const allRatesRes = await adminService.getAllRates();
         setAllRates(allRatesRes.data);
@@ -92,7 +112,7 @@ export default function AdminDashboard({ user, onLogout }) {
     } finally {
       setLoading(false);
     }
-  }, [lastReservationCount]);
+  }, [lastReservationCount, dateFrom, dateTo]);
 
   // Initial fetch and auto-refresh every 15 seconds
   useEffect(() => {
@@ -116,46 +136,17 @@ export default function AdminDashboard({ user, onLogout }) {
         fetchData();
       }
     } catch (error) {
-      // If backend unavailable, parse locally
-      try {
-        const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data);
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
-        // Update local currencies
-        let updatedCount = 0;
-        jsonData.forEach(row => {
-          const code = row['Код валюти'] || row['code'] || Object.values(row)[0];
-          const buy = row['Купівля'] || row['buy'] || Object.values(row)[1];
-          const sell = row['Продаж'] || row['sell'] || Object.values(row)[2];
-          
-          if (code && buy && sell) {
-            const existing = currencies.find(c => c.code === code.toString().toUpperCase());
-            if (existing) {
-              existing.buy_rate = parseFloat(buy);
-              existing.sell_rate = parseFloat(sell);
-              updatedCount++;
-            }
-          }
-        });
-        
-        setCurrencies([...currencies]);
-        setUploadResult({
-          success: true,
-          message: `Курси оновлено локально (mock режим)`,
-          base_rates_updated: updatedCount,
-          branch_rates_updated: 0,
-          cross_rates_updated: 0,
-        });
-      } catch (parseError) {
-        setUploadResult({
-          success: false,
-          message: 'Помилка обробки файлу: ' + parseError.message,
-          errors: [],
-        });
-      }
+      const errorMsg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+      console.error('Upload Error:', error);
+      alert('Upload Failed: ' + errorMsg);
+      setUploadResult({
+        success: false,
+        message: 'Помилка: ' + errorMsg,
+        errors: []
+      });
+      return;
+
+
     } finally {
       setUploading(false);
       if (fileInputRef.current) {
@@ -164,66 +155,121 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
-  const handleDownloadTemplate = () => {
-    // Generate Excel template on client side
-    const workbook = XLSX.utils.book_new();
-    
-    // Currency flags mapping
-    const FLAGS = {
-      USD: '🇺🇸', EUR: '🇪🇺', PLN: '🇵🇱', GBP: '🇬🇧', CHF: '🇨🇭',
-      CAD: '🇨🇦', AUD: '🇦🇺', CZK: '🇨🇿', TRY: '🇹🇷', JPY: '🇯🇵',
-      CNY: '🇨🇳', INR: '🇮🇳', EGP: '🇪🇬', AED: '🇦🇪', SAR: '🇸🇦',
-      THB: '🇹🇭', KRW: '🇰🇷', SEK: '🇸🇪', NOK: '🇳🇴', DKK: '🇩🇰',
-      HUF: '🇭🇺', RON: '🇷🇴', BGN: '🇧🇬', ILS: '🇮🇱', UAH: '🇺🇦',
-    };
-    
-    // Sheet 1: Base rates with flags
-    const currencyData = (currencies.length > 0 ? currencies : DEFAULT_CURRENCIES.map(c => ({
-      code: c.code, name_uk: c.name, buy_rate: c.buy, sell_rate: c.sell
-    }))).map(c => ({
-      'Прапор': FLAGS[c.code] || '🏳️',
-      'Код валюти': c.code,
-      'Назва': c.name_uk || c.name,
-      'Купівля': c.buy_rate || c.buy,
-      'Продаж': c.sell_rate || c.sell,
-    }));
-    const ws1 = XLSX.utils.json_to_sheet(currencyData);
-    ws1['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(workbook, ws1, 'Курси');
-    
-    // Sheet 2: Branch rates with flags
-    const branchData = [];
-    DEFAULT_BRANCHES.forEach(branch => {
-      ['USD', 'EUR', 'PLN', 'GBP', 'CHF'].forEach(code => {
-        const curr = currencies.find(c => c.code === code) || DEFAULT_CURRENCIES.find(c => c.code === code);
-        branchData.push({
-          'Відділення': branch.id,
-          'Адреса': branch.address,
-          'Прапор': FLAGS[code] || '🏳️',
-          'Код валюти': code,
-          'Купівля': curr?.buy_rate || curr?.buy || 0,
-          'Продаж': curr?.sell_rate || curr?.sell || 0,
-        });
-      });
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await adminService.downloadTemplate();
+      //Create a Blob from the PDF Stream
+      const file = new Blob(
+        [response.data],
+        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+      );
+      //Build a URL from the file
+      const fileURL = URL.createObjectURL(file);
+      //Open the URL on new Window
+      const link = document.createElement('a');
+      link.href = fileURL;
+      link.setAttribute('download', 'rates_template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Помилка завантаження шаблону');
+    }
+  };
+
+
+
+  // Reservation handlers
+  const openResModal = async (res) => {
+    // Fetch branches if not loaded
+    if (branches.length === 0) {
+      try {
+        const branchesRes = await adminService.getBranches();
+        setBranches(branchesRes.data);
+      } catch (e) {
+        console.error('Error fetching branches:', e);
+      }
+    }
+    setEditingReservation(res);
+    setResForm({
+      give_amount: res.give_amount,
+      get_amount: res.get_amount,
+      rate: res.rate,
+      branch_id: res.branch_id || '',
     });
-    const ws2 = XLSX.utils.json_to_sheet(branchData);
-    ws2['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(workbook, ws2, 'Відділення');
-    
-    // Sheet 3: Cross rates
-    const crossData = [
-      { 'Пара': 'EUR/USD', 'Опис': 'Євро до Долара', 'Купівля': 1.170, 'Продаж': 1.172 },
-      { 'Пара': 'GBP/USD', 'Опис': 'Фунт до Долара', 'Купівля': 1.332, 'Продаж': 1.335 },
-      { 'Пара': 'GBP/EUR', 'Опис': 'Фунт до Євро', 'Купівля': 1.138, 'Продаж': 1.140 },
-      { 'Пара': 'CHF/USD', 'Опис': 'Франк до Долара', 'Купівля': 1.254, 'Продаж': 1.257 },
-      { 'Пара': 'PLN/EUR', 'Опис': 'Злотий до Євро', 'Купівля': 0.233, 'Продаж': 0.236 },
-    ];
-    const ws3 = XLSX.utils.json_to_sheet(crossData);
-    ws3['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(workbook, ws3, 'Крос-курси');
-    
-    // Download
-    XLSX.writeFile(workbook, 'rates_template.xlsx');
+  };
+
+  const handleResSave = async () => {
+    setResSaving(true);
+    try {
+      await adminService.updateReservation(editingReservation.id, {
+        give_amount: parseFloat(resForm.give_amount),
+        get_amount: parseFloat(resForm.get_amount),
+        rate: parseFloat(resForm.rate),
+        branch_id: resForm.branch_id || null,
+      });
+      setEditingReservation(null);
+      fetchData();
+    } catch (error) {
+      console.error('Error saving reservation:', error);
+      alert(error.response?.data?.detail || 'Помилка збереження');
+    } finally {
+      setResSaving(false);
+    }
+  };
+
+  const handleAssign = async (resId) => {
+    try {
+      await adminService.assignReservation(resId);
+      fetchData();
+    } catch (error) {
+      console.error('Error assigning reservation:', error);
+      alert(error.response?.data?.detail || 'Помилка призначення');
+    }
+  };
+
+  const handleToggleRate = async (branchId, currency, isActive) => {
+    try {
+      // Toggle active status
+      // Backend logic: ON (active=True) for minor -> Deletes override -> Reverts to Base
+      // Backend logic: OFF (active=False) -> Creates override
+      await adminService.updateBranchRate(branchId, currency, { is_active: !isActive });
+      fetchData();
+    } catch (error) {
+      console.error('Error toggling rate:', error);
+    }
+  };
+
+  const handleUpdateRate = async (branchId, code, data) => {
+    try {
+      await adminService.updateBranchRate(branchId, code, data);
+      fetchData();
+    } catch (error) {
+      console.error('Error updating rate:', error);
+      alert('Помилка оновлення курсу');
+    }
+  };
+
+  const openAddRateModal = (branchId) => {
+    setRateModal({ open: true, branchId, currency: null });
+    setRateForm({ currency: 'USD', buy: '', sell: '', is_active: true });
+  };
+
+  const saveRate = async () => {
+    try {
+      const { branchId } = rateModal;
+      await adminService.updateBranchRate(branchId, rateForm.currency, {
+        buy_rate: parseFloat(rateForm.buy),
+        sell_rate: parseFloat(rateForm.sell),
+        is_active: rateForm.is_active
+      });
+      setRateModal({ ...rateModal, open: false });
+      fetchData();
+    } catch (error) {
+      console.error('Error saving rate:', error);
+      alert('Помилка збереження');
+    }
   };
 
   const filteredReservations = statusFilter
@@ -269,7 +315,7 @@ export default function AdminDashboard({ user, onLogout }) {
       <div className="p-6">
         {/* Stats Cards */}
         {dashboard && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <div className="bg-primary-light rounded-2xl p-5 border border-white/10">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
@@ -305,9 +351,19 @@ export default function AdminDashboard({ user, onLogout }) {
                 <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-purple-400" />
                 </div>
-                <span className="text-sm text-text-secondary">Обсяг (UAH)</span>
+                <span className="text-sm text-text-secondary">Обсяг за сьогодні (UAH)</span>
               </div>
               <div className="text-2xl font-bold">{dashboard.total_volume_uah.toLocaleString()}₴</div>
+            </div>
+
+            <div className="bg-primary-light rounded-2xl p-5 border border-white/10">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-purple-400" />
+                </div>
+                <span className="text-sm text-text-secondary">Обсяг за місяць (UAH)</span>
+              </div>
+              <div className="text-2xl font-bold">{dashboard.total_volume_uah_month?.toLocaleString()}₴</div>
             </div>
           </div>
         )}
@@ -316,37 +372,35 @@ export default function AdminDashboard({ user, onLogout }) {
         <div className="flex gap-2 mb-6 flex-wrap">
           <button
             onClick={() => setActiveTab('rates')}
-            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${
-              activeTab === 'rates'
-                ? 'bg-accent-yellow text-primary'
-                : 'bg-primary-light text-text-secondary hover:text-white'
-            }`}
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${activeTab === 'rates'
+              ? 'bg-accent-yellow text-primary'
+              : 'bg-primary-light text-text-secondary hover:text-white'
+              }`}
           >
             <FileSpreadsheet className="w-4 h-4 inline mr-2" />
             Курси валют
           </button>
           <button
             onClick={() => setActiveTab('reservations')}
-            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${
-              activeTab === 'reservations'
-                ? 'bg-accent-yellow text-primary'
-                : 'bg-primary-light text-text-secondary hover:text-white'
-            }`}
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${activeTab === 'reservations'
+              ? 'bg-accent-yellow text-primary'
+              : 'bg-primary-light text-text-secondary hover:text-white'
+              }`}
           >
             <Building2 className="w-4 h-4 inline mr-2" />
             Бронювання
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${
-              activeTab === 'settings'
-                ? 'bg-accent-yellow text-primary'
-                : 'bg-primary-light text-text-secondary hover:text-white'
-            }`}
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${activeTab === 'settings'
+              ? 'bg-accent-yellow text-primary'
+              : 'bg-primary-light text-text-secondary hover:text-white'
+              }`}
           >
             <AlertCircle className="w-4 h-4 inline mr-2" />
             Налаштування
           </button>
+
         </div>
 
         {/* Settings Tab */}
@@ -358,7 +412,7 @@ export default function AdminDashboard({ user, onLogout }) {
             {/* Upload Section */}
             <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
               <h3 className="text-lg font-bold mb-4">Завантаження курсів</h3>
-              
+
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
                   <div className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-accent-yellow/50 transition-colors">
@@ -389,9 +443,8 @@ export default function AdminDashboard({ user, onLogout }) {
                   )}
 
                   {uploadResult && (
-                    <div className={`p-4 rounded-xl mt-4 ${
-                      uploadResult.success ? 'bg-green-500/10' : 'bg-red-500/10'
-                    }`}>
+                    <div className={`p-4 rounded-xl mt-4 ${uploadResult.success ? 'bg-green-500/10' : 'bg-red-500/10'
+                      }`}>
                       <div className="flex items-center gap-3 mb-2">
                         {uploadResult.success ? (
                           <CheckCircle className="w-5 h-5 text-green-400" />
@@ -407,9 +460,6 @@ export default function AdminDashboard({ user, onLogout }) {
                           <p>✓ Базові курси: {uploadResult.base_rates_updated || uploadResult.updated_currencies || 0}</p>
                           {uploadResult.branch_rates_updated > 0 && (
                             <p>✓ Курси по відділеннях: {uploadResult.branch_rates_updated}</p>
-                          )}
-                          {uploadResult.cross_rates_updated > 0 && (
-                            <p>✓ Крос-курси: {uploadResult.cross_rates_updated}</p>
                           )}
                         </div>
                       )}
@@ -434,27 +484,53 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
 
                 <div className="p-4 bg-accent-blue/10 rounded-xl">
-                  <h4 className="font-medium text-sm mb-3 text-accent-blue">📋 Формат Excel файлу</h4>
-                  <div className="space-y-4 text-xs text-text-secondary">
-                    <div>
-                      <p className="font-medium text-white mb-1">Аркуш "Курси" - базові курси:</p>
-                      <code className="text-accent-yellow block bg-black/20 p-2 rounded">
-                        Код валюти | Купівля | Продаж
-                      </code>
-                    </div>
-                    <div>
-                      <p className="font-medium text-white mb-1">Аркуш "Відділення" - курси по філіях:</p>
-                      <code className="text-accent-yellow block bg-black/20 p-2 rounded">
-                        Відділення | Код валюти | Купівля | Продаж
-                      </code>
-                    </div>
-                    <div>
-                      <p className="font-medium text-white mb-1">Аркуш "Крос-курси":</p>
-                      <code className="text-accent-yellow block bg-black/20 p-2 rounded">
-                        Пара | Купівля | Продаж<br/>
-                        EUR/USD | 1.08 | 1.09
-                      </code>
-                    </div>
+                  <h4 className="font-medium text-sm mb-3 text-accent-blue">📋 Формат Excel файлу (Шаблон)</h4>
+                  <div className="text-xs text-text-secondary overflow-x-auto">
+                    <p className="mb-2">Ліва частина - індивідуальні курси відділень (Матриця):</p>
+                    <table className="w-full border-collapse border border-white/20 mb-4 text-[10px] text-center">
+                      <thead>
+                        <tr className="bg-white/5">
+                          <th className="border border-white/10 p-1">Каса</th>
+                          <th className="border border-white/10 p-1 text-green-400">$</th>
+                          <th className="border border-white/10 p-1 text-red-400">$</th>
+                          <th className="border border-white/10 p-1 text-green-400">€</th>
+                          <th className="border border-white/10 p-1 text-red-400">€</th>
+                          <th className="border border-white/10 p-1">...</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="border border-white/10 p-1 text-left">Вул. Городоцька</td>
+                          <td className="border border-white/10 p-1">41.50</td>
+                          <td className="border border-white/10 p-1">42.00</td>
+                          <td className="border border-white/10 p-1">45.10</td>
+                          <td className="border border-white/10 p-1">45.80</td>
+                          <td className="border border-white/10 p-1">...</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <p className="mb-2">Права частина - базові курси (вертикально):</p>
+                    <table className="w-full border-collapse border border-white/20 text-[10px] text-center">
+                      <thead>
+                        <tr className="bg-white/5">
+                          <th className="border border-white/10 p-1">Прапор</th>
+                          <th className="border border-white/10 p-1">Назва</th>
+                          <th className="border border-white/10 p-1 text-green-400">Куп</th>
+                          <th className="border border-white/10 p-1 text-red-400">Прод</th>
+                          <th className="border border-white/10 p-1">Код</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="border border-white/10 p-1">🇨🇦</td>
+                          <td className="border border-white/10 p-1">Канадський долар</td>
+                          <td className="border border-white/10 p-1">30.50</td>
+                          <td className="border border-white/10 p-1">31.20</td>
+                          <td className="border border-white/10 p-1">CAD</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -464,30 +540,19 @@ export default function AdminDashboard({ user, onLogout }) {
             <div className="flex gap-2">
               <button
                 onClick={() => setRatesSubTab('base')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  ratesSubTab === 'base' ? 'bg-white/10 text-white' : 'text-text-secondary hover:text-white'
-                }`}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${ratesSubTab === 'base' ? 'bg-white/10 text-white' : 'text-text-secondary hover:text-white'
+                  }`}
               >
                 <DollarSign className="w-4 h-4 inline mr-1" />
                 Базові курси
               </button>
               <button
                 onClick={() => setRatesSubTab('branches')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  ratesSubTab === 'branches' ? 'bg-white/10 text-white' : 'text-text-secondary hover:text-white'
-                }`}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${ratesSubTab === 'branches' ? 'bg-white/10 text-white' : 'text-text-secondary hover:text-white'
+                  }`}
               >
                 <MapPin className="w-4 h-4 inline mr-1" />
                 По відділеннях
-              </button>
-              <button
-                onClick={() => setRatesSubTab('cross')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  ratesSubTab === 'cross' ? 'bg-white/10 text-white' : 'text-text-secondary hover:text-white'
-                }`}
-              >
-                <ArrowRightLeft className="w-4 h-4 inline mr-1" />
-                Крос-курси
               </button>
             </div>
 
@@ -542,33 +607,39 @@ export default function AdminDashboard({ user, onLogout }) {
             {ratesSubTab === 'branches' && (
               <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
                 <h3 className="text-lg font-bold mb-4">Курси по відділеннях</h3>
-                
+
                 {allRates?.branch_rates && Object.keys(allRates.branch_rates).length > 0 ? (
                   <div className="space-y-6">
                     {allRates.branches?.map((branch) => (
                       <div key={branch.id} className="p-4 bg-primary rounded-xl border border-white/5">
-                        <div className="flex items-center gap-2 mb-3">
-                          <MapPin className="w-4 h-4 text-accent-blue" />
-                          <span className="font-medium">{branch.address}</span>
-                          <span className="text-xs text-text-secondary">(ID: {branch.id})</span>
-                        </div>
-                        
-                        {allRates.branch_rates[branch.id] ? (
-                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                            {Object.entries(allRates.branch_rates[branch.id]).map(([code, rates]) => (
-                              <div key={code} className="p-3 bg-white/5 rounded-lg">
-                                <div className="font-bold text-sm mb-1">{code}</div>
-                                <div className="text-xs">
-                                  <span className="text-green-400">{rates.buy?.toFixed(2)}</span>
-                                  {' / '}
-                                  <span className="text-red-400">{rates.sell?.toFixed(2)}</span>
-                                </div>
-                              </div>
-                            ))}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-accent-blue" />
+                            <span className="font-medium">{branch.address}</span>
+                            <span className="text-xs text-text-secondary">(ID: {branch.id})</span>
                           </div>
-                        ) : (
-                          <p className="text-sm text-text-secondary">Використовуються базові курси</p>
-                        )}
+                          <button
+                            onClick={() => openAddRateModal(branch.id)}
+                            className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-green-400 transition-colors"
+                            title="Додати валюту"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Iterate ALL currencies to show merged view */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                          {currencies.map((currency) => (
+                            <BranchRateCard
+                              key={currency.code}
+                              branchId={branch.id}
+                              currency={currency}
+                              branchData={allRates.branch_rates?.[branch.id]?.[currency.code]}
+                              onUpdate={handleUpdateRate}
+                              onToggle={handleToggleRate}
+                            />
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -581,42 +652,6 @@ export default function AdminDashboard({ user, onLogout }) {
                 )}
               </div>
             )}
-
-            {/* Cross Rates */}
-            {ratesSubTab === 'cross' && (
-              <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
-                <h3 className="text-lg font-bold mb-4">Крос-курси</h3>
-                
-                {allRates?.cross_rates && Object.keys(allRates.cross_rates).length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.entries(allRates.cross_rates).map(([pair, rates]) => (
-                      <div key={pair} className="p-4 bg-primary rounded-xl border border-white/5">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold text-lg">{pair}</span>
-                          <ArrowRightLeft className="w-4 h-4 text-text-secondary" />
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <div>
-                            <span className="text-text-secondary">Купівля: </span>
-                            <span className="text-green-400 font-medium">{rates.buy?.toFixed(4)}</span>
-                          </div>
-                          <div>
-                            <span className="text-text-secondary">Продаж: </span>
-                            <span className="text-red-400 font-medium">{rates.sell?.toFixed(4)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-text-secondary">
-                    <ArrowRightLeft className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>Крос-курси не встановлені</p>
-                    <p className="text-xs mt-1">Завантажте Excel файл з аркушем "Крос-курси"</p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -625,20 +660,59 @@ export default function AdminDashboard({ user, onLogout }) {
           <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">Всі бронювання</h3>
-              
+
               <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 mr-2">
+                  <button
+                    onClick={() => {
+                      const today = new Date().toISOString().split('T')[0];
+                      setDateFrom(today);
+                      setDateTo(today);
+                    }}
+                    className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    Сьогодні
+                  </button>
+                  <button
+                    onClick={() => {
+                      const yesterday = new Date();
+                      yesterday.setDate(yesterday.getDate() - 1);
+                      const yStr = yesterday.toISOString().split('T')[0];
+                      setDateFrom(yStr);
+                      setDateTo(yStr);
+                    }}
+                    className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    Вчора
+                  </button>
+                  <div className="w-px h-8 bg-white/10 mx-1"></div>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
+                  />
+                  <span className="text-text-secondary">—</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
+                  />
+                </div>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="px-4 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
                 >
                   <option value="">Всі статуси</option>
-                  <option value="pending">Очікує</option>
+                  <option value="pending_admin">Очікує адміна</option>
+                  <option value="pending">Очікує оператора</option>
                   <option value="confirmed">Підтверджено</option>
                   <option value="completed">Завершено</option>
                   <option value="cancelled">Скасовано</option>
                 </select>
-                
+
                 <button
                   onClick={fetchData}
                   className="p-2 text-text-secondary hover:text-white rounded-lg hover:bg-white/5 transition-colors"
@@ -659,23 +733,32 @@ export default function AdminDashboard({ user, onLogout }) {
                   <thead>
                     <tr className="text-left text-xs text-text-secondary border-b border-white/10">
                       <th className="pb-3 pr-4">ID</th>
-                      <th className="pb-3 pr-4">Телефон</th>
+                      <th className="pb-3 pr-4">Клієнт</th>
                       <th className="pb-3 pr-4">Сума</th>
                       <th className="pb-3 pr-4">Курс</th>
                       <th className="pb-3 pr-4">Відділення</th>
                       <th className="pb-3 pr-4">Статус</th>
                       <th className="pb-3 pr-4">Створено</th>
+                      <th className="pb-3">Дії</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredReservations.map((res) => {
                       const statusCfg = STATUS_CONFIG[res.status] || STATUS_CONFIG.pending;
                       const StatusIcon = statusCfg.icon;
-                      
+
                       return (
                         <tr key={res.id} className="border-b border-white/5 hover:bg-white/5">
                           <td className="py-4 pr-4 font-mono text-sm">#{res.id}</td>
-                          <td className="py-4 pr-4 text-sm">{res.phone}</td>
+                          <td className="py-4 pr-4">
+                            <div className="text-sm font-medium">{res.customer_name || '—'}</div>
+                            <div className="flex items-center gap-1 mt-1 text-xs text-text-secondary">
+                              <Phone className="w-3 h-3" />
+                              <a href={`tel:${res.phone}`} className="hover:text-white hover:underline transition-colors">
+                                {res.phone}
+                              </a>
+                            </div>
+                          </td>
                           <td className="py-4 pr-4">
                             <div className="text-sm font-medium">
                               {res.give_amount.toLocaleString()} {res.give_currency}
@@ -686,7 +769,7 @@ export default function AdminDashboard({ user, onLogout }) {
                           </td>
                           <td className="py-4 pr-4 text-sm">{res.rate}</td>
                           <td className="py-4 pr-4 text-sm text-text-secondary">
-                            {res.branch_address || '-'}
+                            {res.branch_address || '—'}
                           </td>
                           <td className="py-4 pr-4">
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${statusCfg.color}`}>
@@ -697,6 +780,28 @@ export default function AdminDashboard({ user, onLogout }) {
                           <td className="py-4 pr-4 text-xs text-text-secondary">
                             {new Date(res.created_at).toLocaleString('uk-UA')}
                           </td>
+                          <td className="py-4">
+                            <div className="flex gap-2">
+                              {res.status === 'pending_admin' && (
+                                <>
+                                  <button
+                                    onClick={() => openResModal(res)}
+                                    className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                                    title="Редагувати"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleAssign(res.id)}
+                                    className="p-2 text-text-secondary hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                                    title="Надіслати оператору"
+                                  >
+                                    <Send className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}
@@ -706,7 +811,156 @@ export default function AdminDashboard({ user, onLogout }) {
             )}
           </div>
         )}
+
+        {/* Add/Edit Rate Modal */}
+        {rateModal.open && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-primary-light rounded-2xl p-6 w-full max-w-sm border border-white/10">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold">Додати/Редагувати курс</h3>
+                <button onClick={() => setRateModal({ ...rateModal, open: false })}><X className="w-5 h-5 text-text-secondary" /></button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">Валюта</label>
+                  <select
+                    className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
+                    value={rateForm.currency}
+                    onChange={(e) => setRateForm({ ...rateForm, currency: e.target.value })}
+                  >
+                    {currencies.map(c => (
+                      <option key={c.code} value={c.code}>{c.code} - {c.name_uk}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">Купівля</label>
+                    <input
+                      type="number" step="0.01"
+                      className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
+                      value={rateForm.buy}
+                      onChange={(e) => setRateForm({ ...rateForm, buy: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">Продаж</label>
+                    <input
+                      type="number" step="0.01"
+                      className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
+                      value={rateForm.sell}
+                      onChange={(e) => setRateForm({ ...rateForm, sell: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="rateActive"
+                    checked={rateForm.is_active}
+                    onChange={(e) => setRateForm({ ...rateForm, is_active: e.target.checked })}
+                    className="rounded bg-primary border-white/10"
+                  />
+                  <label htmlFor="rateActive" className="text-sm">Активний курс</label>
+                </div>
+
+                <button
+                  onClick={saveRate}
+                  className="w-full bg-accent-yellow text-primary font-bold py-3 rounded-xl mt-2 hover:bg-yellow-400 transition-colors"
+                >
+                  Зберегти
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reservation Edit Modal */}
+        {editingReservation && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-primary-light rounded-2xl p-6 w-full max-w-md border border-white/10">
+              <h3 className="text-lg font-bold mb-4">Редагувати бронювання #{editingReservation.id}</h3>
+
+              <div className="space-y-4">
+                <div className="p-3 bg-primary rounded-xl">
+                  <div className="text-sm text-text-secondary">Клієнт</div>
+                  <div className="font-medium">{editingReservation.customer_name || '—'}</div>
+                  <div className="text-sm text-text-secondary">{editingReservation.phone}</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">
+                      Віддає ({editingReservation.give_currency})
+                    </label>
+                    <input
+                      type="number"
+                      value={resForm.give_amount}
+                      onChange={(e) => setResForm({ ...resForm, give_amount: e.target.value })}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">
+                      Отримує ({editingReservation.get_currency})
+                    </label>
+                    <input
+                      type="number"
+                      value={resForm.get_amount}
+                      onChange={(e) => setResForm({ ...resForm, get_amount: e.target.value })}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">Курс</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={resForm.rate}
+                    onChange={(e) => setResForm({ ...resForm, rate: e.target.value })}
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">Відділення</label>
+                  <select
+                    value={resForm.branch_id}
+                    onChange={(e) => setResForm({ ...resForm, branch_id: e.target.value ? parseInt(e.target.value) : '' })}
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                  >
+                    <option value="">— Оберіть відділення —</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.address}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setEditingReservation(null)}
+                  className="flex-1 py-3 bg-white/5 rounded-xl text-text-secondary hover:text-white hover:bg-white/10 transition-all"
+                >
+                  Скасувати
+                </button>
+                <button
+                  onClick={handleResSave}
+                  disabled={resSaving}
+                  className="flex-1 py-3 bg-accent-yellow text-primary rounded-xl font-medium hover:brightness-110 transition-all disabled:opacity-50"
+                >
+                  {resSaving ? 'Збереження...' : 'Зберегти'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </div >
   );
 }

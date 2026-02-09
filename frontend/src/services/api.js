@@ -96,15 +96,19 @@ const mockLogin = (username, password) => {
 };
 
 export const currencyService = {
-  getAll: () => api.get('/currencies'),
+  getAll: (branchId) => api.get('/currencies', { params: branchId ? { branch_id: branchId } : {} }),
   getOne: (code) => api.get(`/currencies/${code}`),
   getRates: () => api.get('/rates'),
-  calculate: (amount, fromCurrency, toCurrency = 'UAH') => 
+  getCrossRates: () => api.get('/rates/cross'),
+  getBranchRates: (branchId) => api.get('/currencies', { params: { branch_id: branchId } }),
+  calculate: (amount, fromCurrency, toCurrency = 'UAH') =>
     api.get('/calculate', { params: { amount, from_currency: fromCurrency, to_currency: toCurrency } }),
+  calculateCross: (amount, fromCurrency, toCurrency) =>
+    api.get('/calculate/cross', { params: { amount, from_currency: fromCurrency, to_currency: toCurrency } }),
 };
 
 export const orderService = {
-  getAll: (type = null, page = 1, limit = 10) => 
+  getAll: (type = null, page = 1, limit = 10) =>
     api.get('/orders', { params: { type, page, limit } }),
   getCount: () => api.get('/orders/count'),
 };
@@ -112,6 +116,8 @@ export const orderService = {
 export const branchService = {
   getAll: () => api.get('/branches'),
   getOne: (id) => api.get(`/branches/${id}`),
+  create: (data) => api.post('/admin/branches', data),
+  delete: (id) => api.delete(`/admin/branches/${id}`),
 };
 
 export const reservationService = {
@@ -129,11 +135,12 @@ export const reservationService = {
         rate: 42.10,
         status: 'pending',
         branch_id: data.branch_id || 1,
-        branch_address: data.branch_id === 2 ? 'вул. В. Васильківська, 110' : 
-                        data.branch_id === 3 ? 'вул. В. Васильківська, 130' :
-                        data.branch_id === 4 ? 'вул. Р. Окіпної, 2' :
-                        data.branch_id === 5 ? 'вул. Саксаганського, 69' : 'вул. Старовокзальна, 23',
+        branch_address: data.branch_id === 2 ? 'вул. В. Васильківська, 110' :
+          data.branch_id === 3 ? 'вул. В. Васильківська, 130' :
+            data.branch_id === 4 ? 'вул. Р. Окіпної, 2' :
+              data.branch_id === 5 ? 'вул. Саксаганського, 69' : 'вул. Старовокзальна, 23',
         customer_name: data.customer_name || '',
+        status: 'pending_admin',
         created_at: now.toISOString(),
         expires_at: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
       };
@@ -189,69 +196,94 @@ export const adminService = {
   getDashboard: async () => {
     // Always include mock reservations in stats
     const mockReservations = getMockReservations();
-    
+
     try {
       const response = await api.get('/admin/dashboard');
       const backendData = response.data;
-      
+
       // Add mock stats to backend stats
-      return { 
-        data: { 
-          total_reservations: backendData.total_reservations + mockReservations.length, 
-          pending_reservations: backendData.pending_reservations + mockReservations.filter(r => r.status === 'pending').length, 
-          confirmed_reservations: backendData.confirmed_reservations + mockReservations.filter(r => r.status === 'confirmed').length, 
-          completed_today: backendData.completed_today + mockReservations.filter(r => r.status === 'completed').length, 
+      return {
+        data: {
+          total_reservations: backendData.total_reservations + mockReservations.length,
+          pending_reservations: backendData.pending_reservations + mockReservations.filter(r => r.status === 'pending').length,
+          confirmed_reservations: backendData.confirmed_reservations + mockReservations.filter(r => r.status === 'confirmed').length,
+          completed_today: backendData.completed_today + mockReservations.filter(r => r.status === 'completed').length,
           total_volume_uah: backendData.total_volume_uah + mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-        } 
+        }
       };
     } catch (error) {
       // Backend unavailable - use only mock data
-      return { 
-        data: { 
-          total_reservations: mockReservations.length, 
-          pending_reservations: mockReservations.filter(r => r.status === 'pending').length, 
-          confirmed_reservations: mockReservations.filter(r => r.status === 'confirmed').length, 
-          completed_today: mockReservations.filter(r => r.status === 'completed').length, 
+      return {
+        data: {
+          total_reservations: mockReservations.length,
+          pending_reservations: mockReservations.filter(r => r.status === 'pending').length,
+          confirmed_reservations: mockReservations.filter(r => r.status === 'confirmed').length,
+          completed_today: mockReservations.filter(r => r.status === 'completed').length,
           total_volume_uah: mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-        } 
+        }
       };
     }
   },
   getReservations: async (params = {}) => {
     // Always get mock reservations from localStorage first
-    const mockItems = getMockReservations();
-    
+    let mockItems = [];
     try {
-      const response = await api.get('/admin/reservations', { params });
-      const backendItems = response.data.items || [];
-      
+      mockItems = getMockReservations();
+    } catch (e) {
+      console.warn('Failed to load mock reservations', e);
+    }
+
+    try {
+      // Clean params
+      const cleanParams = {};
+      if (params.limit) cleanParams.limit = params.limit;
+      if (params.page) cleanParams.page = params.page;
+      if (params.date_from) cleanParams.date_from = params.date_from;
+      if (params.date_to) cleanParams.date_to = params.date_to;
+      // Note: params.status is not sent to backend to ensure we get mixed data if needed, 
+      // or we can send it if we want strict backend filtering. 
+      // Current logic implies fetching all and merging.
+
+      const response = await api.get('/admin/reservations', { params: cleanParams });
+
+      let backendItems = [];
+      if (response && response.data && Array.isArray(response.data.items)) {
+        backendItems = response.data.items;
+      } else if (response && Array.isArray(response.items)) {
+        // Fallback if interceptor unwrapped it
+        backendItems = response.items;
+      } else {
+        console.warn('Unexpected reservation response format:', response);
+      }
+
       // Combine: all unique items from both sources
       const allItemsMap = new Map();
-      
+
       // Add backend items first
       backendItems.forEach(item => {
         allItemsMap.set(item.id, item);
       });
-      
+
       // Add mock items if not already present
       mockItems.forEach(item => {
         if (!allItemsMap.has(item.id)) {
           allItemsMap.set(item.id, item);
         }
       });
-      
+
       let allItems = Array.from(allItemsMap.values());
-      
+
       // Sort by created_at descending
       allItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      
-      // Apply status filter
+
+      // Apply status filter (frontend side to handle mixed data sources)
       if (params.status) {
         allItems = allItems.filter(r => r.status === params.status);
       }
-      
+
       return { data: { items: allItems, total: allItems.length, page: 1, pages: 1 } };
     } catch (error) {
+      console.error('Error fetching reservations:', error);
       // Backend unavailable - use only mock data
       let reservations = mockItems;
       if (params.status) {
@@ -260,11 +292,43 @@ export const adminService = {
       return { data: { items: reservations, total: reservations.length, page: 1, pages: 1 } };
     }
   },
+  updateReservation: async (id, data) => {
+    try {
+      return await api.put(`/admin/reservations/${id}`, data);
+    } catch (error) {
+      // Mock mode fallback
+      const mockReservations = getMockReservations();
+      const idx = mockReservations.findIndex(r => r.id === id);
+      if (idx !== -1) {
+        mockReservations[idx] = { ...mockReservations[idx], ...data };
+        saveMockReservations(mockReservations);
+        return { data: mockReservations[idx] };
+      }
+      throw error;
+    }
+  },
+  assignReservation: async (id) => {
+    try {
+      return await api.post(`/admin/reservations/${id}/assign`);
+    } catch (error) {
+      // Mock mode fallback
+      const mockReservations = getMockReservations();
+      const idx = mockReservations.findIndex(r => r.id === id);
+      if (idx !== -1) {
+        mockReservations[idx].status = 'pending_operator';
+        saveMockReservations(mockReservations);
+        return { data: mockReservations[idx] };
+      }
+      throw error;
+    }
+  },
   uploadRates: (file) => {
     const formData = new FormData();
     formData.append('file', file);
     return api.post('/admin/rates/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: {
+        'Content-Type': undefined
+      }
     });
   },
   downloadTemplate: () => api.get('/admin/rates/template', { responseType: 'blob' }),
@@ -279,8 +343,10 @@ export const adminService = {
     }
   },
   getBranchRates: (branchId) => api.get(`/rates/branch/${branchId}`),
+  updateBranchRate: (branchId, currencyCode, data) =>
+    api.put(`/admin/rates/branch/${branchId}/${currencyCode}`, data),
   getCrossRates: () => api.get('/rates/cross'),
-  
+
   // Currency management
   getCurrencies: async () => {
     try {
@@ -291,10 +357,16 @@ export const adminService = {
     }
   },
   updateCurrency: (code, data) => api.put(`/admin/currencies/${code}`, data),
-  
+
   // Branch management
   getBranches: () => api.get('/admin/branches'),
   updateBranch: (id, data) => api.put(`/admin/branches/${id}`, data),
+
+  // User management
+  getUsers: () => api.get('/admin/users'),
+  createUser: (data) => api.post('/admin/users', data),
+  updateUser: (id, data) => api.put(`/admin/users/${id}`, data),
+  deleteUser: (id) => api.delete(`/admin/users/${id}`),
 };
 
 // Operator service with mock fallback
@@ -305,31 +377,31 @@ export const operatorService = {
     if (currentMockUser?.branch_id) {
       mockReservations = mockReservations.filter(r => r.branch_id === currentMockUser.branch_id);
     }
-    
+
     try {
       const response = await api.get('/operator/dashboard');
       const backendData = response.data;
-      
+
       // Add mock stats to backend stats
-      return { 
-        data: { 
-          total_reservations: backendData.total_reservations + mockReservations.length, 
-          pending_reservations: backendData.pending_reservations + mockReservations.filter(r => r.status === 'pending').length, 
-          confirmed_reservations: backendData.confirmed_reservations + mockReservations.filter(r => r.status === 'confirmed').length, 
-          completed_today: backendData.completed_today + mockReservations.filter(r => r.status === 'completed').length, 
+      return {
+        data: {
+          total_reservations: backendData.total_reservations + mockReservations.length,
+          pending_reservations: backendData.pending_reservations + mockReservations.filter(r => r.status === 'pending').length,
+          confirmed_reservations: backendData.confirmed_reservations + mockReservations.filter(r => r.status === 'confirmed').length,
+          completed_today: backendData.completed_today + mockReservations.filter(r => r.status === 'completed').length,
           total_volume_uah: backendData.total_volume_uah + mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-        } 
+        }
       };
     } catch (error) {
       // Backend unavailable
-      return { 
-        data: { 
-          total_reservations: mockReservations.length, 
-          pending_reservations: mockReservations.filter(r => r.status === 'pending').length, 
-          confirmed_reservations: mockReservations.filter(r => r.status === 'confirmed').length, 
-          completed_today: mockReservations.filter(r => r.status === 'completed').length, 
+      return {
+        data: {
+          total_reservations: mockReservations.length,
+          pending_reservations: mockReservations.filter(r => r.status === 'pending').length,
+          confirmed_reservations: mockReservations.filter(r => r.status === 'confirmed').length,
+          completed_today: mockReservations.filter(r => r.status === 'completed').length,
           total_volume_uah: mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-        } 
+        }
       };
     }
   },
@@ -339,25 +411,25 @@ export const operatorService = {
     if (currentMockUser?.branch_id) {
       mockItems = mockItems.filter(r => r.branch_id === currentMockUser.branch_id);
     }
-    
+
     try {
       const response = await api.get('/operator/reservations', { params });
       const backendItems = response.data.items || [];
-      
+
       // Combine items
       const allItemsMap = new Map();
       backendItems.forEach(item => allItemsMap.set(item.id, item));
       mockItems.forEach(item => {
         if (!allItemsMap.has(item.id)) allItemsMap.set(item.id, item);
       });
-      
+
       let allItems = Array.from(allItemsMap.values());
       allItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      
+
       if (params.status) {
         allItems = allItems.filter(r => r.status === params.status);
       }
-      
+
       return { data: { items: allItems, total: allItems.length, page: 1, pages: 1 } };
     } catch (error) {
       let reservations = mockItems;
@@ -381,15 +453,15 @@ export const operatorService = {
       { 'Прапор': '🇹🇷', 'Код валюти': 'TRY', 'Назва': 'Турецька ліра', 'Купівля': 1.22, 'Продаж': 1.28 },
       { 'Прапор': '🇯🇵', 'Код валюти': 'JPY', 'Назва': 'Японська єна', 'Купівля': 0.28, 'Продаж': 0.29 },
     ];
-    
+
     const workbook = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(ratesData);
     ws['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(workbook, ws, 'Курси');
-    
+
     const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    
+
     return { data: blob };
   },
   updateReservation: async (id, data) => {
@@ -486,7 +558,7 @@ const DEFAULT_FAQ = [
 
 const DEFAULT_SERVICES = [
   { id: 1, title: "Приймаємо валюту, яка вийшла з обігу", description: "Миттєво обміняємо старі фунти, франки, марки.", image_url: "https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400&h=200&fit=crop", link_url: "/services/old-currency" },
-  { id: 2, title: "Приймаємо зношену валюту", description: "Зручний спосіб позбутися непотрібних купюр.", image_url: "https://images.unsplash.com/photo-1611324477757-c947df087651?w=400&h=200&fit=crop", link_url: "/services/damaged-currency" },
+  { id: 2, title: "Приймаємо зношену валюту", description: "Зручний спосіб позбутися непотрібних купюр.", image_url: "https://images.unsplash.com/photo-1605792657660-596af9009e82?w=400&h=200&fit=crop", link_url: "/services/damaged-currency" },
   { id: 3, title: "Старі франки на нові або USD", description: "Оновіть франки які вийшли з обігу.", image_url: "https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=400&h=200&fit=crop", link_url: "/services/old-francs" },
 ];
 

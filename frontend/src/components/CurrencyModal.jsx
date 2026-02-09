@@ -22,23 +22,27 @@ export default function CurrencyModal({ isOpen, onClose, currencies, onSelect, t
           </button>
         </div>
 
-        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
-          {currencies.map((currency) => (
+        <div className="max-h-[60vh] overflow-y-auto pr-2 grid grid-cols-3 gap-3 lg:grid-cols-1 lg:space-y-2">
+          {currencies.filter(c => c.code !== 'UAH').map((currency) => (
             <button
               key={currency.code}
               onClick={() => onSelect(currency)}
-              className="w-full flex items-center justify-between p-4 bg-primary rounded-xl border border-white/10 hover:border-accent-yellow transition-colors"
+              className="group relative w-full flex flex-col lg:flex-row items-center justify-center lg:justify-between p-3 lg:p-4 bg-primary rounded-xl border border-white/10 hover:border-accent-yellow transition-all"
             >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{currency.flag}</span>
-                <div className="text-left">
-                  <div className="font-bold">{currency.code}</div>
-                  <div className="text-sm text-text-secondary">{currency.name_uk}</div>
+              <div className="flex flex-col lg:flex-row items-center gap-2 lg:gap-3">
+                <span className="text-3xl lg:text-2xl filter drop-shadow-lg">{currency.flag}</span>
+                <div className="text-center lg:text-left">
+                  <div className="font-bold text-sm lg:text-base">{currency.code}</div>
+                  <div className="hidden lg:block text-xs text-text-secondary">{currency.name_uk}</div>
                 </div>
               </div>
-              <span className={`font-semibold ${currency.is_popular ? 'text-success' : 'text-accent-yellow'}`}>
-                {currency.buy_rate?.toFixed(2)}
-              </span>
+              {currency.code !== 'UAH' && (
+                <div className="mt-1 lg:mt-0 text-xs lg:text-sm font-semibold bg-white/5 px-2 py-0.5 rounded lg:bg-transparent lg:p-0">
+                  <span className={currency.is_popular ? 'text-success' : 'text-accent-yellow'}>
+                    {currency.buy_rate?.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </button>
           ))}
         </div>

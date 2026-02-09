@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { 
-  Save, Plus, Trash2, Edit2, X, Phone, Mail, Clock, 
+import {
+  Save, Plus, Trash2, Edit2, X, Phone, Mail, Clock,
   MapPin, MessageSquare, Send, Globe, HelpCircle, Briefcase,
-  ToggleLeft, ToggleRight, DollarSign
+  ToggleLeft, ToggleRight, DollarSign, Users
 } from 'lucide-react';
 import { settingsService, faqService, servicesService, branchService, adminService, currencyService } from '../services/api';
 
@@ -20,6 +20,13 @@ export default function SettingsPage() {
   const [editingBranch, setEditingBranch] = useState(null);
   const [message, setMessage] = useState(null);
 
+  // Operators state
+  const [users, setUsers] = useState([]);
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [userForm, setUserForm] = useState({ username: '', password: '', name: '', branch_id: '' });
+  const [userSaving, setUserSaving] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -27,18 +34,20 @@ export default function SettingsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [settingsRes, faqRes, servicesRes, branchesRes, currenciesRes] = await Promise.all([
+      const [settingsRes, faqRes, servicesRes, branchesRes, currenciesRes, usersRes] = await Promise.all([
         settingsService.get(),
         faqService.getAll(),
         servicesService.getAll(),
         branchService.getAll(),
-        currencyService.getAll(),
+        adminService.getCurrencies(),
+        adminService.getUsers(),
       ]);
       setSettings(settingsRes.data);
       setFaqItems(faqRes.data);
       setServices(servicesRes.data);
       setBranches(branchesRes.data);
       setCurrencies(currenciesRes.data);
+      setUsers(usersRes.data);
     } catch (error) {
       console.error('Error fetching settings:', error);
     } finally {
@@ -117,7 +126,11 @@ export default function SettingsPage() {
 
   const handleSaveBranch = async (branch) => {
     try {
-      await adminService.updateBranch(branch.id, branch);
+      if (branch.id) {
+        await adminService.updateBranch(branch.id, branch);
+      } else {
+        await branchService.create(branch);
+      }
       fetchData();
       setEditingBranch(null);
       showMessage('Відділення збережено');
@@ -126,6 +139,79 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteBranch = async (id) => {
+    if (!confirm('Видалити це відділення?')) return;
+    try {
+      await branchService.delete(id);
+      fetchData();
+      showMessage('Відділення видалено');
+    } catch (error) {
+      showMessage(error.response?.data?.detail || 'Помилка видалення', 'error');
+    }
+  };
+
+  // Operators functions
+  const openUserModal = (user = null) => {
+    if (user) {
+      setEditingUser(user);
+      setUserForm({
+        username: user.username,
+        password: '',
+        name: user.name,
+        branch_id: user.branch_id || '',
+      });
+    } else {
+      setEditingUser(null);
+      setUserForm({ username: '', password: '', name: '', branch_id: '' });
+    }
+    setUserModalOpen(true);
+  };
+
+  const handleUserSubmit = async () => {
+    setUserSaving(true);
+    try {
+      if (editingUser) {
+        await adminService.updateUser(editingUser.id, {
+          name: userForm.name,
+          branch_id: userForm.branch_id || null,
+          password: userForm.password || null,
+        });
+      } else {
+        await adminService.createUser({
+          username: userForm.username,
+          password: userForm.password,
+          name: userForm.name,
+          branch_id: userForm.branch_id || null,
+          role: 'operator',
+        });
+      }
+      setUserModalOpen(false);
+      const usersRes = await adminService.getUsers();
+      setUsers(usersRes.data);
+      showMessage('Оператора збережено');
+    } catch (error) {
+      console.error('Error saving user:', error);
+      showMessage(error.response?.data?.detail || 'Помилка збереження', 'error');
+    } finally {
+      setUserSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!confirm('Видалити цього оператора?')) return;
+    try {
+      await adminService.deleteUser(userId);
+      const usersRes = await adminService.getUsers();
+      setUsers(usersRes.data);
+      showMessage('Оператора видалено');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      showMessage(error.response?.data?.detail || 'Помилка видалення', 'error');
+    }
+  };
+
+  const [editingCurrency, setEditingCurrency] = useState(null);
+
   const handleToggleCurrency = async (code, isActive) => {
     try {
       await adminService.updateCurrency(code, { is_active: !isActive });
@@ -133,6 +219,28 @@ export default function SettingsPage() {
       showMessage(`Валюту ${code} ${!isActive ? 'увімкнено' : 'вимкнено'}`);
     } catch (error) {
       showMessage('Помилка оновлення', 'error');
+    }
+  };
+
+  const handleSaveCurrency = async () => {
+    if (!editingCurrency) return;
+    try {
+      await adminService.updateCurrency(editingCurrency.code, {
+        buy_rate: editingCurrency.buy_rate,
+        sell_rate: editingCurrency.sell_rate
+      });
+
+      setCurrencies(currencies.map(c =>
+        c.code === editingCurrency.code
+          ? { ...c, buy_rate: editingCurrency.buy_rate, sell_rate: editingCurrency.sell_rate }
+          : c
+      ));
+
+      setEditingCurrency(null);
+      showMessage(`Курс ${editingCurrency.code} оновлено`);
+    } catch (error) {
+      console.error('Error saving currency:', error);
+      showMessage('Помилка збереження курсу', 'error');
     }
   };
 
@@ -148,9 +256,8 @@ export default function SettingsPage() {
     <div className="space-y-6">
       {/* Message Toast */}
       {message && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl ${
-          message.type === 'error' ? 'bg-red-500' : 'bg-green-500'
-        } text-white font-medium shadow-lg`}>
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl ${message.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+          } text-white font-medium shadow-lg`}>
           {message.text}
         </div>
       )}
@@ -160,6 +267,7 @@ export default function SettingsPage() {
         {[
           { id: 'contacts', label: 'Контакти', icon: Phone },
           { id: 'branches', label: 'Відділення', icon: MapPin },
+          { id: 'operators', label: 'Оператори', icon: Users },
           { id: 'currencies', label: 'Валюти', icon: DollarSign },
           { id: 'faq', label: 'FAQ', icon: HelpCircle },
           { id: 'services', label: 'Послуги', icon: Briefcase },
@@ -167,11 +275,10 @@ export default function SettingsPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${
-              activeTab === tab.id
-                ? 'bg-accent-yellow text-primary'
-                : 'bg-primary-light text-text-secondary hover:text-white'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${activeTab === tab.id
+              ? 'bg-accent-yellow text-primary'
+              : 'bg-primary-light text-text-secondary hover:text-white'
+              }`}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -183,7 +290,7 @@ export default function SettingsPage() {
       {activeTab === 'contacts' && settings && (
         <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
           <h3 className="text-lg font-bold mb-6">Контактна інформація</h3>
-          
+
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm text-text-secondary mb-2">Назва компанії</label>
@@ -227,7 +334,7 @@ export default function SettingsPage() {
           </div>
 
           <h4 className="text-md font-bold mt-8 mb-4">Соціальні мережі</h4>
-          
+
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm text-text-secondary mb-2">Telegram URL</label>
@@ -272,7 +379,7 @@ export default function SettingsPage() {
           </div>
 
           <h4 className="text-md font-bold mt-8 mb-4">Налаштування бронювання</h4>
-          
+
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm text-text-secondary mb-2">Мін. сума для оптового курсу ($)</label>
@@ -309,8 +416,17 @@ export default function SettingsPage() {
       {/* Branches Tab */}
       {activeTab === 'branches' && (
         <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
-          <h3 className="text-lg font-bold mb-6">Відділення</h3>
-          
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold">Відділення</h3>
+            <button
+              onClick={() => setEditingBranch({ address: '', hours: 'щодня: 9:00-20:00', phone: '', telegram_chat: '', cashier: '', is_open: true })}
+              className="flex items-center gap-2 px-4 py-2 bg-accent-yellow rounded-xl text-primary font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              Додати
+            </button>
+          </div>
+
           <div className="space-y-4">
             {branches.map((branch) => (
               <div key={branch.id} className="p-4 bg-primary rounded-xl border border-white/10">
@@ -323,17 +439,178 @@ export default function SettingsPage() {
                       <h4 className="font-medium">{branch.address}</h4>
                       <p className="text-sm text-text-secondary">{branch.hours}</p>
                       <p className="text-sm text-accent-yellow">{branch.phone || 'Телефон не вказано'}</p>
+                      {branch.cashier && <p className="text-xs text-white/50 mt-1">Каса: {branch.cashier}</p>}
                     </div>
                   </div>
-                  <button
-                    onClick={() => setEditingBranch(branch)}
-                    className="p-2 hover:bg-white/5 rounded-lg text-text-secondary hover:text-white"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setEditingBranch(branch)}
+                      className="p-2 hover:bg-white/5 rounded-lg text-text-secondary hover:text-white"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteBranch(branch.id)}
+                      className="p-2 hover:bg-red-500/10 rounded-lg text-text-secondary hover:text-red-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Operators Tab */}
+      {activeTab === 'operators' && (
+        <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold">Управління операторами</h3>
+            <button
+              onClick={() => openUserModal()}
+              className="px-4 py-2 bg-accent-yellow text-primary rounded-xl font-medium flex items-center gap-2 hover:brightness-110 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Додати оператора
+            </button>
+          </div>
+
+          {users.length === 0 ? (
+            <div className="text-center py-12 text-text-secondary">
+              <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>Немає операторів</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-xs text-text-secondary border-b border-white/10">
+                    <th className="pb-3 pr-4">Ім'я</th>
+                    <th className="pb-3 pr-4">Логін</th>
+                    <th className="pb-3 pr-4">Роль</th>
+                    <th className="pb-3 pr-4">Відділення</th>
+                    <th className="pb-3">Дії</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="py-4 pr-4 font-medium">{u.name}</td>
+                      <td className="py-4 pr-4 text-sm text-text-secondary">{u.username}</td>
+                      <td className="py-4 pr-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${u.role === 'admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'
+                          }`}>
+                          {u.role === 'admin' ? 'Адмін' : 'Оператор'}
+                        </span>
+                      </td>
+                      <td className="py-4 pr-4 text-sm">
+                        {u.branch_address || <span className="text-text-secondary">—</span>}
+                      </td>
+                      <td className="py-4">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openUserModal(u)}
+                            className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          {u.role !== 'admin' && (
+                            <button
+                              onClick={() => handleDeleteUser(u.id)}
+                              className="p-2 text-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* User Modal */}
+      {userModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-light rounded-2xl p-6 w-full max-w-md border border-white/10">
+            <h3 className="text-lg font-bold mb-4">
+              {editingUser ? 'Редагувати оператора' : 'Новий оператор'}
+            </h3>
+
+            <div className="space-y-4">
+              {!editingUser && (
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">Логін</label>
+                  <input
+                    type="text"
+                    value={userForm.username}
+                    onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                    placeholder="username"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Ім'я</label>
+                <input
+                  type="text"
+                  value={userForm.name}
+                  onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                  placeholder="Іван Петров"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">
+                  {editingUser ? 'Новий пароль (залиште пустим для збереження)' : 'Пароль'}
+                </label>
+                <input
+                  type="password"
+                  value={userForm.password}
+                  onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                  placeholder={editingUser ? '••••••••' : 'password123'}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Відділення</label>
+                <select
+                  value={userForm.branch_id}
+                  onChange={(e) => setUserForm({ ...userForm, branch_id: e.target.value ? parseInt(e.target.value) : '' })}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                >
+                  <option value="">— Без відділення —</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.address}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setUserModalOpen(false)}
+                className="flex-1 py-3 bg-white/5 rounded-xl text-text-secondary hover:text-white hover:bg-white/10 transition-all"
+              >
+                Скасувати
+              </button>
+              <button
+                onClick={handleUserSubmit}
+                disabled={userSaving}
+                className="flex-1 py-3 bg-accent-yellow text-primary rounded-xl font-medium hover:brightness-110 transition-all disabled:opacity-50"
+              >
+                {userSaving ? 'Збереження...' : 'Зберегти'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -345,16 +622,15 @@ export default function SettingsPage() {
             <h3 className="text-lg font-bold">Валюти</h3>
             <p className="text-sm text-text-secondary">Увімкніть/вимкніть відображення валют</p>
           </div>
-          
+
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
             {currencies.map((currency) => (
-              <div 
-                key={currency.code} 
-                className={`p-4 rounded-xl border transition-all ${
-                  currency.is_active !== false 
-                    ? 'bg-primary border-white/10' 
-                    : 'bg-primary/50 border-white/5 opacity-60'
-                }`}
+              <div
+                key={currency.code}
+                className={`p-4 rounded-xl border transition-all ${currency.is_active !== false
+                  ? 'bg-primary border-white/10'
+                  : 'bg-primary/50 border-white/5 opacity-60'
+                  }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -364,20 +640,29 @@ export default function SettingsPage() {
                       <div className="text-xs text-text-secondary">{currency.name_uk}</div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleToggleCurrency(currency.code, currency.is_active !== false)}
-                    className={`p-2 rounded-lg transition-colors ${
-                      currency.is_active !== false 
-                        ? 'text-green-400 hover:bg-green-400/10' 
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingCurrency(currency)}
+                      className="p-2 rounded-lg text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                      title="Редагувати курс"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleToggleCurrency(currency.code, currency.is_active !== false)}
+                      className={`p-2 rounded-lg transition-colors ${currency.is_active !== false
+                        ? 'text-green-400 hover:bg-green-400/10'
                         : 'text-text-secondary hover:bg-white/5'
-                    }`}
-                  >
-                    {currency.is_active !== false ? (
-                      <ToggleRight className="w-6 h-6" />
-                    ) : (
-                      <ToggleLeft className="w-6 h-6" />
-                    )}
-                  </button>
+                        }`}
+                      title={currency.is_active !== false ? 'Вимкнути' : 'Увімкнути'}
+                    >
+                      {currency.is_active !== false ? (
+                        <ToggleRight className="w-6 h-6" />
+                      ) : (
+                        <ToggleLeft className="w-6 h-6" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-2 flex justify-between text-sm">
                   <span className="text-green-400">Купівля: {currency.buy_rate?.toFixed(2)}</span>
@@ -385,6 +670,62 @@ export default function SettingsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Currency Edit Modal */}
+      {editingCurrency && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-light rounded-2xl p-6 max-w-sm w-full border border-white/10">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <span className="text-2xl">{editingCurrency.flag}</span>
+                Редагувати {editingCurrency.code}
+              </h3>
+              <button onClick={() => setEditingCurrency(null)} className="p-2 hover:bg-white/5 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-text-secondary mb-2">Курс Купівлі (Ми купуємо)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editingCurrency.buy_rate}
+                  onChange={(e) => setEditingCurrency({ ...editingCurrency, buy_rate: parseFloat(e.target.value) })}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-green-400 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-text-secondary mb-2">Курс Продажу (Ми продаємо)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editingCurrency.sell_rate}
+                  onChange={(e) => setEditingCurrency({ ...editingCurrency, sell_rate: parseFloat(e.target.value) })}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-red-400 font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditingCurrency(null)}
+                className="flex-1 py-3 bg-white/5 rounded-xl hover:bg-white/10"
+              >
+                Скасувати
+              </button>
+              <button
+                onClick={handleSaveCurrency}
+                className="flex-1 py-3 bg-accent-yellow text-primary rounded-xl font-bold hover:brightness-110"
+              >
+                Зберегти
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -481,7 +822,9 @@ export default function SettingsPage() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-primary-light rounded-2xl p-6 max-w-lg w-full border border-white/10">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold">Редагувати відділення #{editingBranch.id}</h3>
+              <h3 className="text-lg font-bold">
+                {editingBranch.id ? `Редагувати відділення #${editingBranch.id}` : 'Нове відділення'}
+              </h3>
               <button onClick={() => setEditingBranch(null)} className="p-2 hover:bg-white/5 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
@@ -525,6 +868,17 @@ export default function SettingsPage() {
                   value={editingBranch.telegram_chat || ''}
                   onChange={(e) => setEditingBranch({ ...editingBranch, telegram_chat: e.target.value })}
                   placeholder="https://t.me/..."
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-text-secondary mb-2">Каса (ім'я/код для Excel)</label>
+                <input
+                  type="text"
+                  value={editingBranch.cashier || ''}
+                  onChange={(e) => setEditingBranch({ ...editingBranch, cashier: e.target.value })}
+                  placeholder="Наприклад: Каса 1"
                   className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
                 />
               </div>

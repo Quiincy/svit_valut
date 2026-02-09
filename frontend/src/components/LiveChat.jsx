@@ -79,7 +79,7 @@ export default function LiveChat({ isOpen, onClose }) {
       setCustomerName(savedName);
       setNameSubmitted(true);
     }
-    
+
     const savedMessages = getChatMessages(chatId);
     setMessages(savedMessages);
 
@@ -116,7 +116,7 @@ export default function LiveChat({ isOpen, onClose }) {
     if (!customerName.trim()) return;
     localStorage.setItem('chatCustomerName', customerName.trim());
     setNameSubmitted(true);
-    
+
     // Send welcome message
     const welcomeMessage = {
       id: Date.now(),
@@ -149,7 +149,10 @@ export default function LiveChat({ isOpen, onClose }) {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] w-[350px] max-w-[calc(100vw-32px)] bg-primary-light rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col" style={{ height: '500px', maxHeight: 'calc(100vh - 100px)' }}>
+    <div className="fixed z-[100] bg-primary-light border-white/10 shadow-2xl overflow-hidden flex flex-col
+      inset-0 w-full h-full rounded-none border-0
+      lg:inset-auto lg:bottom-4 lg:right-4 lg:w-[350px] lg:h-[500px] lg:rounded-2xl lg:border lg:max-h-[calc(100vh-100px)]"
+    >
       {/* Header */}
       <div className="bg-accent-yellow p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -213,11 +216,10 @@ export default function LiveChat({ isOpen, onClose }) {
                   className={`flex ${msg.from === 'customer' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                      msg.from === 'customer'
+                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${msg.from === 'customer'
                         ? 'bg-accent-yellow text-primary rounded-br-sm'
                         : 'bg-primary border border-white/10 rounded-bl-sm'
-                    }`}
+                      }`}
                   >
                     <p className="text-sm">{msg.text}</p>
                     <p className={`text-xs mt-1 ${msg.from === 'customer' ? 'text-primary/60' : 'text-text-secondary'}`}>

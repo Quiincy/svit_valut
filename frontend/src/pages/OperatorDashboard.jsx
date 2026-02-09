@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  LogOut, RefreshCw, CheckCircle, XCircle, Clock, 
+import {
+  LogOut, RefreshCw, CheckCircle, XCircle, Clock,
   DollarSign, TrendingUp, Phone, MapPin, MessageSquare,
-  Check, X, AlertCircle, Download, Bell
+  Check, X, AlertCircle, Download, Bell, Copy
 } from 'lucide-react';
 import { operatorService } from '../services/api';
 
@@ -17,7 +17,7 @@ const STATUS_CONFIG = {
 // Kyiv timezone
 const formatKyivTime = (isoString) => {
   const date = new Date(isoString);
-  return date.toLocaleString('uk-UA', { 
+  return date.toLocaleString('uk-UA', {
     timeZone: 'Europe/Kyiv',
     day: '2-digit',
     month: '2-digit',
@@ -31,12 +31,15 @@ export default function OperatorDashboard({ user, onLogout }) {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('pending');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [noteModal, setNoteModal] = useState(null);
   const [note, setNote] = useState('');
   const [lastReservationCount, setLastReservationCount] = useState(0);
   const [newReservationAlert, setNewReservationAlert] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [copiedId, setCopiedId] = useState(null);
 
   // Update time every minute (Kyiv time)
   useEffect(() => {
@@ -48,11 +51,16 @@ export default function OperatorDashboard({ user, onLogout }) {
     try {
       const [dashboardRes, reservationsRes] = await Promise.all([
         operatorService.getDashboard(),
-        operatorService.getReservations({ status: statusFilter || undefined, limit: 50 }),
+        operatorService.getReservations({
+          status: statusFilter || undefined,
+          limit: 50,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined
+        }),
       ]);
       setDashboard(dashboardRes.data);
       const items = reservationsRes.data.items || [];
-      
+
       // Check for new reservations
       if (items.length > lastReservationCount && lastReservationCount > 0) {
         setNewReservationAlert(true);
@@ -60,8 +68,8 @@ export default function OperatorDashboard({ user, onLogout }) {
         try {
           const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleX');
           audio.volume = 0.3;
-          audio.play().catch(() => {});
-        } catch {}
+          audio.play().catch(() => { });
+        } catch { }
         setTimeout(() => setNewReservationAlert(false), 5000);
       }
       setLastReservationCount(items.length);
@@ -71,7 +79,7 @@ export default function OperatorDashboard({ user, onLogout }) {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, lastReservationCount]);
+  }, [statusFilter, lastReservationCount, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchData();
@@ -124,7 +132,7 @@ export default function OperatorDashboard({ user, onLogout }) {
 
   const handleCancel = async (id) => {
     if (!confirm('Ви впевнені, що хочете скасувати це бронювання?')) return;
-    
+
     setActionLoading(id);
     try {
       await operatorService.cancelReservation(id);
@@ -138,7 +146,7 @@ export default function OperatorDashboard({ user, onLogout }) {
 
   const handleAddNote = async () => {
     if (!noteModal || !note.trim()) return;
-    
+
     setActionLoading(noteModal);
     try {
       await operatorService.updateReservation(noteModal, { operator_note: note });
@@ -157,6 +165,12 @@ export default function OperatorDashboard({ user, onLogout }) {
     if (diff <= 0) return 'Прострочено';
     const mins = Math.floor(diff / 60000);
     return `${mins} хв`;
+  };
+
+  const handleCopyPhone = (phone, id) => {
+    navigator.clipboard.writeText(phone);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   return (
@@ -186,7 +200,7 @@ export default function OperatorDashboard({ user, onLogout }) {
               <div>Київ</div>
               <div className="font-mono">{currentTime.toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit' })}</div>
             </div>
-            
+
             {/* Download Rates Button */}
             <button
               onClick={handleDownloadRates}
@@ -196,7 +210,7 @@ export default function OperatorDashboard({ user, onLogout }) {
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Курси</span>
             </button>
-            
+
             <div className="text-right">
               <div className="font-medium text-sm">{user.name}</div>
               <div className="text-xs text-accent-blue">Оператор</div>
@@ -214,7 +228,7 @@ export default function OperatorDashboard({ user, onLogout }) {
       <div className="p-6">
         {/* Stats Cards */}
         {dashboard && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <div className="bg-primary-light rounded-2xl p-5 border border-white/10">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
@@ -250,43 +264,94 @@ export default function OperatorDashboard({ user, onLogout }) {
                 <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-purple-400" />
                 </div>
-                <span className="text-sm text-text-secondary">Обсяг</span>
+                <span className="text-sm text-text-secondary">Обсяг за сьогодні (UAH)</span>
               </div>
               <div className="text-2xl font-bold">{dashboard.total_volume_uah.toLocaleString()}₴</div>
+            </div>
+
+            <div className="bg-primary-light rounded-2xl p-5 border border-white/10">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-purple-400" />
+                </div>
+                <span className="text-sm text-text-secondary">Обсяг за місяць (UAH)</span>
+              </div>
+              <div className="text-2xl font-bold">{dashboard.total_volume_uah_month?.toLocaleString()}₴</div>
             </div>
           </div>
         )}
 
         {/* Filters */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { value: 'pending', label: 'Очікують' },
-              { value: 'confirmed', label: 'Підтверджені' },
-              { value: 'completed', label: 'Завершені' },
-              { value: '', label: 'Всі' },
-            ].map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => setStatusFilter(tab.value)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                  statusFilter === tab.value
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: 'pending', label: 'Очікують' },
+                { value: 'confirmed', label: 'Підтверджені' },
+                { value: 'completed', label: 'Завершені' },
+                { value: '', label: 'Всі' },
+              ].map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setStatusFilter(tab.value)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${statusFilter === tab.value
                     ? 'bg-accent-yellow text-primary'
                     : 'bg-primary-light text-text-secondary hover:text-white'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+                    }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-          <button
-            onClick={fetchData}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-light rounded-xl text-text-secondary hover:text-white transition-colors"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Оновити</span>
-          </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const today = new Date().toISOString().split('T')[0];
+                    setDateFrom(today);
+                    setDateTo(today);
+                  }}
+                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  Сьогодні
+                </button>
+                <button
+                  onClick={() => {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yStr = yesterday.toISOString().split('T')[0];
+                    setDateFrom(yStr);
+                    setDateTo(yStr);
+                  }}
+                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  Вчора
+                </button>
+                <div className="w-px h-8 bg-white/10 mx-1"></div>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-blue text-white [color-scheme:dark]"
+                />
+                <span className="text-text-secondary">—</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-blue text-white [color-scheme:dark]"
+                />
+              </div>
+              <button
+                onClick={fetchData}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-light rounded-xl text-text-secondary hover:text-white transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Оновити</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Reservations List */}
@@ -305,22 +370,33 @@ export default function OperatorDashboard({ user, onLogout }) {
               return (
                 <div
                   key={res.id}
-                  className={`bg-primary-light rounded-2xl p-5 border transition-all ${
-                    res.status === 'pending' ? 'border-yellow-500/30' : 'border-white/10'
-                  }`}
+                  className={`bg-primary-light rounded-2xl p-5 border transition-all ${res.status === 'pending' ? 'border-yellow-500/30' : 'border-white/10'
+                    }`}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                     {/* Main Info */}
                     <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      {/* ID & Phone */}
+                      {/* ID & Name & Phone */}
                       <div>
                         <div className="text-xs text-text-secondary mb-1">Бронювання</div>
                         <div className="font-mono font-bold">#{res.id}</div>
+                        <div className="text-sm font-medium mt-1">{res.customer_name || '—'}</div>
                         <div className="flex items-center gap-1 mt-1 text-sm">
                           <Phone className="w-3 h-3 text-accent-blue" />
                           <a href={`tel:${res.phone}`} className="text-accent-blue hover:underline">
                             {res.phone}
                           </a>
+                          <button
+                            onClick={() => handleCopyPhone(res.phone, res.id)}
+                            className="ml-2 p-1 hover:bg-white/10 rounded-md transition-colors"
+                            title="Копіювати номер"
+                          >
+                            {copiedId === res.id ? (
+                              <Check className="w-3 h-3 text-green-400" />
+                            ) : (
+                              <Copy className="w-3 h-3 text-text-secondary" />
+                            )}
+                          </button>
                         </div>
                       </div>
 
@@ -375,7 +451,7 @@ export default function OperatorDashboard({ user, onLogout }) {
                           </button>
                         </>
                       )}
-                      
+
                       {res.status === 'confirmed' && (
                         <>
                           <button

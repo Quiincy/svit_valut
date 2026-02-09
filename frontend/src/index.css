@@ -74,3 +74,11 @@ input:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0px 1000px #141922 inset;
   transition: background-color 5000s ease-in-out 0s;
 }
+
+.map-tiles-blue {
+  filter: grayscale(100%) invert(100%) sepia(100%) hue-rotate(178deg) saturate(400%) brightness(110%) contrast(1.1);
+}
+.custom-leaflet-icon {
+  background: transparent;
+  border: none;
+}

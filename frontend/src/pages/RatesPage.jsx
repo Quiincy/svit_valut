@@ -6,6 +6,7 @@ import { currencyService, settingsService } from '../services/api';
 export default function RatesPage() {
   const [currencies, setCurrencies] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [crossRates, setCrossRates] = useState({});
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
@@ -16,12 +17,14 @@ export default function RatesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [currenciesRes, settingsRes] = await Promise.all([
+      const [currenciesRes, settingsRes, crossRes] = await Promise.all([
         currencyService.getAll(),
         settingsService.get(),
+        currencyService.getCrossRates(),
       ]);
       setCurrencies(currenciesRes.data);
       setSettings(settingsRes.data);
+      setCrossRates(crossRes.data.cross_rates || {});
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Error:', error);
@@ -59,7 +62,7 @@ export default function RatesPage() {
               <p className="text-xs text-text-secondary">Світ Валют</p>
             </div>
           </div>
-          
+
           <button
             onClick={fetchData}
             disabled={loading}
@@ -88,7 +91,7 @@ export default function RatesPage() {
         </div>
 
         {/* Rates Table */}
-        <div className="bg-primary-light rounded-2xl border border-white/10 overflow-hidden">
+        <div className="bg-primary-light rounded-2xl border border-white/10 overflow-hidden mb-12">
           {/* Header */}
           <div className="grid grid-cols-4 px-4 lg:px-6 py-4 border-b border-white/10 bg-white/5">
             <div className="text-sm font-medium text-text-secondary">Валюта</div>
@@ -98,18 +101,17 @@ export default function RatesPage() {
           </div>
 
           {/* Rows */}
-          {currencies.map((currency, index) => (
-            <div 
+          {currencies.filter(c => c.code !== 'UAH').map((currency, index, filtered) => (
+            <div
               key={currency.code}
-              className={`grid grid-cols-4 px-4 lg:px-6 py-4 items-center hover:bg-white/5 transition-colors ${
-                index !== currencies.length - 1 ? 'border-b border-white/5' : ''
-              }`}
+              className={`grid grid-cols-4 px-4 lg:px-6 py-4 items-center hover:bg-white/5 transition-colors ${index !== filtered.length - 1 ? 'border-b border-white/5' : ''
+                }`}
             >
               <div className="flex items-center gap-3">
                 <span className="text-2xl">{currency.flag}</span>
                 <span className="font-bold">{currency.code}</span>
               </div>
-              <div className="text-text-secondary text-sm">{currency.name_uk}</div>
+              <div className="text-text-secondary text-sm lg:block">{currency.name_uk}</div>
               <div className="text-right">
                 <span className="font-bold text-lg text-green-400">{currency.buy_rate?.toFixed(2)}</span>
               </div>
@@ -118,6 +120,36 @@ export default function RatesPage() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Cross Rates */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold mb-2">Крос-курси</h2>
+          <p className="text-sm text-text-secondary mb-4">Вигідний обмін між валютами без участі гривні</p>
+
+          <div className="bg-primary-light rounded-2xl border border-white/10 overflow-hidden">
+            <div className="grid grid-cols-3 px-4 lg:px-6 py-4 border-b border-white/10 bg-white/5">
+              <div className="text-sm font-medium text-text-secondary">Валютна пара</div>
+              <div className="text-sm font-medium text-text-secondary text-right">Купівля</div>
+              <div className="text-sm font-medium text-text-secondary text-right">Продаж</div>
+            </div>
+
+            {Object.entries(crossRates).map(([pair, rate], index) => (
+              <div
+                key={pair}
+                className={`grid grid-cols-3 px-4 lg:px-6 py-4 items-center hover:bg-white/5 transition-colors ${index !== Object.keys(crossRates).length - 1 ? 'border-b border-white/5' : ''
+                  }`}
+              >
+                <div className="font-bold">{pair}</div>
+                <div className="text-right">
+                  <span className="font-bold text-lg text-green-400">{rate.buy?.toFixed(4)}</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-bold text-lg text-red-400">{rate.sell?.toFixed(4)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Legend */}
@@ -134,7 +166,7 @@ export default function RatesPage() {
 
         {/* CTA */}
         <div className="mt-8 text-center">
-          <Link 
+          <Link
             to="/"
             className="inline-flex items-center gap-2 px-8 py-4 bg-accent-yellow rounded-xl text-primary font-bold hover:opacity-90"
           >

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
 import FeaturesSection from './components/FeaturesSection';
@@ -7,6 +7,7 @@ import BranchesSection from './components/BranchesSection';
 import RatesSection from './components/RatesSection';
 import ServicesSection from './components/ServicesSection';
 import FAQSection from './components/FAQSection';
+import ChatSection from './components/ChatSection';
 import Footer from './components/Footer';
 import CurrencyModal from './components/CurrencyModal';
 import SuccessModal from './components/SuccessModal';
@@ -18,58 +19,122 @@ import OperatorDashboard from './pages/OperatorDashboard';
 import RatesPage from './pages/RatesPage';
 import ServicePage from './pages/ServicePage';
 import AllServicesPage from './pages/AllServicesPage';
-import { 
+import {
   currencyService, branchService, settingsService, faqService, servicesService,
-  reservationService, authService, restoreAuth, clearAuthCredentials 
+  reservationService, authService, restoreAuth, clearAuthCredentials
 } from './services/api';
 
 // Main public website
 function PublicSite() {
+  const { hash } = useLocation();
   const [currencies, setCurrencies] = useState([]);
   const [branches, setBranches] = useState([]);
   const [settings, setSettings] = useState(null);
   const [faqItems, setFaqItems] = useState([]);
   const [services, setServices] = useState([]);
+  const [crossRates, setCrossRates] = useState({});
+  const [ratesUpdated, setRatesUpdated] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  
+
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [currencyModalType, setCurrencyModalType] = useState('give');
   const [successModalOpen, setSuccessModalOpen] = useState(false);
-  
-  const [giveAmount, setGiveAmount] = useState(500);
+
+  const [giveAmount, setGiveAmount] = useState(100);
   const [giveCurrency, setGiveCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 42.10 });
   const [getCurrency, setGetCurrency] = useState({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦' });
-  const [getAmount, setGetAmount] = useState(21050);
+  const [getAmount, setGetAmount] = useState(0);
+  const [activeBranch, setActiveBranch] = useState(null);
+
+  // Independent Selection States
+  const [sellCurrency, setSellCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 42.10 });
+  const [buyCurrency, setBuyCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 42.10 });
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  // Handle hash scrolling
+  useEffect(() => {
+    if (hash) {
+      // Small timeout to ensure DOM is ready even after loading changes
+      setTimeout(() => {
+        const id = hash.replace('#', '');
+        const element = document.getElementById(id);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    }
+  }, [hash, loading, branches]);
+
   useEffect(() => {
     calculateExchange();
-  }, [giveAmount, giveCurrency]);
+  }, [giveAmount, giveCurrency, getCurrency, crossRates]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [currenciesRes, branchesRes, settingsRes, faqRes, servicesRes] = await Promise.all([
+      const [currenciesRes, branchesRes, settingsRes, faqRes, servicesRes, crossRatesRes] = await Promise.all([
         currencyService.getAll(),
         branchService.getAll(),
         settingsService.get(),
         faqService.getAll(),
         servicesService.getAll(),
+        currencyService.getCrossRates(),
       ]);
-      
-      setCurrencies(currenciesRes.data);
+
+      const allCurrs = currenciesRes.data;
+      const uah = { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
+      const finalCurrencies = allCurrs.some(c => c.code === 'UAH') ? allCurrs : [uah, ...allCurrs];
+
+      setCurrencies(finalCurrencies);
       setBranches(branchesRes.data);
       setSettings(settingsRes.data);
       setFaqItems(faqRes.data);
       setServices(servicesRes.data);
-      
-      if (currenciesRes.data.length > 0) {
-        setGiveCurrency(currenciesRes.data[0]);
+      setCrossRates(crossRatesRes.data.cross_rates || {});
+
+      if (finalCurrencies.length > 0) {
+        const defaultCurrency = finalCurrencies.find(c => c.code === 'USD') || finalCurrencies[0];
+        setGiveCurrency(defaultCurrency);
+        setGetCurrency(finalCurrencies.find(c => c.code === 'UAH') || finalCurrencies[1]);
+
+        // Initialize independent states
+        setSellCurrency(defaultCurrency);
+        setBuyCurrency(defaultCurrency);
+      }
+      if (branchesRes.data.length > 0) {
+        const defaultBranch = branchesRes.data[0];
+        setActiveBranch(defaultBranch);
+
+        // Load branch-specific currencies immediately
+        try {
+          const branchRatesRes = await currencyService.getBranchRates(defaultBranch.id);
+          const branchCurrencies = branchRatesRes.data.filter(c => c.code !== 'UAH');
+          if (branchCurrencies && branchCurrencies.length > 0) {
+            setCurrencies(branchCurrencies);
+
+            // Use first available currency as default, always get UAH
+            const uah = { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
+            const newDefault = branchCurrencies[0];
+            setGiveCurrency(newDefault);
+            setGetCurrency(uah);
+            setSellCurrency(newDefault);
+            setBuyCurrency(newDefault);
+          }
+        } catch (err) {
+          console.error('Failed to load branch currencies:', err);
+          // Keep global currencies as fallback
+        }
+      }
+
+      // Get rates update time
+      const ratesRes = await currencyService.getRates();
+      if (ratesRes.data && ratesRes.data.updated_at) {
+        setRatesUpdated(ratesRes.data.updated_at);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -81,11 +146,11 @@ function PublicSite() {
         { code: 'CHF', name_uk: 'Франк', flag: '🇨🇭', buy_rate: 52.80, sell_rate: 52.95 },
       ]);
       setBranches([
-        { id: 1, address: 'вул. Старовокзальна, 23', hours: 'щодня: 9:00-19:00', phone: '(096) 048-88-84' },
-        { id: 2, address: 'вул. В. Васильківська, 110', hours: 'щодня: 8:00-20:00', phone: '(096) 048-88-84' },
-        { id: 3, address: 'вул. В. Васильківська, 130', hours: 'щодня: 8:00-20:00', phone: '(096) 048-88-84' },
-        { id: 4, address: 'вул. Р. Окіпної, 2', hours: 'щодня: 8:00-20:00', phone: '(096) 048-88-84' },
-        { id: 5, address: 'вул. Саксаганського, 69', hours: 'щодня: 9:00-20:00', phone: '(096) 048-88-84' },
+        { id: 1, address: 'вул. Старовокзальна, 23', hours: 'щодня: 9:00-19:00', phone: '(096) 048-88-84', lat: 50.443886, lng: 30.490430 },
+        { id: 2, address: 'вул. В. Васильківська, 110', hours: 'щодня: 8:00-20:00', phone: '(096) 048-88-84', lat: 50.423804, lng: 30.518400 },
+        { id: 3, address: 'вул. В. Васильківська, 130', hours: 'щодня: 8:00-20:00', phone: '(096) 048-88-84', lat: 50.416770, lng: 30.522873 },
+        { id: 4, address: 'вул. Р. Окіпної, 2', hours: 'щодня: 8:00-20:00', phone: '(096) 048-88-84', lat: 50.450606, lng: 30.597410 },
+        { id: 5, address: 'вул. Саксаганського, 69', hours: 'щодня: 9:00-20:00', phone: '(096) 048-88-84', lat: 50.4358, lng: 30.50 },
       ]);
     } finally {
       setLoading(false);
@@ -93,8 +158,25 @@ function PublicSite() {
   };
 
   const calculateExchange = () => {
-    const rate = giveCurrency.buy_rate || 42.10;
-    setGetAmount(Math.round(giveAmount * rate));
+    if (giveCurrency.code === 'UAH') {
+      const rate = getCurrency.sell_rate || 42.15;
+      setGetAmount(giveAmount / rate);
+    } else if (getCurrency.code === 'UAH') {
+      const rate = giveCurrency.buy_rate || 42.10;
+      setGetAmount(giveAmount * rate);
+    } else {
+      // Cross rate
+      const pair = `${giveCurrency.code}/${getCurrency.code}`;
+      const crossRate = crossRates[pair];
+
+      if (crossRate) {
+        setGetAmount(giveAmount * crossRate.buy);
+      } else {
+        // Fallback dynamic calculation if pair not in common list
+        const rate = (giveCurrency.buy_rate || 0) / (getCurrency.sell_rate || 1);
+        setGetAmount(giveAmount * rate);
+      }
+    }
   };
 
   const openCurrencyModal = (type) => {
@@ -103,16 +185,52 @@ function PublicSite() {
   };
 
   const handleCurrencySelect = (currency) => {
-    if (currencyModalType === 'give') {
-      setGiveCurrency(currency);
+    // Determine which "Row" triggered this.
+    if (currencyModalType === 'sell_currency') {
+      setSellCurrency(currency);
+      // If we are currently in Sell Mode (give=Foreign), update giveCurrency immediately
+      if (giveCurrency.code !== 'UAH') {
+        setGiveCurrency(currency);
+      }
+    } else if (currencyModalType === 'buy_currency') {
+      setBuyCurrency(currency);
+      // If we are currently in Buy Mode (get=Foreign), update getCurrency immediately
+      if (getCurrency.code !== 'UAH') {
+        setGetCurrency(currency);
+      }
+    } else {
+      // Fallback for logical handling if used elsewhere
+      if (currencyModalType === 'give') setGiveCurrency(currency);
+      else setGetCurrency(currency);
     }
     setCurrencyModalOpen(false);
   };
 
   const handleSwapCurrencies = () => {
     const temp = giveCurrency;
-    setGiveCurrency({ ...getCurrency, buy_rate: 1 / (temp.buy_rate || 42.10) });
+    setGiveCurrency(getCurrency);
     setGetCurrency(temp);
+  };
+
+  const handleBranchChange = async (branch) => {
+    setActiveBranch(branch);
+    try {
+      const ratesRes = await currencyService.getBranchRates(branch.id);
+      const allCurrs = ratesRes.data.filter(c => c.code !== 'UAH');
+      setCurrencies(allCurrs);
+
+      // Always switch to first currency when branch changes
+      if (allCurrs.length > 0) {
+        const uah = { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
+        const firstCurrency = allCurrs[0];
+        setGiveCurrency(firstCurrency);
+        setGetCurrency(uah);
+        setSellCurrency(firstCurrency);
+        setBuyCurrency(firstCurrency);
+      }
+    } catch (error) {
+      console.error('Error fetching branch rates:', error);
+    }
   };
 
   const handleReservation = async (data) => {
@@ -128,33 +246,78 @@ function PublicSite() {
     }
   };
 
+  const handlePresetExchange = (type, currencyCode) => {
+    const targetCurrency = currencies.find(c => c.code === currencyCode);
+    if (!targetCurrency) return;
+
+    // Find UAH
+    const uah = currencies.find(c => c.code === 'UAH') || { code: 'UAH' };
+
+    if (type === 'buy') {
+      // User Buys Foreign (Give UAH -> Get Foreign)
+      setGiveCurrency(uah);
+      setGetCurrency(targetCurrency);
+
+      // Update Independent Buy State
+      setBuyCurrency(targetCurrency);
+
+      // HeroSection will sync amount via useEffect
+    } else {
+      // User Sells Foreign (Give Foreign -> Get UAH)
+      setGiveCurrency(targetCurrency);
+      setGetCurrency(uah);
+
+      // Update Independent Sell State
+      setSellCurrency(targetCurrency);
+
+      // HeroSection will sync amount via useEffect
+    }
+
+    // Scroll to top/hero
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-primary">
-      <Header onMenuToggle={() => setMobileMenuOpen(true)} onOpenChat={() => setChatOpen(true)} settings={settings} />
+      <Header
+        onMenuToggle={() => setMobileMenuOpen(true)}
+        onOpenChat={() => setChatOpen(true)}
+        settings={settings}
+        currencies={currencies}
+        onPresetExchange={handlePresetExchange}
+      />
       <MobileNav isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} settings={settings} />
-      
+
       <main>
         <HeroSection
           giveAmount={giveAmount}
           setGiveAmount={setGiveAmount}
           giveCurrency={giveCurrency}
+          setGiveCurrency={setGiveCurrency}
           getCurrency={getCurrency}
+          setGetCurrency={setGetCurrency}
           getAmount={getAmount}
           onOpenCurrencyModal={openCurrencyModal}
           onSwapCurrencies={handleSwapCurrencies}
           onReserve={handleReservation}
           branches={branches}
           settings={settings}
+          activeBranch={activeBranch}
+          onBranchChange={handleBranchChange}
+          onOpenChat={() => setChatOpen(true)}
+          sellCurrency={sellCurrency}
+          buyCurrency={buyCurrency}
         />
         <FeaturesSection settings={settings} />
+        <ChatSection settings={settings} />
         <BranchesSection branches={branches} settings={settings} />
-        <RatesSection currencies={currencies} />
+        <RatesSection currencies={currencies} crossRates={crossRates} updatedAt={ratesUpdated} />
         <ServicesSection services={services} />
         <FAQSection faqItems={faqItems} />
       </main>
-      
+
       <Footer settings={settings} />
-      
+
       <CurrencyModal
         isOpen={currencyModalOpen}
         onClose={() => setCurrencyModalOpen(false)}
@@ -162,17 +325,17 @@ function PublicSite() {
         onSelect={handleCurrencySelect}
         type={currencyModalType}
       />
-      
+
       <SuccessModal
         isOpen={successModalOpen}
         onClose={() => setSuccessModalOpen(false)}
       />
-      
+
       <LiveChat
         isOpen={chatOpen}
         onClose={() => setChatOpen(false)}
       />
-      
+
       {/* Chat FAB when chat is closed */}
       {!chatOpen && (
         <button
