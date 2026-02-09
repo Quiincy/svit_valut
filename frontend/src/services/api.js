@@ -71,19 +71,7 @@ export const restoreAuth = () => {
   return false;
 };
 
-// Mock reservations storage (persisted in localStorage)
-const getMockReservations = () => {
-  try {
-    const stored = localStorage.getItem('mockReservations');
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-};
 
-const saveMockReservations = (reservations) => {
-  localStorage.setItem('mockReservations', JSON.stringify(reservations));
-};
 
 // Mock login function
 const mockLogin = (username, password) => {
@@ -121,34 +109,7 @@ export const branchService = {
 };
 
 export const reservationService = {
-  create: async (data) => {
-    try {
-      return await api.post('/reservations', data);
-    } catch (error) {
-      // Mock mode - save locally
-      const mockReservations = getMockReservations();
-      const now = new Date();
-      const newReservation = {
-        id: Date.now(),
-        ...data,
-        get_amount: data.give_amount * 42.10, // Mock rate
-        rate: 42.10,
-        status: 'pending',
-        branch_id: data.branch_id || 1,
-        branch_address: data.branch_id === 2 ? 'вул. В. Васильківська, 110' :
-          data.branch_id === 3 ? 'вул. В. Васильківська, 130' :
-            data.branch_id === 4 ? 'вул. Р. Окіпної, 2' :
-              data.branch_id === 5 ? 'вул. Саксаганського, 69' : 'вул. Старовокзальна, 23',
-        customer_name: data.customer_name || '',
-        status: 'pending_admin',
-        created_at: now.toISOString(),
-        expires_at: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
-      };
-      mockReservations.unshift(newReservation);
-      saveMockReservations(mockReservations);
-      return { data: newReservation };
-    }
-  },
+  create: (data) => api.post('/reservations', data),
   getOne: (id) => api.get(`/reservations/${id}`),
 };
 
@@ -191,137 +152,36 @@ export const authService = {
   },
 };
 
-// Admin service with mock fallback
 export const adminService = {
-  getDashboard: async () => {
-    // Always include mock reservations in stats
-    const mockReservations = getMockReservations();
-
-    try {
-      const response = await api.get('/admin/dashboard');
-      const backendData = response.data;
-
-      // Add mock stats to backend stats
-      return {
-        data: {
-          total_reservations: backendData.total_reservations + mockReservations.length,
-          pending_reservations: backendData.pending_reservations + mockReservations.filter(r => r.status === 'pending').length,
-          confirmed_reservations: backendData.confirmed_reservations + mockReservations.filter(r => r.status === 'confirmed').length,
-          completed_today: backendData.completed_today + mockReservations.filter(r => r.status === 'completed').length,
-          total_volume_uah: backendData.total_volume_uah + mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-        }
-      };
-    } catch (error) {
-      // Backend unavailable - use only mock data
-      return {
-        data: {
-          total_reservations: mockReservations.length,
-          pending_reservations: mockReservations.filter(r => r.status === 'pending').length,
-          confirmed_reservations: mockReservations.filter(r => r.status === 'confirmed').length,
-          completed_today: mockReservations.filter(r => r.status === 'completed').length,
-          total_volume_uah: mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-        }
-      };
-    }
-  },
+  getDashboard: () => api.get('/admin/dashboard').then(r => r).catch(() => ({
+    data: { total_reservations: 0, pending_reservations: 0, confirmed_reservations: 0, completed_today: 0, total_volume_uah: 0 }
+  })),
   getReservations: async (params = {}) => {
-    // Always get mock reservations from localStorage first
-    let mockItems = [];
     try {
-      mockItems = getMockReservations();
-    } catch (e) {
-      console.warn('Failed to load mock reservations', e);
-    }
-
-    try {
-      // Clean params
       const cleanParams = {};
       if (params.limit) cleanParams.limit = params.limit;
       if (params.page) cleanParams.page = params.page;
       if (params.date_from) cleanParams.date_from = params.date_from;
       if (params.date_to) cleanParams.date_to = params.date_to;
-      // Note: params.status is not sent to backend to ensure we get mixed data if needed, 
-      // or we can send it if we want strict backend filtering. 
-      // Current logic implies fetching all and merging.
+      if (params.status) cleanParams.status = params.status;
 
       const response = await api.get('/admin/reservations', { params: cleanParams });
 
-      let backendItems = [];
-      if (response && response.data && Array.isArray(response.data.items)) {
-        backendItems = response.data.items;
-      } else if (response && Array.isArray(response.items)) {
-        // Fallback if interceptor unwrapped it
-        backendItems = response.items;
-      } else {
-        console.warn('Unexpected reservation response format:', response);
+      let items = [];
+      if (response?.data?.items && Array.isArray(response.data.items)) {
+        items = response.data.items;
       }
 
-      // Combine: all unique items from both sources
-      const allItemsMap = new Map();
+      items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-      // Add backend items first
-      backendItems.forEach(item => {
-        allItemsMap.set(item.id, item);
-      });
-
-      // Add mock items if not already present
-      mockItems.forEach(item => {
-        if (!allItemsMap.has(item.id)) {
-          allItemsMap.set(item.id, item);
-        }
-      });
-
-      let allItems = Array.from(allItemsMap.values());
-
-      // Sort by created_at descending
-      allItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-      // Apply status filter (frontend side to handle mixed data sources)
-      if (params.status) {
-        allItems = allItems.filter(r => r.status === params.status);
-      }
-
-      return { data: { items: allItems, total: allItems.length, page: 1, pages: 1 } };
+      return { data: { items, total: response.data?.total || items.length, page: response.data?.page || 1, pages: response.data?.pages || 1 } };
     } catch (error) {
       console.error('Error fetching reservations:', error);
-      // Backend unavailable - use only mock data
-      let reservations = mockItems;
-      if (params.status) {
-        reservations = reservations.filter(r => r.status === params.status);
-      }
-      return { data: { items: reservations, total: reservations.length, page: 1, pages: 1 } };
+      return { data: { items: [], total: 0, page: 1, pages: 1 } };
     }
   },
-  updateReservation: async (id, data) => {
-    try {
-      return await api.put(`/admin/reservations/${id}`, data);
-    } catch (error) {
-      // Mock mode fallback
-      const mockReservations = getMockReservations();
-      const idx = mockReservations.findIndex(r => r.id === id);
-      if (idx !== -1) {
-        mockReservations[idx] = { ...mockReservations[idx], ...data };
-        saveMockReservations(mockReservations);
-        return { data: mockReservations[idx] };
-      }
-      throw error;
-    }
-  },
-  assignReservation: async (id) => {
-    try {
-      return await api.post(`/admin/reservations/${id}/assign`);
-    } catch (error) {
-      // Mock mode fallback
-      const mockReservations = getMockReservations();
-      const idx = mockReservations.findIndex(r => r.id === id);
-      if (idx !== -1) {
-        mockReservations[idx].status = 'pending_operator';
-        saveMockReservations(mockReservations);
-        return { data: mockReservations[idx] };
-      }
-      throw error;
-    }
-  },
+  updateReservation: (id, data) => api.put(`/admin/reservations/${id}`, data),
+  assignReservation: (id) => api.post(`/admin/reservations/${id}/assign`),
   uploadRates: (file) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -369,74 +229,19 @@ export const adminService = {
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
 };
 
-// Operator service with mock fallback
+// Operator service
 export const operatorService = {
-  getDashboard: async () => {
-    // Get mock reservations and filter by branch
-    let mockReservations = getMockReservations();
-    if (currentMockUser?.branch_id) {
-      mockReservations = mockReservations.filter(r => r.branch_id === currentMockUser.branch_id);
-    }
-
-    try {
-      const response = await api.get('/operator/dashboard');
-      const backendData = response.data;
-
-      // Add mock stats to backend stats
-      return {
-        data: {
-          total_reservations: backendData.total_reservations + mockReservations.length,
-          pending_reservations: backendData.pending_reservations + mockReservations.filter(r => r.status === 'pending').length,
-          confirmed_reservations: backendData.confirmed_reservations + mockReservations.filter(r => r.status === 'confirmed').length,
-          completed_today: backendData.completed_today + mockReservations.filter(r => r.status === 'completed').length,
-          total_volume_uah: backendData.total_volume_uah + mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-        }
-      };
-    } catch (error) {
-      // Backend unavailable
-      return {
-        data: {
-          total_reservations: mockReservations.length,
-          pending_reservations: mockReservations.filter(r => r.status === 'pending').length,
-          confirmed_reservations: mockReservations.filter(r => r.status === 'confirmed').length,
-          completed_today: mockReservations.filter(r => r.status === 'completed').length,
-          total_volume_uah: mockReservations.reduce((sum, r) => sum + (r.get_amount || 0), 0)
-        }
-      };
-    }
-  },
+  getDashboard: () => api.get('/operator/dashboard').then(r => r).catch(() => ({
+    data: { total_reservations: 0, pending_reservations: 0, confirmed_reservations: 0, completed_today: 0, total_volume_uah: 0 }
+  })),
   getReservations: async (params = {}) => {
-    // Get mock reservations
-    let mockItems = getMockReservations();
-    if (currentMockUser?.branch_id) {
-      mockItems = mockItems.filter(r => r.branch_id === currentMockUser.branch_id);
-    }
-
     try {
       const response = await api.get('/operator/reservations', { params });
-      const backendItems = response.data.items || [];
-
-      // Combine items
-      const allItemsMap = new Map();
-      backendItems.forEach(item => allItemsMap.set(item.id, item));
-      mockItems.forEach(item => {
-        if (!allItemsMap.has(item.id)) allItemsMap.set(item.id, item);
-      });
-
-      let allItems = Array.from(allItemsMap.values());
-      allItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-      if (params.status) {
-        allItems = allItems.filter(r => r.status === params.status);
-      }
-
-      return { data: { items: allItems, total: allItems.length, page: 1, pages: 1 } };
+      const items = response.data?.items || [];
+      items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      return { data: { items, total: response.data?.total || items.length, page: 1, pages: 1 } };
     } catch (error) {
-      let reservations = mockItems;
-      if (params.status) {
-        reservations = reservations.filter(r => r.status === params.status);
-      }
-      return { data: { items: reservations, total: reservations.length, page: 1, pages: 1 } };
+      return { data: { items: [], total: 0, page: 1, pages: 1 } };
     }
   },
   downloadRates: async () => {
@@ -464,71 +269,10 @@ export const operatorService = {
 
     return { data: blob };
   },
-  updateReservation: async (id, data) => {
-    try {
-      return await api.put(`/operator/reservations/${id}`, data);
-    } catch (error) {
-      if (mockMode) {
-        const reservations = getMockReservations();
-        const idx = reservations.findIndex(r => r.id === id);
-        if (idx !== -1) {
-          reservations[idx] = { ...reservations[idx], ...data };
-          saveMockReservations(reservations);
-          return { data: reservations[idx] };
-        }
-      }
-      throw error;
-    }
-  },
-  confirmReservation: async (id) => {
-    try {
-      return await api.post(`/operator/reservations/${id}/confirm`);
-    } catch (error) {
-      if (mockMode) {
-        const reservations = getMockReservations();
-        const idx = reservations.findIndex(r => r.id === id);
-        if (idx !== -1) {
-          reservations[idx].status = 'confirmed';
-          saveMockReservations(reservations);
-          return { data: reservations[idx] };
-        }
-      }
-      throw error;
-    }
-  },
-  completeReservation: async (id) => {
-    try {
-      return await api.post(`/operator/reservations/${id}/complete`);
-    } catch (error) {
-      if (mockMode) {
-        const reservations = getMockReservations();
-        const idx = reservations.findIndex(r => r.id === id);
-        if (idx !== -1) {
-          reservations[idx].status = 'completed';
-          reservations[idx].completed_at = new Date().toISOString();
-          saveMockReservations(reservations);
-          return { data: reservations[idx] };
-        }
-      }
-      throw error;
-    }
-  },
-  cancelReservation: async (id) => {
-    try {
-      return await api.post(`/operator/reservations/${id}/cancel`);
-    } catch (error) {
-      if (mockMode) {
-        const reservations = getMockReservations();
-        const idx = reservations.findIndex(r => r.id === id);
-        if (idx !== -1) {
-          reservations[idx].status = 'cancelled';
-          saveMockReservations(reservations);
-          return { data: reservations[idx] };
-        }
-      }
-      throw error;
-    }
-  },
+  updateReservation: (id, data) => api.put(`/operator/reservations/${id}`, data),
+  confirmReservation: (id) => api.post(`/operator/reservations/${id}/confirm`),
+  completeReservation: (id) => api.post(`/operator/reservations/${id}/complete`),
+  cancelReservation: (id) => api.post(`/operator/reservations/${id}/cancel`),
 };
 
 // Default site settings for mock mode

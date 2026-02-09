@@ -52,16 +52,33 @@ function PublicSite() {
   const [sellCurrency, setSellCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 42.10 });
   const [buyCurrency, setBuyCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 42.10 });
 
+  // Preset action from header dropdowns: { type: 'buy'|'sell', currency, timestamp }
+  const [presetAction, setPresetAction] = useState(null);
+
   useEffect(() => {
     fetchData();
   }, []);
 
-  // Handle hash scrolling
+  // Handle hash scrolling and preset currency links (e.g. /#buy-USD, /#sell-EUR)
   useEffect(() => {
     if (hash) {
-      // Small timeout to ensure DOM is ready even after loading changes
       setTimeout(() => {
         const id = hash.replace('#', '');
+
+        // Check for buy/sell preset links
+        const buyMatch = id.match(/^buy-([A-Z]{3})$/);
+        const sellMatch = id.match(/^sell-([A-Z]{3})$/);
+
+        if (buyMatch) {
+          handlePresetExchange('buy', buyMatch[1]);
+          return;
+        }
+        if (sellMatch) {
+          handlePresetExchange('sell', sellMatch[1]);
+          return;
+        }
+
+        // Standard section scrolling
         const element = document.getElementById(id);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth' });
@@ -107,17 +124,13 @@ function PublicSite() {
         setBuyCurrency(defaultCurrency);
       }
       if (branchesRes.data.length > 0) {
-        const defaultBranch = branchesRes.data[0];
-        setActiveBranch(defaultBranch);
-
-        // Load branch-specific currencies immediately
+        // Don't auto-select a branch — show "Будь-яке відділення" by default
+        // Load rates from branch 1 as the global default rates
         try {
-          const branchRatesRes = await currencyService.getBranchRates(defaultBranch.id);
+          const branchRatesRes = await currencyService.getBranchRates(branchesRes.data[0].id);
           const branchCurrencies = branchRatesRes.data.filter(c => c.code !== 'UAH');
           if (branchCurrencies && branchCurrencies.length > 0) {
             setCurrencies(branchCurrencies);
-
-            // Use first available currency as default, always get UAH
             const uah = { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
             const newDefault = branchCurrencies[0];
             setGiveCurrency(newDefault);
@@ -127,7 +140,6 @@ function PublicSite() {
           }
         } catch (err) {
           console.error('Failed to load branch currencies:', err);
-          // Keep global currencies as fallback
         }
       }
 
@@ -251,29 +263,24 @@ function PublicSite() {
     if (!targetCurrency) return;
 
     // Find UAH
-    const uah = currencies.find(c => c.code === 'UAH') || { code: 'UAH' };
+    const uah = currencies.find(c => c.code === 'UAH') || { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
 
     if (type === 'buy') {
       // User Buys Foreign (Give UAH -> Get Foreign)
       setGiveCurrency(uah);
       setGetCurrency(targetCurrency);
-
-      // Update Independent Buy State
       setBuyCurrency(targetCurrency);
-
-      // HeroSection will sync amount via useEffect
     } else {
       // User Sells Foreign (Give Foreign -> Get UAH)
       setGiveCurrency(targetCurrency);
       setGetCurrency(uah);
-
-      // Update Independent Sell State
       setSellCurrency(targetCurrency);
-
-      // HeroSection will sync amount via useEffect
     }
 
-    // Scroll to top/hero
+    // Signal HeroSection to fill default amount in the correct input
+    setPresetAction({ type, currency: targetCurrency, timestamp: Date.now() });
+
+    // Scroll to calculator
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -284,6 +291,7 @@ function PublicSite() {
         onOpenChat={() => setChatOpen(true)}
         settings={settings}
         currencies={currencies}
+        services={services}
         onPresetExchange={handlePresetExchange}
       />
       <MobileNav isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} settings={settings} />
@@ -307,6 +315,7 @@ function PublicSite() {
           onOpenChat={() => setChatOpen(true)}
           sellCurrency={sellCurrency}
           buyCurrency={buyCurrency}
+          presetAction={presetAction}
         />
         <FeaturesSection settings={settings} />
         <ChatSection settings={settings} />

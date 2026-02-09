@@ -19,6 +19,7 @@ export default function HeroSection({
   onOpenChat,
   sellCurrency,
   buyCurrency,
+  presetAction,
 }) {
   const [bookingStep, setBookingStep] = useState(null); // null, 'branch', 'name', 'phone'
   const [phone, setPhone] = useState('');
@@ -34,6 +35,25 @@ export default function HeroSection({
   const reservationTime = settings?.reservation_time_minutes || 60;
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
+
+  // React to header dropdown preset selections
+  useEffect(() => {
+    if (!presetAction) return;
+    const defaultAmount = '100';
+    if (presetAction.type === 'sell') {
+      // User wants to SELL foreign currency
+      setSellInputValue(defaultAmount);
+      setBuyInputValue('');
+      setGiveAmount(Number(defaultAmount));
+    } else if (presetAction.type === 'buy') {
+      // User wants to BUY foreign currency
+      setBuyInputValue(defaultAmount);
+      setSellInputValue('');
+      const rate = (presetAction.currency?.sell_rate && presetAction.currency.sell_rate > 0)
+        ? presetAction.currency.sell_rate : 42.15;
+      setGiveAmount(Number(defaultAmount) * rate);
+    }
+  }, [presetAction]);
 
   // Determine Active Mode "Officially" from Global State
   const isSellMode = giveCurrency && giveCurrency.code !== 'UAH';
@@ -567,7 +587,7 @@ function ExchangeCard({
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-accent-yellow" />
               <span className="text-sm font-medium truncate">
-                {activeBranch?.address || 'Оберіть відділення'}
+                {activeBranch?.address || 'Будь-яке відділення'}
               </span>
             </div>
             <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${branchDropdownOpen ? 'rotate-180' : ''}`} />
@@ -633,7 +653,7 @@ function ExchangeCard({
               <span className="text-xs text-text-secondary block">Я отримаю</span>
               <input
                 type="text"
-                value={(isSellMode && !buyInputValue && sellInputValue) ? getAmount : ((Number(sellInputValue.replace(/[^\d.]/g, '')) || 0) * (sellCurrency.buy_rate || 0)).toFixed(2)}
+                value={((isSellMode && !buyInputValue && sellInputValue) ? getAmount : ((Number(sellInputValue.replace(/[^\d.]/g, '')) || 0) * (sellCurrency.buy_rate || 0))).toFixed(2)}
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^\d.]/g, '');
                   const rate = sellCurrency.buy_rate || 1;
@@ -699,7 +719,7 @@ function ExchangeCard({
               <span className="text-xs text-text-secondary block">Мені знадобиться</span>
               <input
                 type="text"
-                value={(!isSellMode && !sellInputValue && buyInputValue) ? giveAmount : ((Number(buyInputValue.replace(/[^\d.]/g, '')) || 0) * (buyCurrency.sell_rate || 42.15)).toFixed(2)}
+                value={((!isSellMode && !sellInputValue && buyInputValue) ? giveAmount : ((Number(buyInputValue.replace(/[^\d.]/g, '')) || 0) * (buyCurrency.sell_rate || 42.15))).toFixed(2)}
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^\d.]/g, '');
                   const rate = (buyCurrency.sell_rate && buyCurrency.sell_rate > 0) ? buyCurrency.sell_rate : 42.15;

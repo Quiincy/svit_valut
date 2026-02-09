@@ -1,9 +1,19 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Menu, MessageSquare, MapPin, ChevronDown } from 'lucide-react';
 
-export default function Header({ onMenuToggle, onOpenChat, currencies = [], onPresetExchange }) {
+const defaultServices = [
+  { id: 1, title: 'Приймаємо валюту, яка вийшла з обігу', link_url: '/services/old-currency' },
+  { id: 2, title: 'Приймаємо зношену валюту', link_url: '/services/damaged-currency' },
+  { id: 3, title: 'Старі франки на нові або USD', link_url: '/services/old-francs' },
+];
+
+export default function Header({ onMenuToggle, onOpenChat, currencies = [], services = [], onPresetExchange }) {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
+  const [servicesOpen, setServicesOpen] = useState(false);
+
+  const serviceItems = services?.length > 0 ? services : defaultServices;
 
   // Filter currencies for dropdowns (exclude UAH)
   const availableCurrencies = currencies.filter(c => c.code !== 'UAH');
@@ -49,11 +59,14 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], onPr
               {/* Dropdown Menu */}
               <div className={`absolute top-full left-0 mt-0 w-48 bg-primary-light border border-white/10 rounded-xl shadow-xl overflow-hidden transition-all duration-200 options-scroll max-h-[60vh] overflow-y-auto ${purchaseOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
                 {availableCurrencies.map(currency => (
-                  <button
+                  <a
                     key={currency.code}
-                    onClick={() => {
+                    href={`/#buy-${currency.code}`}
+                    onClick={(e) => {
+                      e.preventDefault();
                       onPresetExchange('buy', currency.code);
                       setPurchaseOpen(false);
+                      window.history.pushState(null, '', `/#buy-${currency.code}`);
                     }}
                     className="w-full text-left px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5 last:border-b-0"
                   >
@@ -62,7 +75,7 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], onPr
                       <div className="font-bold text-sm text-white">{currency.code}</div>
                       <div className="text-[10px] text-text-secondary">Придбати {currency.code}</div>
                     </div>
-                  </button>
+                  </a>
                 ))}
               </div>
             </div>
@@ -81,11 +94,14 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], onPr
               {/* Dropdown Menu */}
               <div className={`absolute top-full left-0 mt-0 w-48 bg-primary-light border border-white/10 rounded-xl shadow-xl overflow-hidden transition-all duration-200 options-scroll max-h-[60vh] overflow-y-auto ${sellOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
                 {availableCurrencies.map(currency => (
-                  <button
+                  <a
                     key={currency.code}
-                    onClick={() => {
+                    href={`/#sell-${currency.code}`}
+                    onClick={(e) => {
+                      e.preventDefault();
                       onPresetExchange('sell', currency.code);
                       setSellOpen(false);
+                      window.history.pushState(null, '', `/#sell-${currency.code}`);
                     }}
                     className="w-full text-left px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5 last:border-b-0"
                   >
@@ -94,14 +110,44 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], onPr
                       <div className="font-bold text-sm text-white">{currency.code}</div>
                       <div className="text-[10px] text-text-secondary">Продати {currency.code}</div>
                     </div>
-                  </button>
+                  </a>
                 ))}
               </div>
             </div>
 
-            <a href="#services" className="text-text-secondary hover:text-white text-base font-medium transition-colors">
-              Додаткові послуги
-            </a>
+            {/* Services Dropdown */}
+            <div
+              className="relative group"
+              onMouseEnter={() => setServicesOpen(true)}
+              onMouseLeave={() => setServicesOpen(false)}
+            >
+              <button className="flex items-center gap-1 text-text-secondary hover:text-white text-base font-medium transition-colors py-2">
+                Додаткові послуги
+                <ChevronDown className={`w-3 h-3 transition-transform ${servicesOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              <div className={`absolute top-full left-0 mt-0 w-64 bg-primary-light border border-white/10 rounded-xl shadow-xl overflow-hidden transition-all duration-200 ${servicesOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
+                {serviceItems.map(service => (
+                  <Link
+                    key={service.id}
+                    to={service.link_url || `/services`}
+                    onClick={() => setServicesOpen(false)}
+                    className="w-full text-left px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5 last:border-b-0 block"
+                  >
+                    <div>
+                      <div className="font-medium text-sm text-white">{service.title}</div>
+                    </div>
+                  </Link>
+                ))}
+                <Link
+                  to="/services"
+                  onClick={() => setServicesOpen(false)}
+                  className="w-full text-left px-4 py-3 hover:bg-accent-blue/10 flex items-center gap-2 transition-colors bg-white/5 block"
+                >
+                  <span className="text-sm font-medium text-accent-blue">Всі послуги →</span>
+                </Link>
+              </div>
+            </div>
 
             <a href="#footer" className="text-text-secondary hover:text-white text-base font-medium transition-colors">
               Контакти

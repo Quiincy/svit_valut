@@ -19,19 +19,6 @@ const STATUS_CONFIG = {
   expired: { label: 'Прострочено', color: 'text-gray-400 bg-gray-400/10', icon: XCircle },
 };
 
-// Kyiv timezone helper
-const formatKyivTime = (isoString) => {
-  if (!isoString) return '—';
-  const date = new Date(isoString);
-  return date.toLocaleString('uk-UA', {
-    timeZone: 'Europe/Kyiv',
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
 
 
 // Default currencies for template
@@ -794,7 +781,7 @@ export default function AdminDashboard({ user, onLogout }) {
                             </span>
                           </td>
                           <td className="py-4 pr-4 text-xs text-text-secondary">
-                            {formatKyivTime(res.created_at)}
+                            {new Date(res.created_at).toLocaleString('uk-UA')}
                           </td>
                           <td className="py-4">
                             <div className="flex gap-2">

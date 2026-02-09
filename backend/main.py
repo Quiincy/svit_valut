@@ -642,7 +642,17 @@ async def create_reservation(request: ReservationRequest, db: Session = Depends(
         get_amount = request.give_amount * from_curr.buy_rate
         rate = from_curr.buy_rate
     
-    now = datetime.now(timezone.utc)
+    # Use Naive Kyiv Time to ensure correct string-based sorting with existing legacy data
+    # and correct display on frontend (as local time).
+    try:
+        from zoneinfo import ZoneInfo
+        kyiv = ZoneInfo("Europe/Kyiv")
+        now = datetime.now(kyiv).replace(tzinfo=None)
+    except ImportError:
+        # Fallback for systems without zoneinfo (e.g. older python)
+        # Kyiv is UTC+2 in winter, UTC+3 in summer. Currently Feb -> +2
+        now = datetime.utcnow() + timedelta(hours=2)
+
     expires_at = now + timedelta(minutes=60)
     
     db_res = models.Reservation(
