@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import {
   Upload, Download, LogOut, RefreshCw, CheckCircle,
   XCircle, Clock, DollarSign, TrendingUp, FileSpreadsheet,
   AlertCircle, ChevronDown, Search, Building2, ArrowRightLeft,
-  MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X
+  MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X, Globe, Save
 } from 'lucide-react';
 import BranchRateCard from '../components/admin/BranchRateCard';
 import { adminService, currencyService } from '../services/api';
@@ -71,6 +71,11 @@ export default function AdminDashboard({ user, onLogout }) {
   // Rate management state
   const [rateModal, setRateModal] = useState({ open: false, branchId: null, currency: null });
   const [rateForm, setRateForm] = useState({ currency: 'USD', buy: '', sell: '', is_active: true });
+
+  // SEO editing state
+  const [seoEditing, setSeoEditing] = useState(null); // currency code being edited
+  const [seoForm, setSeoForm] = useState({ seo_h1: '', seo_h2: '', seo_text: '', seo_image: '', buy_url: '', sell_url: '' });
+  const [seoSaving, setSeoSaving] = useState(false);
 
 
   const fetchData = useCallback(async () => {
@@ -272,6 +277,36 @@ export default function AdminDashboard({ user, onLogout }) {
     } catch (error) {
       console.error('Error saving rate:', error);
       alert('Помилка збереження');
+    }
+  };
+
+  const handleSeoEdit = (currency) => {
+    if (seoEditing === currency.code) {
+      setSeoEditing(null);
+      return;
+    }
+    setSeoEditing(currency.code);
+    setSeoForm({
+      seo_h1: currency.seo_h1 || '',
+      seo_h2: currency.seo_h2 || '',
+      seo_text: currency.seo_text || '',
+      seo_image: currency.seo_image || '',
+      buy_url: currency.buy_url || '',
+      sell_url: currency.sell_url || '',
+    });
+  };
+
+  const handleSeoSave = async () => {
+    setSeoSaving(true);
+    try {
+      await adminService.updateCurrency(seoEditing, seoForm);
+      setSeoEditing(null);
+      fetchData();
+    } catch (error) {
+      console.error('Error saving SEO info:', error);
+      alert('Помилка збереження SEO інформації');
+    } finally {
+      setSeoSaving(false);
     }
   };
 
@@ -580,26 +615,133 @@ export default function AdminDashboard({ user, onLogout }) {
                         <th className="pb-3 pr-4">Назва</th>
                         <th className="pb-3 pr-4 text-right">Купівля</th>
                         <th className="pb-3 text-right">Продаж</th>
+                        <th className="pb-3 pl-4 text-center">SEO</th>
                       </tr>
                     </thead>
                     <tbody>
                       {currencies.map((currency) => (
-                        <tr key={currency.code} className="border-b border-white/5">
-                          <td className="py-3 pr-4">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xl">{currency.flag}</span>
-                              <span className="font-bold">{currency.code}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 pr-4 text-text-secondary">{currency.name_uk}</td>
-                          <td className="py-3 pr-4 text-right font-medium text-green-400">
-                            {currency.buy_rate?.toFixed(2)}
-                          </td>
-                          <td className="py-3 text-right font-medium text-red-400">
-                            {currency.sell_rate?.toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
+                        <Fragment key={currency.code}>
+                          <tr className="border-b border-white/5">
+                            <td className="py-3 pr-4">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xl">{currency.flag}</span>
+                                <span className="font-bold">{currency.code}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 pr-4 text-text-secondary">{currency.name_uk}</td>
+                            <td className="py-3 pr-4 text-right font-medium text-green-400">
+                              {currency.buy_rate?.toFixed(2)}
+                            </td>
+                            <td className="py-3 text-right font-medium text-red-400">
+                              {currency.sell_rate?.toFixed(2)}
+                            </td>
+                            <td className="py-3 pl-4">
+                              <button
+                                onClick={() => handleSeoEdit(currency)}
+                                className={`p-1.5 rounded-lg transition-colors ${seoEditing === currency.code ? 'bg-accent-yellow/20 text-accent-yellow' : 'text-text-secondary hover:text-white hover:bg-white/5'}`}
+                                title="SEO інформація"
+                              >
+                                <Globe className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                          {/* SEO Editing Form Row */}
+                          {seoEditing === currency.code && (
+                            <tr key={`${currency.code}-seo`}>
+                              <td colSpan="5" className="p-4 bg-primary/50 border-b border-white/5">
+                                <div className="p-5 bg-primary rounded-xl border border-accent-yellow/30">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <h4 className="font-bold text-accent-yellow flex items-center gap-2">
+                                      <Globe className="w-4 h-4" />
+                                      SEO для {seoEditing}
+                                    </h4>
+                                    <button onClick={() => setSeoEditing(null)} className="text-text-secondary hover:text-white">
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                  <div className="grid md:grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="text-xs text-text-secondary block mb-1">H1 Заголовок</label>
+                                      <input
+                                        type="text"
+                                        value={seoForm.seo_h1}
+                                        onChange={(e) => setSeoForm({ ...seoForm, seo_h1: e.target.value })}
+                                        placeholder="Наприклад: Обмін долара в Києві"
+                                        className="w-full px-3 py-2 bg-primary-light rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs text-text-secondary block mb-1">H2 Підзаголовок</label>
+                                      <input
+                                        type="text"
+                                        value={seoForm.seo_h2}
+                                        onChange={(e) => setSeoForm({ ...seoForm, seo_h2: e.target.value })}
+                                        placeholder="Наприклад: вигідний курс без комісій"
+                                        className="w-full px-3 py-2 bg-primary-light rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs text-text-secondary block mb-1">URL зображення</label>
+                                      <input
+                                        type="text"
+                                        value={seoForm.seo_image}
+                                        onChange={(e) => setSeoForm({ ...seoForm, seo_image: e.target.value })}
+                                        placeholder="https://..."
+                                        className="w-full px-3 py-2 bg-primary-light rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
+                                      />
+                                    </div>
+                                    <div className="row-span-2">
+                                      <label className="text-xs text-text-secondary block mb-1">SEO текст (опис)</label>
+                                      <textarea
+                                        value={seoForm.seo_text}
+                                        onChange={(e) => setSeoForm({ ...seoForm, seo_text: e.target.value })}
+                                        placeholder="Описовий текст для сторінки валюти..."
+                                        rows={4}
+                                        className="w-full px-3 py-2 bg-primary-light rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow resize-none"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs text-text-secondary block mb-1">URL купівлі</label>
+                                      <input
+                                        type="text"
+                                        value={seoForm.buy_url}
+                                        onChange={(e) => setSeoForm({ ...seoForm, buy_url: e.target.value })}
+                                        placeholder="/buy-usd"
+                                        className="w-full px-3 py-2 bg-primary-light rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs text-text-secondary block mb-1">URL продажу</label>
+                                      <input
+                                        type="text"
+                                        value={seoForm.sell_url}
+                                        onChange={(e) => setSeoForm({ ...seoForm, sell_url: e.target.value })}
+                                        placeholder="/sell-usd"
+                                        className="w-full px-3 py-2 bg-primary-light rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex justify-end mt-4 gap-3">
+                                    <button
+                                      onClick={() => setSeoEditing(null)}
+                                      className="px-4 py-2 text-sm text-text-secondary hover:text-white transition-colors"
+                                    >
+                                      Скасувати
+                                    </button>
+                                    <button
+                                      onClick={handleSeoSave}
+                                      disabled={seoSaving}
+                                      className="px-6 py-2 bg-accent-yellow text-primary text-sm font-bold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+                                    >
+                                      {seoSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                      Зберегти
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>))}
                     </tbody>
                   </table>
                 </div>

@@ -93,6 +93,7 @@ export const currencyService = {
     api.get('/calculate', { params: { amount, from_currency: fromCurrency, to_currency: toCurrency } }),
   calculateCross: (amount, fromCurrency, toCurrency) =>
     api.get('/calculate/cross', { params: { amount, from_currency: fromCurrency, to_currency: toCurrency } }),
+  getAllCurrencyInfo: () => api.get('/currencies/info/all'),
 };
 
 export const orderService = {

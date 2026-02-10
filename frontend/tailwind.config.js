@@ -8,9 +8,9 @@ export default {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#0a0e14',
-          light: '#141922',
-          card: 'rgba(30, 38, 50, 0.85)',
+          DEFAULT: '#151b28',
+          light: '#1c2333',
+          card: 'rgba(30, 38, 55, 0.85)',
         },
         accent: {
           yellow: '#f5d547',

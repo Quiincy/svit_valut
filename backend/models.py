@@ -132,3 +132,10 @@ class Currency(Base):
     is_popular = Column(Boolean, default=False)
     flag = Column(String, default="🏳️")
     order = Column(Integer, default=0)
+    # SEO / Info fields
+    buy_url = Column(String, nullable=True)
+    sell_url = Column(String, nullable=True)
+    seo_h1 = Column(String, nullable=True)
+    seo_h2 = Column(String, nullable=True)
+    seo_image = Column(String, nullable=True)
+    seo_text = Column(Text, nullable=True)

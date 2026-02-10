@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, RefreshCw, Loader2, X, MapPin, User, Phone, Check, ArrowRight } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { ChevronDown, RefreshCw, Loader2, X, MapPin, User, Phone, Check, ArrowRight, Clock } from 'lucide-react';
 
 export default function HeroSection({
   giveAmount,
@@ -16,11 +17,14 @@ export default function HeroSection({
   settings,
   activeBranch,
   onBranchChange,
-  onOpenChat,
   sellCurrency,
   buyCurrency,
   presetAction,
+  branchCurrencyMap = {},
+  currencyInfoMap = {},
+  onOpenChat,
 }) {
+  const location = useLocation();
   const [bookingStep, setBookingStep] = useState(null); // null, 'branch', 'name', 'phone'
   const [phone, setPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -72,6 +76,56 @@ export default function HeroSection({
     if (digits.length > 10) formatted = '+' + digits.slice(0, 2) + ' (' + digits.slice(2, 5) + ') ' + digits.slice(5, 8) + '-' + digits.slice(8, 10) + '-' + digits.slice(10);
 
     return formatted;
+  };
+
+  // Filter branches that support the selected currency, sorted by best rate
+  const getAvailableBranches = () => {
+    const selectedCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
+    if (!selectedCode || Object.keys(branchCurrencyMap).length === 0) {
+      return { available: branches, unavailable: [] };
+    }
+
+    const available = [];
+    const unavailable = [];
+
+    branches.forEach(b => {
+      const currs = branchCurrencyMap[b.id];
+      if (!currs || currs.length === 0) {
+        unavailable.push(b);
+        return;
+      }
+      const hasCurrency = currs.some(c => c.code === selectedCode);
+      if (hasCurrency) {
+        available.push(b);
+      } else {
+        unavailable.push(b);
+      }
+    });
+
+    // Sort available by best rate for the user
+    available.sort((a, b) => {
+      const aCurrs = branchCurrencyMap[a.id] || [];
+      const bCurrs = branchCurrencyMap[b.id] || [];
+      const aRate = aCurrs.find(c => c.code === selectedCode);
+      const bRate = bCurrs.find(c => c.code === selectedCode);
+      if (!aRate || !bRate) return 0;
+
+      if (isSellMode) {
+        return (bRate.buy_rate || 0) - (aRate.buy_rate || 0);
+      } else {
+        return (aRate.sell_rate || 0) - (bRate.sell_rate || 0);
+      }
+    });
+
+    return { available, unavailable };
+  };
+
+  // Get rate for a specific currency at a specific branch
+  const getBranchRate = (branchId) => {
+    const selectedCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
+    const currs = branchCurrencyMap[branchId];
+    if (!currs || !selectedCode) return null;
+    return currs.find(c => c.code === selectedCode);
   };
 
   const handleStartBooking = () => {
@@ -206,60 +260,127 @@ export default function HeroSection({
   const buyRate = activeCurrency?.buy_rate || 0;
   const sellRate = activeCurrency?.sell_rate || 1;
 
+  // Chat availability helper — only available 7:30–20:30 Kyiv time
+  const isChatAvailable = () => {
+    const now = new Date();
+    // Get Kyiv time (UTC+2 / UTC+3 depending on DST)
+    const kyivTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
+    const hours = kyivTime.getHours();
+    const minutes = kyivTime.getMinutes();
+    const totalMinutes = hours * 60 + minutes;
+    return totalMinutes >= 450 && totalMinutes <= 1230; // 7:30 = 450, 20:30 = 1230
+  };
+
+  const chatOnline = isChatAvailable();
+
+  // Get current currency info based on selected currency
+  const currentCurrencyCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
+  const currencyInfo = currencyInfoMap[currentCurrencyCode] || null;
+  // Only show SEO content if we are NOT on the homepage (root path)
+  // AND we have actual SEO info to show
+  const hasCurrencyInfo = location.pathname !== '/' && currencyInfo && (currencyInfo.seo_h1 || currencyInfo.seo_h2 || currencyInfo.seo_text);
+
   return (
     <section className="pt-20 lg:pt-24">
       {/* Desktop Layout */}
-      <div className="hidden lg:block">
-        <div className="max-w-7xl mx-auto px-8 py-16">
+      <div className="hidden lg:block relative overflow-hidden">
+        {/* Background image on right half */}
+        <div
+          className="absolute top-0 right-0 w-1/2 h-full bg-cover bg-center"
+          style={{ backgroundImage: "url('/hero-bg.jpg')" }}
+        ></div>
+        {/* Gradient overlay: solid on left, fading to transparent on right */}
+        <div className="absolute inset-0 bg-gradient-to-r from-primary via-primary/95 to-primary/40"></div>
+        <div className="relative z-10 max-w-7xl mx-auto px-8 py-16">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
-            {/* Left Content */}
+            {/* Left Content — Dynamic Currency Info or Default */}
             <div className="flex flex-col gap-8">
-              {/* Title */}
-              <h1 className="text-5xl xl:text-7xl font-bold leading-tight">
-                <span className="text-accent-yellow">Обмін валют</span>
-                <br />
-                <span className="text-white font-light text-4xl xl:text-6xl">без ризиків та переплат</span>
-              </h1>
+              {hasCurrencyInfo ? (
+                <>
+                  {/* Dynamic SEO H1 */}
+                  <h1 className="text-5xl xl:text-7xl font-bold leading-tight">
+                    <span className="text-accent-yellow">{currencyInfo.seo_h1}</span>
+                    {currencyInfo.seo_h2 && (
+                      <>
+                        <br />
+                        <span className="text-white font-light text-4xl xl:text-6xl">{currencyInfo.seo_h2}</span>
+                      </>
+                    )}
+                  </h1>
 
-              {/* Banner */}
-              <div className="flex items-center gap-3 bg-white/10 rounded-full pl-2 pr-6 py-2 w-fit backdrop-blur-md border border-white/5">
-                <div className="w-8 h-8 rounded-full border border-accent-blue text-accent-blue flex items-center justify-center">
-                  <ArrowRight className="w-4 h-4" />
-                </div>
-                <span className="text-base text-gray-300">Швидко. Безпечно. За вигідним курсом.</span>
-              </div>
+                  {/* SEO Image */}
+                  {currencyInfo.seo_image && (
+                    <div className="rounded-2xl overflow-hidden border border-white/10 max-w-md">
+                      <img src={currencyInfo.seo_image} alt={currencyInfo.seo_h1} className="w-full h-48 object-cover" />
+                    </div>
+                  )}
+
+                  {/* SEO Text */}
+                  {currencyInfo.seo_text && (
+                    <div className="text-gray-400 text-base leading-relaxed max-w-lg whitespace-pre-line">
+                      {currencyInfo.seo_text}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Default Title */}
+                  <h1 className="text-5xl xl:text-7xl font-bold leading-tight">
+                    <span className="text-accent-yellow">Обмін валют</span>
+                    <br />
+                    <span className="text-white font-light text-4xl xl:text-6xl">без ризиків та переплат</span>
+                  </h1>
+
+                  {/* Banner / Badge */}
+                  <div className="flex items-center gap-4 bg-white/5 rounded-full pl-2 pr-8 py-2 w-fit backdrop-blur-md border border-white/10">
+                    <div className="w-10 h-10 rounded-full border border-accent-blue text-accent-blue flex items-center justify-center bg-accent-blue/10">
+                      <ArrowRight className="w-5 h-5" />
+                    </div>
+                    <span className="text-lg text-gray-300 font-light tracking-wide">Швидко. Безпечно. За вигідним курсом.</span>
+                  </div>
+                </>
+              )}
 
               {/* Contact Block */}
               <div className="mt-8">
-                <p className="text-gray-400 mb-4 text-lg">
-                  Маєте питання?<br />
+                <p className="text-gray-400 mb-2 text-xl font-light">
+                  Маєте питання?
+                </p>
+                <p className="text-gray-300 mb-8 text-xl font-light">
                   Напишіть нам — відповімо за кілька хвилин.
                 </p>
+
+                <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">Напишіть нам:</p>
                 <div className="flex items-center gap-6">
                   {/* Avatar & Status */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-4">
                     <div className="relative">
                       <img
                         src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
                         alt="Irina"
-                        className="w-12 h-12 rounded-full object-cover border-2 border-white/10"
+                        className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
                       />
-                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-primary"></div>
+                      <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
                     </div>
                     <div>
-                      <div className="font-medium text-white">Ірина</div>
-                      <div className="text-accent-blue text-sm">в мережі</div>
+                      <div className="font-bold text-white text-lg">Ірина</div>
+                      <div className={`text-sm font-medium ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
+                        {chatOnline ? 'в мережі' : 'не в мережі'}
+                      </div>
                     </div>
                   </div>
 
                   {/* Chat Button */}
                   <button
                     onClick={onOpenChat}
-                    className="px-8 py-3 bg-gradient-to-r from-accent-yellow to-yellow-600 rounded-full text-primary font-bold hover:shadow-lg hover:shadow-yellow-500/20 transition-all"
+                    className="px-10 py-4 bg-accent-yellow rounded-full text-primary font-bold text-lg hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:-translate-y-0.5"
                   >
                     Відкрити чат
                   </button>
                 </div>
+                {!chatOnline && (
+                  <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 7:30 до 20:30</p>
+                )}
               </div>
             </div>
 
@@ -305,95 +426,232 @@ export default function HeroSection({
       </div>
 
       {/* Mobile Layout */}
-      <div className="lg:hidden px-4 py-10 flex flex-col gap-8">
-        <div className="flex flex-col gap-4 text-center items-center">
-          <h1 className="text-3xl font-bold leading-tight">
-            <span className="text-accent-yellow text-4xl">Обмін валют</span>
-            <br />
-            <span className="text-white font-light text-2xl">без ризиків та переплат</span>
-          </h1>
-          <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
-            <div className="w-8 h-8 bg-accent-blue/20 rounded-full flex items-center justify-center">
-              <ArrowRight className="w-4 h-4 text-accent-blue transform -rotate-45" />
+      <div className="lg:hidden relative overflow-hidden">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/hero-bg.jpg')" }}
+        ></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/90 via-primary/80 to-primary/90"></div>
+        <div className="relative z-10 px-4 py-10 flex flex-col gap-8">
+          <div className="flex flex-col gap-4 text-center items-center">
+            <h1 className="text-3xl font-bold leading-tight">
+              <span className="text-accent-yellow text-4xl">Обмін валют</span>
+              <br />
+              <span className="text-white font-light text-2xl">без ризиків та переплат</span>
+            </h1>
+            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
+              <div className="w-8 h-8 bg-accent-blue/20 rounded-full flex items-center justify-center">
+                <ArrowRight className="w-4 h-4 text-accent-blue transform -rotate-45" />
+              </div>
+              <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
             </div>
-            <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
           </div>
+
+          <ExchangeCard
+            giveAmount={giveAmount}
+            setGiveAmount={setGiveAmount}
+            giveCurrency={giveCurrency}
+            setGiveCurrency={setGiveCurrency}
+            getCurrency={getCurrency}
+            setGetCurrency={setGetCurrency}
+            getAmount={getAmount}
+            onOpenCurrencyModal={onOpenCurrencyModal}
+            onSwapCurrencies={onSwapCurrencies}
+            onReserve={handleStartBooking}
+            error={error}
+            settings={settings}
+            isMobile
+            branches={branches}
+            activeBranch={activeBranch}
+            onBranchChange={onBranchChange}
+            sellCurrency={sellCurrency}
+            buyCurrency={buyCurrency}
+            sellInputValue={sellInputValue}
+            setSellInputValue={setSellInputValue}
+            buyInputValue={buyInputValue}
+            setBuyInputValue={setBuyInputValue}
+            minAmount={minAmount}
+            reservationTime={reservationTime}
+            branchDropdownOpen={branchDropdownOpen}
+            setBranchDropdownOpen={setBranchDropdownOpen}
+            focusedInput={focusedInput}
+            setFocusedInput={setFocusedInput}
+            isSellMode={isSellMode}
+            handleSellChange={handleSellChange}
+            handleBuyChange={handleBuyChange}
+            buyRate={buyRate}
+            sellRate={sellRate}
+          />
+
+          {/* Mobile Currency Info + Chat (below form) */}
+          <div className="mt-6 px-2">
+            {hasCurrencyInfo && (
+              <div className="mb-6">
+                <h2 className="text-3xl font-bold leading-tight">
+                  <span className="text-accent-yellow">{currencyInfo.seo_h1}</span>
+                  <br />
+                  {currencyInfo.seo_h2 && (
+                    <span className="text-white font-light text-2xl">{currencyInfo.seo_h2}</span>
+                  )}
+                </h2>
+                {currencyInfo.seo_text && (
+                  <p className="text-gray-400 text-sm mt-3 whitespace-pre-line">{currencyInfo.seo_text}</p>
+                )}
+                {currencyInfo.seo_image && (
+                  <div className="rounded-xl overflow-hidden border border-white/10 mt-4">
+                    <img src={currencyInfo.seo_image} alt={currencyInfo.seo_h1} className="w-full h-40 object-cover" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Questions / Chat Section (mobile) */}
+            <div className="mb-4">
+              <p className="text-gray-400 text-sm mb-2">
+                Маєте питання?
+              </p>
+              <p className="text-gray-500 text-sm mb-1">— Наявність на відділеннях</p>
+              <p className="text-gray-500 text-sm mb-1">— Оптовий курс</p>
+              <p className="text-gray-500 text-sm mb-3">— інше.</p>
+
+              <p className="text-gray-500 text-sm mb-3">Напишіть нам:</p>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <img
+                      src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
+                      alt="Irina"
+                      className="w-10 h-10 rounded-full object-cover border-2 border-white/10"
+                    />
+                    <div className={`absolute bottom - 0 right - 0 w - 2.5 h - 2.5 rounded - full border - 2 border - primary ${chatOnline ? 'bg-green-500' : 'bg-gray-500'} `}></div>
+                  </div>
+                  <div>
+                    <div className="font-medium text-white text-sm">Ірина</div>
+                    <div className={`text-xs ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
+                      {chatOnline ? 'в мережі' : 'не в мережі'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={onOpenChat}
+                  className="px-6 py-2.5 bg-gradient-to-r from-accent-yellow to-yellow-600 rounded-full text-primary font-bold text-sm hover:shadow-lg transition-all"
+                >
+                  Відкрити чат
+                </button>
+              </div>
+              {!chatOnline && (
+                <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 7:30 до 20:30</p>
+              )}
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-text-secondary">
+            Фіксація курсу на {settings?.reservation_time_minutes || 60} хвилин.<br />
+            Оптовий курс від {settings?.min_wholesale_amount || 1000} USD.
+          </p>
         </div>
-
-        <ExchangeCard
-          giveAmount={giveAmount}
-          setGiveAmount={setGiveAmount}
-          giveCurrency={giveCurrency}
-          setGiveCurrency={setGiveCurrency}
-          getCurrency={getCurrency}
-          setGetCurrency={setGetCurrency}
-          getAmount={getAmount}
-          onOpenCurrencyModal={onOpenCurrencyModal}
-          onSwapCurrencies={onSwapCurrencies}
-          onReserve={handleStartBooking}
-          error={error}
-          settings={settings}
-          isMobile
-          branches={branches}
-          activeBranch={activeBranch}
-          onBranchChange={onBranchChange}
-          sellCurrency={sellCurrency}
-          buyCurrency={buyCurrency}
-          sellInputValue={sellInputValue}
-          setSellInputValue={setSellInputValue}
-          buyInputValue={buyInputValue}
-          setBuyInputValue={setBuyInputValue}
-          minAmount={minAmount}
-          reservationTime={reservationTime}
-          branchDropdownOpen={branchDropdownOpen}
-          setBranchDropdownOpen={setBranchDropdownOpen}
-          focusedInput={focusedInput}
-          setFocusedInput={setFocusedInput}
-          isSellMode={isSellMode}
-          handleSellChange={handleSellChange}
-          handleBuyChange={handleBuyChange}
-          buyRate={buyRate}
-          sellRate={sellRate}
-        />
-
-        <p className="text-center text-sm text-text-secondary">
-          Фіксація курсу на {settings?.reservation_time_minutes || 60} хвилин.<br />
-          Оптовий курс від {settings?.min_wholesale_amount || 1000} USD.
-        </p>
       </div>
 
       {/* Step 1: Branch Selection Modal */}
-      {bookingStep === 'branch' && (
-        <BookingModal onClose={closeModal} step={1} totalSteps={3}>
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-accent-blue/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MapPin className="w-8 h-8 text-accent-blue" />
+      {bookingStep === 'branch' && (() => {
+        const { available: availBranches, unavailable: unavailBranches } = getAvailableBranches();
+        const selectedCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
+        const selectedFlag = isSellMode ? sellCurrency?.flag : buyCurrency?.flag;
+        return (
+          <BookingModal onClose={closeModal} step={1} totalSteps={3}>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-accent-blue/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MapPin className="w-8 h-8 text-accent-blue" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Оберіть відділення</h3>
+              <p className="text-text-secondary text-sm">Куди вам зручніше приїхати?</p>
             </div>
-            <h3 className="text-xl font-bold mb-2">Оберіть відділення</h3>
-            <p className="text-text-secondary text-sm">Куди вам зручніше приїхати?</p>
-          </div>
 
-          <div className="space-y-3 max-h-[300px] overflow-y-auto">
-            {branches.map((branch) => (
-              <button
-                key={branch.id}
-                onClick={() => handleSelectBranch(branch)}
-                className="w-full p-4 bg-primary rounded-xl border border-white/10 hover:border-accent-blue/50 transition-all text-left flex items-center gap-4"
-              >
-                <div className="w-10 h-10 rounded-full bg-accent-blue/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-accent-blue font-bold">{branch.id}</span>
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium">{branch.address}</div>
-                  <div className="text-sm text-text-secondary">{branch.hours}</div>
-                  {branch.phone && <div className="text-sm text-accent-yellow">{branch.phone}</div>}
-                </div>
-                <ArrowRight className="w-5 h-5 text-text-secondary" />
-              </button>
-            ))}
-          </div>
-        </BookingModal>
-      )}
+            {/* Info banner when currency not available at all branches */}
+            {unavailBranches.length > 0 && availBranches.length > 0 && (
+              <div className="mb-4 p-3 bg-accent-yellow/10 border border-accent-yellow/30 rounded-xl flex items-start gap-2">
+                <span className="text-lg flex-shrink-0 mt-0.5">{selectedFlag}</span>
+                <p className="text-sm text-accent-yellow">
+                  <span className="font-bold">{selectedCode}</span> доступна у {availBranches.length} з {branches.length} відділень
+                </p>
+              </div>
+            )}
+
+            {availBranches.length > 0 ? (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                {availBranches.map((branch, index) => {
+                  const rate = getBranchRate(branch.id);
+                  const isBest = index === 0;
+                  return (
+                    <button
+                      key={branch.id}
+                      onClick={() => handleSelectBranch(branch)}
+                      className={`w-full p-4 rounded-2xl border transition-all text-left group ${isBest ? 'bg-accent-yellow/5 border-accent-yellow/40 shadow-lg shadow-accent-yellow/5' : 'bg-white/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.06]'}`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <MapPin className={`w-4 h-4 ${isBest ? 'text-accent-yellow' : 'text-accent-blue'}`} />
+                          <span className="font-bold text-white text-sm">{branch.name || branch.address}</span>
+                        </div>
+                        {isBest && (
+                          <span className="text-[10px] bg-accent-yellow/20 text-accent-yellow px-2.5 py-1 rounded-full font-bold tracking-wide">
+                            ★ Найкращий курс
+                          </span>
+                        )}
+                      </div>
+                      <div className="pl-6 space-y-1">
+                        {branch.name && <p className="text-xs text-text-secondary">{branch.address}</p>}
+                        <div className="flex items-center gap-1 text-xs text-text-secondary">
+                          <Clock className="w-3 h-3" />
+                          <span>{branch.hours || branch.working_hours}</span>
+                        </div>
+                        {rate && (
+                          <div className="flex items-center gap-4 mt-1.5">
+                            <div className="text-xs">
+                              <span className="text-text-secondary">Купівля: </span>
+                              <span className="text-white font-semibold">{rate.buy_rate?.toFixed(2)}</span>
+                            </div>
+                            <div className="text-xs">
+                              <span className="text-text-secondary">Продаж: </span>
+                              <span className="text-white font-semibold">{rate.sell_rate?.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {/* Show unavailable branches dimmed */}
+                {unavailBranches.length > 0 && (
+                  <>
+                    <div className="text-xs text-text-secondary text-center pt-3 pb-1 opacity-50">Немає {selectedCode}:</div>
+                    {unavailBranches.map((branch) => (
+                      <div
+                        key={branch.id}
+                        className="w-full p-3 rounded-xl bg-white/[0.02] border border-white/5 text-left opacity-40 cursor-not-allowed"
+                      >
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-3.5 h-3.5 text-text-secondary" />
+                          <span className="text-sm text-text-secondary">{branch.address}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-3">{selectedFlag}</div>
+                <p className="text-text-secondary font-medium mb-2">На жаль, <span className="text-white">{selectedCode}</span> наразі недоступна</p>
+                <p className="text-text-secondary text-sm">Жодне відділення не працює з цією валютою. Зверніться до нас через чат для уточнення.</p>
+              </div>
+            )}
+          </BookingModal>
+        );
+      })()}
 
       {/* Step 2: Name Modal */}
       {bookingStep === 'name' && (
@@ -504,7 +762,7 @@ export default function HeroSection({
 // Booking Modal Component
 function BookingModal({ children, onClose, step, totalSteps }) {
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={onClose}>
       <div
         className="bg-primary-light rounded-3xl p-6 max-w-md w-full border border-white/10 relative"
         onClick={(e) => e.stopPropagation()}
@@ -522,8 +780,8 @@ function BookingModal({ children, onClose, step, totalSteps }) {
           {[1, 2, 3].map((s) => (
             <div
               key={s}
-              className={`h-2 rounded-full transition-all ${s === step ? 'w-8 bg-accent-yellow' : s < step ? 'w-2 bg-accent-yellow/50' : 'w-2 bg-white/20'
-                }`}
+              className={`h - 2 rounded - full transition - all ${s === step ? 'w-8 bg-accent-yellow' : s < step ? 'w-2 bg-accent-yellow/50' : 'w-2 bg-white/20'
+                } `}
             />
           ))}
         </div>
@@ -571,47 +829,14 @@ function ExchangeCard({
   sellRate
 }) {
   return (
-    <div className={`bg-primary-card backdrop-blur-xl rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'p-4' : 'p-6 lg:p-8 max-w-xl w-full'}`}>
+    <div className={`bg-primary-card backdrop-blur-sm rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'p-4' : 'p-6 lg:p-8 max-w-xl w-full'}`}>
       <h3 className="text-lg lg:text-xl font-bold text-center mb-1">Забронювати валюту</h3>
       <p className="text-xs lg:text-sm text-text-secondary text-center mb-6">
         Фіксація курсу на {reservationTime} хвилин
       </p>
 
-      {/* Branch Selector */}
-      {branches.length > 0 && (
-        <div className="mb-6 relative">
-          <button
-            onClick={() => setBranchDropdownOpen(!branchDropdownOpen)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-primary-light rounded-xl border border-white/10 hover:border-accent-yellow/50 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-accent-yellow" />
-              <span className="text-sm font-medium truncate">
-                {activeBranch?.address || 'Будь-яке відділення'}
-              </span>
-            </div>
-            <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${branchDropdownOpen ? 'rotate-180' : ''}`} />
-          </button>
 
-          {branchDropdownOpen && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-primary-light rounded-xl border border-white/10 shadow-xl z-50 max-h-48 overflow-y-auto">
-              {branches.map((branch) => (
-                <button
-                  key={branch.id}
-                  onClick={() => {
-                    onBranchChange(branch);
-                    setBranchDropdownOpen(false);
-                  }}
-                  className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0 ${activeBranch?.id === branch.id ? 'bg-accent-yellow/10' : ''}`}
-                >
-                  <div className="text-sm font-medium">{branch.address}</div>
-                  <div className="text-xs text-text-secondary">{branch.hours}</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+
 
       {/* Row 1: I SELL (Give Foreign -> Get UAH) */}
       <div className="mb-3 transition-all rounded-xl border p-1 bg-primary-light border-white/10 focus-within:border-green-400 focus-within:shadow-[0_0_20px_rgba(74,222,128,0.2)]">

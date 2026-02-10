@@ -73,6 +73,15 @@ export default function LiveChat({ isOpen, onClose }) {
   const messagesEndRef = useRef(null);
   const chatId = getChatId();
 
+  // Chat availability — 7:30–20:30 Kyiv time
+  const isChatAvailable = () => {
+    const now = new Date();
+    const kyivTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
+    const totalMinutes = kyivTime.getHours() * 60 + kyivTime.getMinutes();
+    return totalMinutes >= 450 && totalMinutes <= 1230;
+  };
+  const chatOnline = isChatAvailable();
+
   useEffect(() => {
     const savedName = localStorage.getItem('chatCustomerName');
     if (savedName) {
@@ -161,7 +170,9 @@ export default function LiveChat({ isOpen, onClose }) {
           </div>
           <div>
             <div className="font-bold text-primary">Світ Валют</div>
-            <div className="text-xs text-primary/70">Онлайн підтримка</div>
+            <div className={`text-xs ${chatOnline ? 'text-primary/70' : 'text-red-600/70'}`}>
+              {chatOnline ? 'Онлайн підтримка' : 'Не в мережі (7:30–20:30)'}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -217,8 +228,8 @@ export default function LiveChat({ isOpen, onClose }) {
                 >
                   <div
                     className={`max-w-[80%] rounded-2xl px-4 py-2 ${msg.from === 'customer'
-                        ? 'bg-accent-yellow text-primary rounded-br-sm'
-                        : 'bg-primary border border-white/10 rounded-bl-sm'
+                      ? 'bg-accent-yellow text-primary rounded-br-sm'
+                      : 'bg-primary border border-white/10 rounded-bl-sm'
                       }`}
                   >
                     <p className="text-sm">{msg.text}</p>
@@ -234,23 +245,47 @@ export default function LiveChat({ isOpen, onClose }) {
 
           {/* Input */}
           <div className="p-4 border-t border-white/10">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Напишіть повідомлення..."
-                className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm"
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!input.trim()}
-                className="p-3 bg-accent-yellow rounded-xl text-primary hover:opacity-90 disabled:opacity-50"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </div>
+            {chatOnline ? (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Напишіть повідомлення..."
+                  className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!input.trim()}
+                  className="p-3 bg-accent-yellow rounded-xl text-primary hover:opacity-90 disabled:opacity-50"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-2">
+                <p className="text-sm text-gray-400">Чат працює щодня з 7:30 до 20:30</p>
+                <p className="text-xs text-gray-500 mt-1">Залиште повідомлення і ми відповімо вранці</p>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    placeholder="Залишити повідомлення..."
+                    className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!input.trim()}
+                    className="p-3 bg-accent-yellow/60 rounded-xl text-primary hover:opacity-90 disabled:opacity-50"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

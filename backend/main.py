@@ -2298,25 +2298,55 @@ class CurrencyUpdate(BaseModel):
     is_popular: Optional[bool] = None
     buy_rate: Optional[float] = None
     sell_rate: Optional[float] = None
+    buy_url: Optional[str] = None
+    sell_url: Optional[str] = None
+    seo_h1: Optional[str] = None
+    seo_h2: Optional[str] = None
+    seo_image: Optional[str] = None
+    seo_text: Optional[str] = None
+
+@app.get("/api/currencies/info/all")
+async def get_all_currency_info(db: Session = Depends(get_db)):
+    """Get SEO info for all currencies (public)"""
+    currencies = db.query(models.Currency).filter(models.Currency.is_active == True).order_by(models.Currency.order).all()
+    result = {}
+    for c in currencies:
+        result[c.code] = {
+            "code": c.code,
+            "name_uk": c.name_uk,
+            "flag": c.flag,
+            "buy_url": c.buy_url,
+            "sell_url": c.sell_url,
+            "seo_h1": c.seo_h1,
+            "seo_h2": c.seo_h2,
+            "seo_image": c.seo_image,
+            "seo_text": c.seo_text,
+        }
+    return result
 
 @app.get("/api/admin/currencies")
 async def get_admin_currencies(user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Get all currencies including inactive"""
-    # Query definitive list from Currency table
+    """Get all currencies including inactive with SEO fields"""
     currencies = db.query(models.Currency).order_by(models.Currency.order).all()
     
     result = []
     for c in currencies:
-        result.append(Currency(
-            code=c.code,
-            name=c.name,
-            name_uk=c.name_uk,
-            flag=c.flag,
-            buy_rate=c.buy_rate,
-            sell_rate=c.sell_rate,
-            is_popular=c.is_popular,
-            is_active=c.is_active
-        ))
+        result.append({
+            "code": c.code,
+            "name": c.name,
+            "name_uk": c.name_uk,
+            "flag": c.flag,
+            "buy_rate": c.buy_rate,
+            "sell_rate": c.sell_rate,
+            "is_popular": c.is_popular,
+            "is_active": c.is_active,
+            "buy_url": c.buy_url,
+            "sell_url": c.sell_url,
+            "seo_h1": c.seo_h1,
+            "seo_h2": c.seo_h2,
+            "seo_image": c.seo_image,
+            "seo_text": c.seo_text,
+        })
     return result
 
 @app.put("/api/admin/currencies/{code}")
@@ -2336,6 +2366,18 @@ async def update_currency(code: str, update: CurrencyUpdate, user: models.User =
         c.is_active = update.is_active
     if update.is_popular is not None:
         c.is_popular = update.is_popular
+    if update.buy_url is not None:
+        c.buy_url = update.buy_url
+    if update.sell_url is not None:
+        c.sell_url = update.sell_url
+    if update.seo_h1 is not None:
+        c.seo_h1 = update.seo_h1
+    if update.seo_h2 is not None:
+        c.seo_h2 = update.seo_h2
+    if update.seo_image is not None:
+        c.seo_image = update.seo_image
+    if update.seo_text is not None:
+        c.seo_text = update.seo_text
     
     global rates_updated_at
     rates_updated_at = datetime.now()
@@ -2343,16 +2385,22 @@ async def update_currency(code: str, update: CurrencyUpdate, user: models.User =
     db.commit()
     db.refresh(c)
     
-    return Currency(
-        code=c.code,
-        name=c.name,
-        name_uk=c.name_uk,
-        flag=c.flag,
-        buy_rate=c.buy_rate,
-        sell_rate=c.sell_rate,
-        is_popular=c.is_popular,
-        is_active=c.is_active
-    )
+    return {
+        "code": c.code,
+        "name": c.name,
+        "name_uk": c.name_uk,
+        "flag": c.flag,
+        "buy_rate": c.buy_rate,
+        "sell_rate": c.sell_rate,
+        "is_popular": c.is_popular,
+        "is_active": c.is_active,
+        "buy_url": c.buy_url,
+        "sell_url": c.sell_url,
+        "seo_h1": c.seo_h1,
+        "seo_h2": c.seo_h2,
+        "seo_image": c.seo_image,
+        "seo_text": c.seo_text,
+    }
 
 
 # ============== OPERATOR RATES DOWNLOAD ==============

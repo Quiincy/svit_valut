@@ -6,6 +6,35 @@ export default function Footer({ settings }) {
   const phoneClean = phone.replace(/[^\d+]/g, '');
   const workingHours = settings?.working_hours || 'щодня: 8:00-20:00';
 
+  // SVG Logo component inline
+  const LogoSvg = () => (
+    <svg viewBox="0 0 240 60" className="h-10 lg:h-12 w-auto" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="goldGradientFooter" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FDE68A" />
+          <stop offset="25%" stopColor="#D97706" />
+          <stop offset="50%" stopColor="#FDE68A" />
+          <stop offset="75%" stopColor="#B45309" />
+          <stop offset="100%" stopColor="#F59E0B" />
+        </linearGradient>
+      </defs>
+      <g transform="translate(5, 5)">
+        <circle cx="25" cy="25" r="23" stroke="url(#goldGradientFooter)" strokeWidth="2" fill="none" />
+        <path d="M25 2 V48 M2 25 H48" stroke="url(#goldGradientFooter)" strokeWidth="0.5" opacity="0.3" />
+        <path d="M12 10 Q2,25 12,40 M38 10 Q48,25 38,40" stroke="url(#goldGradientFooter)" strokeWidth="0.5" fill="none" opacity="0.3" />
+        <text x="25" y="42" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="42" fill="url(#goldGradientFooter)" textAnchor="middle" filter="drop-shadow(1px 1px 2px rgba(0,0,0,0.5))">$</text>
+      </g>
+      <g transform="translate(60, 0)">
+        <text x="0" y="38" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="36" fill="url(#goldGradientFooter)" letterSpacing="1" filter="drop-shadow(1px 1px 2px rgba(0,0,0,0.5))">
+          СВІТ
+        </text>
+        <text x="0" y="56" fontFamily="Arial, sans-serif" fontWeight="bold" fontSize="14" fill="url(#goldGradientFooter)" letterSpacing="4.5" opacity="0.9">
+          ВАЛЮТ
+        </text>
+      </g>
+    </svg>
+  );
+
   return (
     <footer id="footer" className="bg-primary-light border-t border-white/10">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
@@ -36,14 +65,7 @@ export default function Footer({ settings }) {
           <div className="hidden lg:grid grid-cols-4 gap-8">
             <div>
               <Link to="/" className="flex items-center gap-2 mb-4">
-                {/* Styled Logo matching screenshot */}
-                <div className="relative flex items-center justify-center">
-                  <span className="text-3xl font-bold text-[#4488FF] font-sans">$</span>
-                </div>
-                <div className="text-left flex flex-col justify-center h-full pt-1">
-                  <div className="font-bold text-lg leading-none tracking-wide text-white">СВІТ</div>
-                  <div className="text-[10px] font-medium text-text-secondary tracking-[2px] uppercase leading-none mt-0.5">ВАЛЮТ</div>
-                </div>
+                <LogoSvg />
               </Link>
               <p className="text-sm text-text-secondary">
                 Надійний обмін валют у Києві з 2015 року
@@ -54,9 +76,9 @@ export default function Footer({ settings }) {
               <h4 className="font-semibold mb-4">Навігація</h4>
               <ul className="space-y-2 text-sm text-text-secondary">
                 <li><Link to="/rates" className="hover:text-accent-yellow transition-colors">Курс валют</Link></li>
-                <li><a href="#branches" className="hover:text-accent-yellow transition-colors">Відділення</a></li>
-                <li><a href="#services" className="hover:text-accent-yellow transition-colors">Послуги</a></li>
-                <li><a href="#faq" className="hover:text-accent-yellow transition-colors">FAQ</a></li>
+                <li><Link to="/contacts" className="hover:text-accent-yellow transition-colors">Контакти</Link></li>
+                <li><Link to="/services" className="hover:text-accent-yellow transition-colors">Послуги</Link></li>
+                <li><Link to="/faq" className="hover:text-accent-yellow transition-colors">FAQ</Link></li>
               </ul>
             </div>
 

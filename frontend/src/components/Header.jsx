@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Menu, MessageSquare, MapPin, ChevronDown } from 'lucide-react';
 
 const defaultServices = [
@@ -8,7 +8,8 @@ const defaultServices = [
   { id: 3, title: 'Старі франки на нові або USD', link_url: '/services/old-francs' },
 ];
 
-export default function Header({ onMenuToggle, onOpenChat, currencies = [], services = [], onPresetExchange }) {
+export default function Header({ onMenuToggle, onOpenChat, currencies = [], services = [], onPresetExchange, currencyInfoMap = {}, branches = [] }) {
+  const navigate = useNavigate();
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
@@ -18,8 +19,55 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
   // Filter currencies for dropdowns (exclude UAH)
   const availableCurrencies = currencies.filter(c => c.code !== 'UAH');
 
+  // Chat availability — 7:30–20:30 Kyiv time
+  const isChatAvailable = () => {
+    const now = new Date();
+    const kyivTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
+    const totalMinutes = kyivTime.getHours() * 60 + kyivTime.getMinutes();
+    return totalMinutes >= 450 && totalMinutes <= 1230;
+  };
+  const chatOnline = isChatAvailable();
+
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+
+      // Determine if at top (for glass effect)
+      setIsScrolled(currentScrollY > 20);
+
+      // Determine visibility (Hide on down, Show on up)
+      if (currentScrollY > lastScrollY && currentScrollY > 100) {
+        // Scrolling Down & past threshold -> Hide
+        setIsVisible(false);
+      } else {
+        // Scrolling Up or at top -> Show
+        setIsVisible(true);
+      }
+
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
+
+  // Header Classes:
+  // - Fixed: Always sticky
+  // - Transition: Smooth slide/fade
+  // - Glass: When scrolled (bg-primary/50 + backdrop-blur-xl)
+  // - Hidden: -translate-y-full
+  const headerClasses = `
+    fixed top-0 left-0 right-0 z-50 transition-all duration-300 transform
+    ${isScrolled ? 'bg-primary/50 backdrop-blur-xl border-b border-white/10 shadow-lg' : 'bg-primary border-b border-white/10'}
+    ${isVisible ? 'translate-y-0' : '-translate-y-full'}
+  `;
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-primary/95 backdrop-blur-xl border-b border-white/10">
+    <header className={headerClasses}>
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         <div className="flex items-center justify-between h-auto py-2 lg:h-20 lg:py-0 gap-2">
           {/* Mobile Menu Button */}
@@ -32,15 +80,50 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
           </button>
 
           {/* Logo */}
-          <a href="/" className="flex items-center gap-1.5 lg:gap-2 shrink-0">
-            <div className="relative flex items-center justify-center">
-              <span className="text-3xl lg:text-4xl font-bold text-[#4488FF] font-sans">$</span>
+          {/* Logo */}
+          <Link
+            to="/"
+            onClick={() => onPresetExchange('sell', 'USD')}
+            className="flex items-center gap-1.5 lg:gap-2 shrink-0 group"
+          >
+            <div className="h-10 lg:h-12 w-auto">
+              {/* Use the Logo component */}
+              <svg viewBox="0 0 240 60" className="h-full w-auto" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#FDE68A" />
+                    <stop offset="25%" stopColor="#D97706" />
+                    <stop offset="50%" stopColor="#FDE68A" />
+                    <stop offset="75%" stopColor="#B45309" />
+                    <stop offset="100%" stopColor="#F59E0B" />
+                  </linearGradient>
+                </defs>
+
+                {/* Globe/Dollar Icon Group */}
+                <g transform="translate(5, 5)">
+                  {/* Simplified Globe/Coin circle */}
+                  <circle cx="25" cy="25" r="23" stroke="url(#goldGradient)" strokeWidth="2" fill="none" />
+                  <path d="M25 2 V48 M2 25 H48" stroke="url(#goldGradient)" strokeWidth="0.5" opacity="0.3" />
+                  <path d="M12 10 Q2,25 12,40 M38 10 Q48,25 38,40" stroke="url(#goldGradient)" strokeWidth="0.5" fill="none" opacity="0.3" />
+
+                  {/* Heavy Dollar Sign */}
+                  <text x="25" y="42" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="42" fill="url(#goldGradient)" textAnchor="middle" filter="drop-shadow(1px 1px 2px rgba(0,0,0,0.5))">$</text>
+                </g>
+
+                {/* Text Group */}
+                <g transform="translate(60, 0)">
+                  {/* СВІТ */}
+                  <text x="0" y="38" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="36" fill="url(#goldGradient)" letterSpacing="1" filter="drop-shadow(1px 1px 2px rgba(0,0,0,0.5))">
+                    СВІТ
+                  </text>
+                  {/* ВАЛЮТ */}
+                  <text x="0" y="56" fontFamily="Arial, sans-serif" fontWeight="bold" fontSize="14" fill="url(#goldGradient)" letterSpacing="4.5" opacity="0.9">
+                    ВАЛЮТ
+                  </text>
+                </g>
+              </svg>
             </div>
-            <div className="text-left flex flex-col justify-center h-full pt-1">
-              <div className="font-bold text-lg lg:text-xl leading-none tracking-wide text-white">СВІТ</div>
-              <div className="text-[10px] lg:text-xs font-medium text-text-secondary tracking-[2px] uppercase leading-none mt-0.5">ВАЛЮТ</div>
-            </div>
-          </a>
+          </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center gap-8">
@@ -58,25 +141,36 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
 
               {/* Dropdown Menu */}
               <div className={`absolute top-full left-0 mt-0 w-48 bg-primary-light border border-white/10 rounded-xl shadow-xl overflow-hidden transition-all duration-200 options-scroll max-h-[60vh] overflow-y-auto ${purchaseOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
-                {availableCurrencies.map(currency => (
-                  <a
-                    key={currency.code}
-                    href={`/#buy-${currency.code}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onPresetExchange('buy', currency.code);
-                      setPurchaseOpen(false);
-                      window.history.pushState(null, '', `/#buy-${currency.code}`);
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5 last:border-b-0"
-                  >
-                    <span className="text-lg">{currency.flag}</span>
-                    <div>
-                      <div className="font-bold text-sm text-white">{currency.code}</div>
-                      <div className="text-[10px] text-text-secondary">Придбати {currency.code}</div>
-                    </div>
-                  </a>
-                ))}
+                {availableCurrencies.map(currency => {
+                  const info = currencyInfoMap[currency.code] || {};
+                  const buyUrl = info.buy_url;
+                  const targetUrl = buyUrl || `/#buy-${currency.code}`;
+
+                  return (
+                    <a
+                      key={currency.code}
+                      href={targetUrl}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setPurchaseOpen(false);
+                        if (buyUrl) {
+                          onPresetExchange('buy', currency.code);
+                          navigate(buyUrl);
+                        } else {
+                          onPresetExchange('buy', currency.code);
+                          window.history.pushState(null, '', targetUrl);
+                        }
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5 last:border-b-0"
+                    >
+                      <span className="text-lg">{currency.flag}</span>
+                      <div>
+                        <div className="font-bold text-sm text-white">{currency.code}</div>
+                        <div className="text-[10px] text-text-secondary">Придбати {currency.code}</div>
+                      </div>
+                    </a>
+                  );
+                })}
               </div>
             </div>
 
@@ -93,25 +187,36 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
 
               {/* Dropdown Menu */}
               <div className={`absolute top-full left-0 mt-0 w-48 bg-primary-light border border-white/10 rounded-xl shadow-xl overflow-hidden transition-all duration-200 options-scroll max-h-[60vh] overflow-y-auto ${sellOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
-                {availableCurrencies.map(currency => (
-                  <a
-                    key={currency.code}
-                    href={`/#sell-${currency.code}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onPresetExchange('sell', currency.code);
-                      setSellOpen(false);
-                      window.history.pushState(null, '', `/#sell-${currency.code}`);
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5 last:border-b-0"
-                  >
-                    <span className="text-lg">{currency.flag}</span>
-                    <div>
-                      <div className="font-bold text-sm text-white">{currency.code}</div>
-                      <div className="text-[10px] text-text-secondary">Продати {currency.code}</div>
-                    </div>
-                  </a>
-                ))}
+                {availableCurrencies.map(currency => {
+                  const info = currencyInfoMap[currency.code] || {};
+                  const sellUrl = info.sell_url;
+                  const targetUrl = sellUrl || `/#sell-${currency.code}`;
+
+                  return (
+                    <a
+                      key={currency.code}
+                      href={targetUrl}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setSellOpen(false);
+                        if (sellUrl) {
+                          onPresetExchange('sell', currency.code);
+                          navigate(sellUrl);
+                        } else {
+                          onPresetExchange('sell', currency.code);
+                          window.history.pushState(null, '', targetUrl);
+                        }
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5 last:border-b-0"
+                    >
+                      <span className="text-lg">{currency.flag}</span>
+                      <div>
+                        <div className="font-bold text-sm text-white">{currency.code}</div>
+                        <div className="text-[10px] text-text-secondary">Продати {currency.code}</div>
+                      </div>
+                    </a>
+                  );
+                })}
               </div>
             </div>
 
@@ -149,9 +254,10 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
               </div>
             </div>
 
-            <a href="#footer" className="text-text-secondary hover:text-white text-base font-medium transition-colors">
+
+            <Link to="/contacts" className="text-text-secondary hover:text-white text-base font-medium transition-colors">
               Контакти
-            </a>
+            </Link>
           </nav>
 
           {/* Right Section */}
@@ -164,7 +270,7 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
               <div className="flex items-center gap-1.5">
                 <span className="text-white text-[10px] lg:text-sm font-medium">м. Київ</span>
                 <MapPin className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-[#4488FF] fill-[#4488FF]/20" />
-                <span className="text-[#4488FF] text-[10px] lg:text-sm font-bold">5 пунктів</span>
+                <span className="text-[#4488FF] text-[10px] lg:text-sm font-bold">{branches?.length > 0 ? branches.length : 5} пунктів</span>
               </div>
               <div className="text-[10px] lg:text-[11px] text-text-secondary/80 font-medium whitespace-nowrap">
                 щодня: 8:00–20:00
@@ -184,9 +290,9 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
               </div>
               <div className="hidden sm:block">
                 <div className="text-sm font-bold text-white leading-none mb-1">Ірина</div>
-                <div className="text-[10px] font-medium text-blue-400 leading-none flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
-                  в мережі
+                <div className={`text-[10px] font-medium leading-none flex items-center gap-1 ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${chatOnline ? 'bg-green-400 animate-pulse' : 'bg-red-500'}`}></span>
+                  {chatOnline ? 'в мережі' : 'не в мережі'}
                 </div>
               </div>
             </button>
