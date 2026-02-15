@@ -261,6 +261,14 @@ class RatesUploadResponseV2(BaseModel):
     branch_rates_updated: int
     errors: List[str] = []
 
+# Strict list of 34 currencies for Excel template/ordering
+ORDERED_CURRENCIES = [
+    "USD", "EUR", "PLN", "GBP", "CHF", "MDL", "DKK", "NOK", "SEK", "CNY", 
+    "HUF", "ILS", "KZT", "MLD", "RON", "SAR", "SGD", "THB", "AED", "RSD", 
+    "AZN", "BGN", "HKD", "GEL", "KRW", "MXN", "NZD", "EGP", "JPY", "INR", 
+    "AUD", "CAD", "CZK", "TRY"
+]
+
 # Initial data for migration (will be used once to populate DB)
 branches_data = [
     Branch(id=1, address="вул. Старовокзальна, 23", hours="щодня: 9:00-19:00", lat=50.443886, lng=30.490430, is_open=True, phone="(096) 048-88-81"),
@@ -288,16 +296,38 @@ passwords_db = {
 currencies_data = [
     Currency(code="USD", name="US Dollar", name_uk="Долар", flag="🇺🇸", buy_rate=42.10, sell_rate=42.15, is_popular=True),
     Currency(code="EUR", name="Euro", name_uk="Євро", flag="🇪🇺", buy_rate=49.30, sell_rate=49.35, is_popular=True),
-    Currency(code="PLN", name="Polish Zloty", name_uk="Польський злотий", flag="🇵🇱", buy_rate=11.50, sell_rate=11.65, is_popular=False),
-    Currency(code="GBP", name="British Pound", name_uk="Фунт стерлінгів", flag="🇬🇧", buy_rate=56.10, sell_rate=56.25, is_popular=True),
-    Currency(code="CHF", name="Swiss Franc", name_uk="Швейцарський франк", flag="🇨🇭", buy_rate=52.80, sell_rate=52.95, is_popular=False),
-    Currency(code="EGP", name="Egyptian Pound", name_uk="Єгипетський фунт", flag="🇪🇬", buy_rate=1.35, sell_rate=1.40, is_popular=False),
-    Currency(code="JPY", name="Japanese Yen", name_uk="Єна", flag="🇯🇵", buy_rate=0.28, sell_rate=0.29, is_popular=False),
-    Currency(code="INR", name="Indian Rupee", name_uk="Індійська рупія", flag="🇮🇳", buy_rate=0.50, sell_rate=0.52, is_popular=False),
-    Currency(code="AUD", name="Australian Dollar", name_uk="Австралійський долар", flag="🇦🇺", buy_rate=30.40, sell_rate=30.55, is_popular=False),
-    Currency(code="CAD", name="Canadian Dollar", name_uk="Канадський долар", flag="🇨🇦", buy_rate=31.20, sell_rate=31.35, is_popular=False),
-    Currency(code="CZK", name="Czech Koruna", name_uk="Чеська крона", flag="🇨🇿", buy_rate=1.85, sell_rate=1.90, is_popular=False),
-    Currency(code="TRY", name="Turkish Lira", name_uk="Турецька ліра", flag="🇹🇷", buy_rate=1.22, sell_rate=1.28, is_popular=False),
+    Currency(code="PLN", name="Polish Zloty", name_uk="Польський злотий", flag="🇵🇱", buy_rate=10.50, sell_rate=10.65, is_popular=True),
+    Currency(code="GBP", name="British Pound", name_uk="Фунт стерлінгів", flag="🇬🇧", buy_rate=53.10, sell_rate=53.25, is_popular=True),
+    Currency(code="CHF", name="Swiss Franc", name_uk="Швейцарський франк", flag="🇨🇭", buy_rate=47.50, sell_rate=47.80, is_popular=True),
+    Currency(code="MDL", name="Moldovan Leu", name_uk="Молдовський лей", flag="🇲🇩", buy_rate=2.30, sell_rate=2.40, is_popular=False),
+    Currency(code="DKK", name="Danish Krone", name_uk="Данська крона", flag="🇩🇰", buy_rate=6.10, sell_rate=6.20, is_popular=False),
+    Currency(code="NOK", name="Norwegian Krone", name_uk="Норвезька крона", flag="🇳🇴", buy_rate=3.80, sell_rate=3.90, is_popular=False),
+    Currency(code="SEK", name="Swedish Krona", name_uk="Шведська крона", flag="🇸🇪", buy_rate=3.90, sell_rate=4.00, is_popular=False),
+    Currency(code="CNY", name="Chinese Yuan", name_uk="Юань Женьміньбі", flag="🇨🇳", buy_rate=5.70, sell_rate=5.90, is_popular=False),
+    Currency(code="HUF", name="Hungarian Forint", name_uk="Форинт", flag="🇭🇺", buy_rate=0.11, sell_rate=0.12, is_popular=False),
+    Currency(code="ILS", name="Israeli New Shekel", name_uk="Новий ізраїльський шекель", flag="🇮🇱", buy_rate=11.20, sell_rate=11.50, is_popular=False),
+    Currency(code="KZT", name="Kazakhstani Tenge", name_uk="Теньге", flag="🇰🇿", buy_rate=0.09, sell_rate=0.10, is_popular=False),
+    Currency(code="MLD", name="Moldovan Leu (Alt)", name_uk="Молдовський лей", flag="🇲🇩", buy_rate=2.30, sell_rate=2.40, is_popular=False), # Duplicate as requested
+    Currency(code="RON", name="Romanian Leu", name_uk="Румунський лей", flag="🇷🇴", buy_rate=9.00, sell_rate=9.20, is_popular=False),
+    Currency(code="SAR", name="Saudi Riyal", name_uk="Саудівський ріал", flag="🇸🇦", buy_rate=11.00, sell_rate=11.30, is_popular=False),
+    Currency(code="SGD", name="Singapore Dollar", name_uk="Сінгапурський долар", flag="🇸🇬", buy_rate=30.50, sell_rate=31.00, is_popular=False),
+    Currency(code="THB", name="Thai Baht", name_uk="Бат", flag="🇹🇭", buy_rate=1.10, sell_rate=1.20, is_popular=False),
+    Currency(code="AED", name="UAE Dirham", name_uk="Дирхам ОАЕ", flag="🇦🇪", buy_rate=11.30, sell_rate=11.50, is_popular=False),
+    Currency(code="RSD", name="Serbian Dinar", name_uk="Сербський динар", flag="🇷🇸", buy_rate=0.38, sell_rate=0.40, is_popular=False),
+    Currency(code="AZN", name="Azerbaijani Manat", name_uk="Азербайджанський манат", flag="🇦🇿", buy_rate=24.50, sell_rate=25.00, is_popular=False),
+    Currency(code="BGN", name="Bulgarian Lev", name_uk="Болгарський лев", flag="🇧🇬", buy_rate=22.50, sell_rate=23.00, is_popular=False),
+    Currency(code="HKD", name="Hong Kong Dollar", name_uk="Гонконгівський долар", flag="🇭🇰", buy_rate=5.30, sell_rate=5.45, is_popular=False),
+    Currency(code="GEL", name="Georgian Lari", name_uk="Ларі", flag="🇬🇪", buy_rate=15.20, sell_rate=15.50, is_popular=False),
+    Currency(code="KRW", name="South Korean Won", name_uk="Вона", flag="🇰🇷", buy_rate=0.030, sell_rate=0.032, is_popular=False),
+    Currency(code="MXN", name="Mexican Peso", name_uk="Мексиканське песо", flag="🇲🇽", buy_rate=2.40, sell_rate=2.50, is_popular=False),
+    Currency(code="NZD", name="New Zealand Dollar", name_uk="Новозеландський долар", flag="🇳🇿", buy_rate=25.50, sell_rate=26.00, is_popular=False),
+    Currency(code="EGP", name="Egyptian Pound", name_uk="Єгипетський фунт", flag="🇪🇬", buy_rate=0.85, sell_rate=0.95, is_popular=False),
+    Currency(code="JPY", name="Japanese Yen", name_uk="Єна", flag="🇯🇵", buy_rate=0.27, sell_rate=0.29, is_popular=False),
+    Currency(code="INR", name="Indian Rupee", name_uk="Індійська рупія", flag="🇮🇳", buy_rate=0.49, sell_rate=0.51, is_popular=False),
+    Currency(code="AUD", name="Australian Dollar", name_uk="Австралійський долар", flag="🇦🇺", buy_rate=27.00, sell_rate=27.50, is_popular=False),
+    Currency(code="CAD", name="Canadian Dollar", name_uk="Канадський долар", flag="🇨🇦", buy_rate=30.00, sell_rate=30.50, is_popular=False),
+    Currency(code="CZK", name="Czech Koruna", name_uk="Чеська крона", flag="🇨🇿", buy_rate=1.80, sell_rate=1.90, is_popular=False),
+    Currency(code="TRY", name="Turkish Lira", name_uk="Турецька ліра", flag="🇹🇷", buy_rate=1.20, sell_rate=1.30, is_popular=False),
 ]
 
 # Data migration helper
@@ -366,9 +396,11 @@ def init_db_data(db: Session):
                 name=u.name
             ))
             
-    # Migrate Currencies
-    if not db.query(models.Currency).first():
-        for i, c in enumerate(currencies_data):
+    # Migrate Currencies (Ensure all 34 exist)
+    existing_codes = {c.code for c in db.query(models.Currency).all()}
+    
+    for i, c in enumerate(currencies_data):
+        if c.code not in existing_codes:
             db.add(models.Currency(
                 code=c.code,
                 name=c.name,
@@ -381,8 +413,11 @@ def init_db_data(db: Session):
             ))
             
     # Migrate Initial Branch Rates (into branch_rates table for branch 1 as default)
-    if not db.query(models.BranchRate).first():
-        for c in currencies_data:
+    # Ensure rates exist for all currencies for branch 1
+    existing_rates = {r.currency_code for r in db.query(models.BranchRate).filter(models.BranchRate.branch_id == 1).all()}
+    
+    for c in currencies_data:
+        if c.code not in existing_rates:
             db.add(models.BranchRate(
                 branch_id=1,
                 currency_code=c.code,
@@ -401,6 +436,8 @@ def startup_db_client():
     db = SessionLocal()
     try:
         init_db_data(db)
+    except Exception as e:
+        print(f"Startup Error: {e}")
     finally:
         db.close()
 
@@ -1096,10 +1133,15 @@ async def upload_rates(
 
                 # Check for Branch Matrix Cols (Hybrid)
                 # Map lower cased symbols and codes to canonical codes
-                all_currencies = db.query(models.Currency).filter(models.Currency.is_active == True).all()
+                # FIX: Include ALL currencies from DB + allowed defaults to ensure we don't skip valid ones
+                all_currencies_db = db.query(models.Currency).all()
                 curr_map = {}
-                for c in all_currencies:
+                for c in all_currencies_db:
                     curr_map[c.code.lower()] = c.code
+                
+                # Also ensure ORDERED_CURRENCIES are in the map even if not in DB yet (though they should be)
+                for code in ORDERED_CURRENCIES:
+                     curr_map[code.lower()] = code
                 
                 # Add common symbols overrides
                 curr_map['$'] = 'USD'
@@ -1194,11 +1236,41 @@ async def upload_rates(
                                         rate_entry.wholesale_sell_rate = wh_sell
                                         rate_entry.is_active = True
                                     else:
+                                        # Check if currency exists, if not construct it (safe fallback)
                                         key_active = db.query(models.Currency).filter(models.Currency.code == mc['code']).first()
-                                        if key_active:
-                                            db.add(models.BranchRate(branch_id=branch_id, currency_code=mc['code'], buy_rate=buy, sell_rate=sell, wholesale_buy_rate=wh_buy, wholesale_sell_rate=wh_sell, is_active=True))
+                                        if not key_active:
+                                            # Create missing currency on the fly
+                                            # Try to find metadata from defaults
+                                            default_meta = next((c for c in currencies_data if c.code == mc['code']), None)
+                                            name = default_meta.name if default_meta else mc['code']
+                                            name_uk = default_meta.name_uk if default_meta else mc['code']
+                                            flag = default_meta.flag if default_meta else "🏳️"
+                                            
+                                            new_curr = models.Currency(
+                                                code=mc['code'],
+                                                name=name,
+                                                name_uk=name_uk,
+                                                flag=flag,
+                                                is_active=True,
+                                                buy_rate=buy, # Set base rate to first branch rate found
+                                                sell_rate=sell
+                                            )
+                                            db.add(new_curr)
+                                            db.flush() # flush to make it available for FK
+                                        
+                                        db.add(models.BranchRate(
+                                            branch_id=branch_id, 
+                                            currency_code=mc['code'], 
+                                            buy_rate=buy, 
+                                            sell_rate=sell, 
+                                            wholesale_buy_rate=wh_buy, 
+                                            wholesale_sell_rate=wh_sell, 
+                                            is_active=True
+                                        ))
                                     branch_updated += 1
-                                except: pass
+                                except Exception as e:
+                                    # print(f"Error processing {mc['code']}: {e}")
+                                    pass
                             
                             # IMPORTANT: In Hybrid mode, we IGNORE the legacy vertical columns (like NOK in row 3).
                             # This ensures that minor currencies use the Base Rate (Global) as instructed by user.
@@ -1225,9 +1297,25 @@ async def upload_rates(
                                     rate_entry.sell_rate = sell
                                     rate_entry.is_active = True
                                 else:
+                                    # Fallback create currency
                                     key_active = db.query(models.Currency).filter(models.Currency.code == code).first()
-                                    if key_active:
-                                        db.add(models.BranchRate(branch_id=branch_id, currency_code=code, buy_rate=buy, sell_rate=sell, is_active=True))
+                                    if not key_active:
+                                        # Validate code length
+                                        if len(code) != 3: continue
+                                        
+                                        default_meta = next((c for c in currencies_data if c.code == code), None)
+                                        name = default_meta.name if default_meta else code
+                                        name_uk = default_meta.name_uk if default_meta else code
+                                        flag = default_meta.flag if default_meta else "🏳️"
+                                        
+                                        new_curr = models.Currency(
+                                            code=code, name=name, name_uk=name_uk, flag=flag,
+                                            is_active=True, buy_rate=buy, sell_rate=sell
+                                        )
+                                        db.add(new_curr)
+                                        db.flush()
+
+                                    db.add(models.BranchRate(branch_id=branch_id, currency_code=code, buy_rate=buy, sell_rate=sell, is_active=True))
                                 branch_updated += 1
                             except: pass
 
@@ -1269,13 +1357,26 @@ async def upload_rates(
                                         rate_entry.sell_rate = sell
                                     else:
                                         key_active = db.query(models.Currency).filter(models.Currency.code == code).first()
-                                        if key_active:
-                                            db.add(models.BranchRate(
-                                                branch_id=bid,
-                                                currency_code=code,
-                                                buy_rate=buy,
-                                                sell_rate=sell
-                                            ))
+                                        if not key_active:
+                                             if len(code) != 3: continue
+                                             default_meta = next((c for c in currencies_data if c.code == code), None)
+                                             name = default_meta.name if default_meta else code
+                                             name_uk = default_meta.name_uk if default_meta else code
+                                             flag = default_meta.flag if default_meta else "🏳️"
+                                             
+                                             new_curr = models.Currency(
+                                                code=code, name=name, name_uk=name_uk, flag=flag,
+                                                is_active=True, buy_rate=buy, sell_rate=sell
+                                             )
+                                             db.add(new_curr)
+                                             db.flush()
+                                        
+                                        db.add(models.BranchRate(
+                                            branch_id=bid,
+                                            currency_code=code,
+                                            buy_rate=buy,
+                                            sell_rate=sell
+                                        ))
                                     branch_updated += 1
                                 except: pass
                     except Exception as e:
@@ -1312,24 +1413,16 @@ async def download_rates_template(
         # Sheet "Курси"
         
         # 1. Fetch Data
-        active_currencies = db.query(models.Currency).order_by(models.Currency.order).all()
-        
-        # Sort Currencies: USD, EUR, PLN, GBP, CHF first, then others
-        priority_codes = ['USD', 'EUR', 'PLN', 'GBP', 'CHF']
-        def get_priority(code):
-            try:
-                return priority_codes.index(code)
-            except ValueError:
-                return 100 + (1 if code else 0) # others at the end
-        
-        active_currencies = sorted(active_currencies, key=lambda c: get_priority(c.code))
-        
-        branches = db.query(models.Branch).all()
+        branches = db.query(models.Branch).order_by(models.Branch.id).all()
         all_rates = db.query(models.BranchRate).all()
         
         # Map: (branch_id, code) -> rate
         rates_map = {(r.branch_id, r.currency_code): r for r in all_rates}
         
+        # Map: code -> currency info (for names/flags)
+        db_currencies = db.query(models.Currency).all()
+        curr_info_map = {c.code: c for c in db_currencies}
+
         # 2. Prepare Columns
         # Base Columns
         columns = ['Код', 'Прапор', 'Валюта']
@@ -1347,17 +1440,24 @@ async def download_rates_template(
             
         data_rows = []
         
-        # 3. Build Rows (Iterate Currencies)
-        for curr in active_currencies:
+        # 3. Build Rows (Iterate Strict List)
+        for code in ORDERED_CURRENCIES:
+            # Get info or default
+            curr_info = curr_info_map.get(code)
+            
+            # Default values if currency not in DB yet
+            flag = curr_info.flag if curr_info else CURRENCY_FLAGS.get(code, "🏳️")
+            name_uk = curr_info.name_uk if curr_info else CURRENCY_NAMES.get(code, (code, code))[1]
+            
             row = {
-                'Код': curr.code,
-                'Прапор': curr.flag,
-                'Валюта': curr.name_uk
+                'Код': code,
+                'Прапор': flag,
+                'Валюта': name_uk
             }
             
             for branch in branches:
                 b_name = f"{branch.id} {branch.address}"
-                rate = rates_map.get((branch.id, curr.code))
+                rate = rates_map.get((branch.id, code))
                 
                 # Default to 0.00 if no rate exists
                 buy = rate.buy_rate if rate else 0.00
@@ -1375,23 +1475,23 @@ async def download_rates_template(
         # Create DataFrame
         df = pd.DataFrame(data_rows, columns=columns)
         
-        # Adjust column widths (optional, but good for "everything" look)
-        # We can't easily do it with just to_excel, need sheet access.
+        # Write to Excel
         df.to_excel(writer, index=False, sheet_name='Курси')
         
-        # Auto-adjust column widths
+        # Auto-adjust column widths (basic)
         worksheet = writer.sheets['Курси']
-        for idx, col in enumerate(df.columns):
-            # width = max(len(col) + 2, 12)
-            # worksheet.column_dimensions[get_column_letter(idx + 1)].width = width
-            pass # skipping advanced formatting to keep dependencies simple
+        for i, col in enumerate(df.columns):
+            column_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
+            # Cap width
+            if column_len > 30: column_len = 30
+            # worksheet.column_dimensions[chr(65 + i)].width = column_len # simple A-Z checks needed, skipping for now
     
     output.seek(0)
     
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=rates_template_v2.xlsx"}
+        headers={"Content-Disposition": "attachment; filename=svit_valut_rates.xlsx"}
     )
 
 

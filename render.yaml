@@ -12,7 +12,6 @@ databases:
 
 services:
   # Backend API (FastAPI)
-  # Backend API (FastAPI)
   - type: web
     name: svit-valut-api
     runtime: python
