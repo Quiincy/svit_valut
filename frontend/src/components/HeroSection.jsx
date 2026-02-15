@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ChevronDown, RefreshCw, Loader2, X, MapPin, User, Phone, Check, ArrowRight, Clock } from 'lucide-react';
 
 export default function HeroSection({
@@ -479,6 +479,7 @@ export default function HeroSection({
                 buyRate={displayBuyRate}
                 sellRate={displaySellRate}
                 getEffectiveRate={getEffectiveRate}
+                currencyInfoMap={currencyInfoMap}
               />
             </div>
           </div>
@@ -493,7 +494,7 @@ export default function HeroSection({
           style={{ backgroundImage: "url('/mobile-pattern.png')" }}
         ></div>
         <div className="absolute inset-0 bg-gradient-to-b from-primary/90 via-primary/80 to-primary/90"></div> */}
-        <div className="relative z-10 py-10 flex flex-col gap-8">
+        <div className="relative z-10 py-10 flex flex-col gap-8 px-[10px]">
           <div className="flex flex-col gap-4 text-center items-center">
             <h1 className="text-3xl font-bold leading-tight">
               <span className="text-accent-yellow text-4xl">Обмін валют</span>
@@ -509,7 +510,7 @@ export default function HeroSection({
           </div>
 
           <div
-            className="p-0"
+            className="p-0 rounded-3xl overflow-hidden"
             style={{
               backgroundImage: "url('/hero-bg.jpg')",
               backgroundSize: 'cover',
@@ -552,6 +553,7 @@ export default function HeroSection({
               buyRate={displayBuyRate}
               sellRate={displaySellRate}
               getEffectiveRate={getEffectiveRate}
+              currencyInfoMap={currencyInfoMap}
             />
           </div>
 
@@ -698,39 +700,6 @@ export default function HeroSection({
                     </button>
                   );
                 })}
-
-                {/* Show unavailable branches as selectable but with visual cue */}
-                {unavailBranches.length > 0 && (
-                  <>
-                    <div className="text-xs text-text-secondary text-center pt-3 pb-1 opacity-70">Інші відділення (курс за запитом):</div>
-                    {unavailBranches.map((branch) => (
-                      <button
-                        key={branch.id}
-                        onClick={() => handleSelectBranch(branch)}
-                        className="w-full p-4 rounded-2xl bg-white/[0.02] border border-white/5 text-left hover:bg-white/[0.05] hover:border-white/10 transition-all group"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-gray-500 group-hover:text-gray-400" />
-                            <span className="font-bold text-gray-300 text-sm">{branch.name || branch.address}</span>
-                          </div>
-                        </div>
-                        <div className="pl-6 space-y-1">
-                          {branch.name && <p className="text-xs text-text-secondary">{branch.address}</p>}
-                          <div className="flex items-center gap-1 text-xs text-text-secondary">
-                            <Clock className="w-3 h-3" />
-                            <span>{branch.hours || branch.working_hours}</span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <span className="text-xs text-accent-yellow/70 bg-accent-yellow/10 px-2 py-0.5 rounded">
-                              Курс уточнюйте
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </>
-                )}
               </div>
             ) : (
               <div className="text-center py-8">
@@ -738,114 +707,119 @@ export default function HeroSection({
                 <p className="text-text-secondary font-medium mb-2">На жаль, <span className="text-white">{selectedCode}</span> наразі недоступна</p>
                 <p className="text-text-secondary text-sm">Жодне відділення не працює з цією валютою. Зверніться до нас через чат для уточнення.</p>
               </div>
-            )}
-          </BookingModal>
+            )
+            }
+          </BookingModal >
         );
       })()}
 
       {/* Step 2: Name Modal */}
-      {bookingStep === 'name' && (
-        <BookingModal onClose={closeModal} step={2} totalSteps={3}>
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-accent-yellow/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <User className="w-8 h-8 text-accent-yellow" />
-            </div>
-            <h3 className="text-xl font-bold mb-2">Як вас звати?</h3>
-            <p className="text-text-secondary text-sm">Щоб оператор міг до вас звернутися</p>
-          </div>
-
-          <div className="space-y-4">
-            <input
-              type="text"
-              value={customerName}
-              onChange={(e) => { setCustomerName(e.target.value); setError(''); }}
-              placeholder="Ваше ім'я"
-              autoFocus
-              className="w-full px-4 py-4 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center text-lg"
-            />
-
-            {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
-                <p className="text-sm text-red-400 text-center">{error}</p>
+      {
+        bookingStep === 'name' && (
+          <BookingModal onClose={closeModal} step={2} totalSteps={3}>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-accent-yellow/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <User className="w-8 h-8 text-accent-yellow" />
               </div>
-            )}
+              <h3 className="text-xl font-bold mb-2">Як вас звати?</h3>
+              <p className="text-text-secondary text-sm">Щоб оператор міг до вас звернутися</p>
+            </div>
 
-            <button
-              onClick={handleNameSubmit}
-              className="w-full py-4 bg-accent-yellow rounded-xl text-primary font-bold text-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-            >
-              Далі
-              <ArrowRight className="w-5 h-5" />
-            </button>
-          </div>
-        </BookingModal>
-      )}
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={customerName}
+                onChange={(e) => { setCustomerName(e.target.value); setError(''); }}
+                placeholder="Ваше ім'я"
+                autoFocus
+                className="w-full px-4 py-4 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center text-lg"
+              />
+
+              {error && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <p className="text-sm text-red-400 text-center">{error}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleNameSubmit}
+                className="w-full py-4 bg-accent-yellow rounded-xl text-primary font-bold text-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+              >
+                Далі
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+          </BookingModal>
+        )
+      }
 
       {/* Step 3: Phone Modal */}
-      {bookingStep === 'phone' && (
-        <BookingModal onClose={closeModal} step={3} totalSteps={3}>
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Phone className="w-8 h-8 text-green-400" />
-            </div>
-            <h3 className="text-xl font-bold mb-2">Ваш номер телефону</h3>
-            <p className="text-text-secondary text-sm">Ми зателефонуємо для підтвердження</p>
-          </div>
-
-          <div className="space-y-4">
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => { setPhone(formatPhone(e.target.value)); setError(''); }}
-              placeholder="+38 (0XX) XXX-XX-XX"
-              autoFocus
-              className="w-full px-4 py-4 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center text-lg font-mono"
-            />
-
-            {/* Summary */}
-            <div className="p-4 bg-primary rounded-xl border border-white/10">
-              <div className="text-sm text-text-secondary mb-2">Ваше бронювання:</div>
-              <div className="flex justify-between mb-1">
-                <span>Сума:</span>
-                <span className="font-bold">{giveAmount} {giveCurrency.code} → {getAmount.toLocaleString()} {getCurrency.code}</span>
+      {
+        bookingStep === 'phone' && (
+          <BookingModal onClose={closeModal} step={3} totalSteps={3}>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Phone className="w-8 h-8 text-green-400" />
               </div>
-              <div className="flex justify-between mb-1">
-                <span>Відділення:</span>
-                <span className="font-medium text-sm">{selectedBranch?.address}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Ім'я:</span>
-                <span className="font-medium">{customerName}</span>
-              </div>
+              <h3 className="text-xl font-bold mb-2">Ваш номер телефону</h3>
+              <p className="text-text-secondary text-sm">Ми зателефонуємо для підтвердження</p>
             </div>
 
-            {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
-                <p className="text-sm text-red-400 text-center">{error}</p>
-              </div>
-            )}
+            <div className="space-y-4">
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => { setPhone(formatPhone(e.target.value)); setError(''); }}
+                placeholder="+38 (0XX) XXX-XX-XX"
+                autoFocus
+                className="w-full px-4 py-4 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center text-lg font-mono"
+              />
 
-            <button
-              onClick={handlePhoneSubmit}
-              disabled={loading}
-              className="w-full py-4 bg-gradient-gold rounded-xl text-primary font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Бронювання...
-                </>
-              ) : (
-                <>
-                  <Check className="w-5 h-5" />
-                  Забронювати
-                </>
+              {/* Summary */}
+              <div className="p-4 bg-primary rounded-xl border border-white/10">
+                <div className="text-sm text-text-secondary mb-2">Ваше бронювання:</div>
+                <div className="flex justify-between mb-1">
+                  <span>Сума:</span>
+                  <span className="font-bold">{giveAmount} {giveCurrency.code} → {getAmount.toLocaleString()} {getCurrency.code}</span>
+                </div>
+                <div className="flex justify-between mb-1">
+                  <span>Відділення:</span>
+                  <span className="font-medium text-sm">{selectedBranch?.address}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Ім'я:</span>
+                  <span className="font-medium">{customerName}</span>
+                </div>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <p className="text-sm text-red-400 text-center">{error}</p>
+                </div>
               )}
-            </button>
-          </div>
-        </BookingModal>
-      )}
-    </section>
+
+              <button
+                onClick={handlePhoneSubmit}
+                disabled={loading}
+                className="w-full py-4 bg-gradient-gold rounded-xl text-primary font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Бронювання...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-5 h-5" />
+                    Забронювати
+                  </>
+                )}
+              </button>
+            </div>
+          </BookingModal>
+        )
+      }
+    </section >
   );
 }
 
@@ -917,10 +891,11 @@ function ExchangeCard({
   buyRate,
   sellRate,
   getEffectiveRate,
-  isMobile
+  isMobile,
+  currencyInfoMap = {}
 }) {
   return (
-    <div className={`backdrop-blur-md rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'bg-primary-card/20 px-8 py-8' : 'bg-primary-card/80 p-6 lg:p-8 max-w-xl w-full'}`}>
+    <div className={`rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'bg-transparent px-8 py-8' : 'backdrop-blur-md bg-primary-card/80 p-6 lg:p-8 max-w-xl w-full'}`}>
       <h3 className={`${isMobile ? 'text-base' : 'text-lg lg:text-xl'} font-bold text-center mb-1 text-white`}>Забронювати валюту</h3>
       <p className="text-[10px] lg:text-sm text-text-secondary text-center mb-6">
         Фіксація курсу на {reservationTime} хвилин
@@ -939,7 +914,7 @@ function ExchangeCard({
                 className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
               />
             </div>
-            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10" onClick={() => onOpenCurrencyModal('sell_currency')}>
+            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10 mr-1.5" onClick={() => onOpenCurrencyModal('sell_currency')}>
               <span className="text-lg">{sellCurrency?.flag || '🇺🇸'}</span>
               <span className="font-bold text-sm">{sellCurrency?.code || 'USD'}</span>
               <ChevronDown className="w-3 h-3 text-text-secondary" />
@@ -972,6 +947,8 @@ function ExchangeCard({
         </div>
       </div>
 
+
+
       {/* Row 2: I BUY */}
       <div className="mb-3 transition-all rounded-xl border p-1 bg-primary-light border-white/10">
         <div className="flex flex-col md:flex-row gap-3">
@@ -985,7 +962,7 @@ function ExchangeCard({
                 className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
               />
             </div>
-            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10" onClick={() => onOpenCurrencyModal('buy_currency')}>
+            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10 mr-1.5" onClick={() => onOpenCurrencyModal('buy_currency')}>
               <span className="text-lg">{buyCurrency?.flag || '🇺🇸'}</span>
               <span className="font-bold text-sm">{buyCurrency?.code || 'USD'}</span>
               <ChevronDown className="w-3 h-3 text-text-secondary" />
@@ -1017,6 +994,8 @@ function ExchangeCard({
           </div>
         </div>
       </div>
+
+
 
       {/* Branch Selector */}
       <div className="mb-4 relative px-1">

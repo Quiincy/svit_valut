@@ -195,8 +195,6 @@ function PublicLayout() {
       const isOnDedicatedPage = pathname.startsWith('/contacts') || pathname.startsWith('/faq') || pathname.startsWith('/services') || pathname.startsWith('/rates');
       if (isOnDedicatedPage) {
         // Don't redirect when on dedicated pages
-      } else if (pathname === '/' && targetCode === 'USD' && mode === 'sell') {
-        // Do nothing, let the URL stay at /
       } else if (targetUrl && pathname !== targetUrl) {
         navigate(targetUrl, { replace: true });
       }
@@ -397,14 +395,14 @@ function PublicLayout() {
   const handleCurrencySelect = (currency) => {
     if (currencyModalType === 'sell_currency') {
       setSellCurrency(currency);
-      if (giveCurrency.code !== 'UAH') {
-        setGiveCurrency(currency);
-      }
+      // Force "Sell" mode when selecting a currency in the "Sell" row
+      setGiveCurrency(currency);
+      setGetCurrency({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 });
     } else if (currencyModalType === 'buy_currency') {
       setBuyCurrency(currency);
-      if (getCurrency.code !== 'UAH') {
-        setGetCurrency(currency);
-      }
+      // Force "Buy" mode when selecting a currency in the "Buy" row
+      setGetCurrency(currency);
+      setGiveCurrency({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 });
     } else {
       if (currencyModalType === 'give') setGiveCurrency(currency);
       else setGetCurrency(currency);
