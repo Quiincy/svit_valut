@@ -25,8 +25,8 @@ export default function FAQSection({ faqItems }) {
             <div
               key={faq.id}
               className={`bg-primary-light rounded-xl border transition-all ${expandedIndex === index
-                  ? 'border-accent-blue'
-                  : 'border-white/10'
+                ? 'border-accent-blue'
+                : 'border-white/10'
                 }`}
             >
               <button
@@ -38,8 +38,8 @@ export default function FAQSection({ faqItems }) {
                 </div>
                 <span className="flex-1 font-medium">{faq.question}</span>
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${expandedIndex === index
-                    ? 'bg-accent-blue text-white rotate-180'
-                    : 'bg-white/5 text-text-secondary'
+                  ? 'bg-accent-blue text-white rotate-180'
+                  : 'bg-white/5 text-text-secondary'
                   }`}>
                   <ChevronDown className="w-5 h-5" />
                 </div>
@@ -48,16 +48,7 @@ export default function FAQSection({ faqItems }) {
               {expandedIndex === index && (
                 <div className="px-4 lg:px-5 pb-4 lg:pb-5 pl-[72px]">
                   <p className="text-text-secondary mb-3">{faq.answer}</p>
-                  {faq.link_text && faq.link_url && (
-                    <Link
-                      to={faq.link_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 border border-accent-blue text-accent-blue rounded-lg text-sm font-medium hover:bg-accent-blue/10 transition-colors inline-block"
-                    >
-                      {faq.link_text}
-                    </Link>
-                  )}
+                  {/* Removed Detailed button per request */}
                 </div>
               )}
             </div>

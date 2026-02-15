@@ -1,7 +1,17 @@
 # Render Blueprint for Світ Валют
 # Automatic deployment configuration
 
+databases:
+  # Managed PostgreSQL Database
+  - name: svit-valut-db
+    databaseName: svit_valut
+    user: svit_valut_user
+    plan: free # Change to 'starter' for production
+    region: frankfurt
+    ipAllowList: [] # Allow all IPs for now (or restricted if needed)
+
 services:
+  # Backend API (FastAPI)
   # Backend API (FastAPI)
   - type: web
     name: svit-valut-api
@@ -15,6 +25,10 @@ services:
         value: "3.11"
       - key: TZ
         value: "Europe/Kyiv"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: svit-valut-db
+          property: connectionString
     rootDir: backend
     healthCheckPath: /api/health
     autoDeploy: true

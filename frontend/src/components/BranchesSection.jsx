@@ -57,10 +57,14 @@ export default function BranchesSection({ branches = [], settings }) {
     } else {
       setGeoError('Не вдалося знайти найближче відділення (перевірте координати)');
     }
+    if (Number(lat) === 0 && Number(lng) === 0) {
+      setGeoError('Неможливо визначити точну локацію (Null Island).');
+      setFindingNearest(false);
+      return;
+    }
+
     setGeoSource(source);
     setFindingNearest(false);
-
-    // DEBUG ALERT REMOVED
   };
 
   const handleFindNearest = () => {
@@ -99,6 +103,10 @@ export default function BranchesSection({ branches = [], settings }) {
     } else {
       tryIpGeo();
     }
+  };
+
+  const handleSetKyivLocation = () => {
+    findNearestFromCoords(50.4501, 30.5234, 'Manual');
   };
 
   // ... (unchanged)
@@ -220,7 +228,20 @@ export default function BranchesSection({ branches = [], settings }) {
             {nearestBranch && (
               <div className="p-3 bg-accent-yellow/10 border border-accent-yellow/30 rounded-xl text-sm">
                 <span className="text-accent-yellow font-medium">Найближче до вас:</span>{' '}
-                {nearestBranch.branch.address} ({nearestBranch.distance.toFixed(1)} км)
+                {nearestBranch.branch.address}
+                {nearestBranch.distance > 100 ? (
+                  <span className="text-red-300 ml-1">
+                    ({nearestBranch.distance.toFixed(0)} км — ви далеко від Києва)
+                    <button
+                      onClick={handleSetKyivLocation}
+                      className="ml-2 underline text-accent-yellow hover:text-white transition-colors cursor-pointer"
+                    >
+                      Це помилка? Я в Києві
+                    </button>
+                  </span>
+                ) : (
+                  <span> ({nearestBranch.distance.toFixed(1)} км)</span>
+                )}
                 {geoSource === 'IP' && (
                   <div className="text-[10px] text-accent-yellow/90 mt-1 font-medium italic">
                     ⚠️ Локація приблизна (за IP-адресою). Дозвольте GPS для точності.
@@ -229,6 +250,11 @@ export default function BranchesSection({ branches = [], settings }) {
                 {geoSource === 'GPS' && (
                   <div className="text-[10px] text-green-400/90 mt-1 font-bold">
                     ✅ Точна локація (GPS)
+                  </div>
+                )}
+                {geoSource === 'Manual' && (
+                  <div className="text-[10px] text-blue-400/90 mt-1 font-bold">
+                    📍 Локація: Київ (Центр)
                   </div>
                 )}
                 {userLocation && (
@@ -269,8 +295,13 @@ export default function BranchesSection({ branches = [], settings }) {
                         <Clock className="w-3 h-3" />
                         {branch.hours}
                         {branch.distance !== Infinity && (
-                          <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold ${isNearest ? 'bg-accent-yellow/20 text-accent-yellow' : 'bg-white/10 text-white/70'}`}>
-                            {branch.distance.toFixed(1)} км
+                          <span
+                            title={branch.distance > 100 ? "Ви знаходитесь далеко від Києва" : ""}
+                            className={`ml-2 px-2 py-0.5 rounded text-xs font-bold ${branch.distance > 100 ? 'bg-red-500/20 text-red-300' :
+                              isNearest ? 'bg-accent-yellow/20 text-accent-yellow' : 'bg-white/10 text-white/70'
+                              }`}
+                          >
+                            {branch.distance.toFixed(branch.distance > 100 ? 0 : 1)} км
                           </span>
                         )}
                       </div>

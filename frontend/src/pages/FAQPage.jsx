@@ -1,13 +1,32 @@
-import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useOutletContext, useParams } from 'react-router-dom';
 import { ChevronDown, HelpCircle } from 'lucide-react';
 
 export default function FAQPage() {
     const { faqItems } = useOutletContext();
+    const { id } = useParams();
     const [openItem, setOpenItem] = useState(null);
 
-    const toggleItem = (id) => {
-        setOpenItem(openItem === id ? null : id);
+    // Auto-expand item if ID is present in URL
+    useEffect(() => {
+        if (id && faqItems?.length > 0) {
+            // Find item by ID (assuming id param matches item.id)
+            // Note: URL param is string, item.id might be number
+            const targetId = Number(id);
+            const found = faqItems.find(i => i.id === targetId);
+            if (found) {
+                setOpenItem(found.id);
+                // Scroll to it after render
+                setTimeout(() => {
+                    const el = document.getElementById(`faq-${found.id}`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+            }
+        }
+    }, [id, faqItems]);
+
+    const toggleItem = (itemId) => {
+        setOpenItem(openItem === itemId ? null : itemId);
     };
 
     const defaultFaq = [
@@ -41,6 +60,7 @@ export default function FAQPage() {
                         return (
                             <div
                                 key={item.id}
+                                id={`faq-${item.id}`}
                                 className={`bg-primary-light border rounded-2xl overflow-hidden transition-all duration-300 ${isOpen ? 'border-accent-yellow/30' : 'border-white/10 hover:border-white/20'}`}
                             >
                                 <button

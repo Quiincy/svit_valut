@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet, useOutletContext } from 'react-router-dom';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
@@ -64,6 +64,60 @@ function PublicLayout() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Distance Calculation (Haversine)
+  const getDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // GPS Auto-Selection
+  useEffect(() => {
+    // Only run if branches are loaded and we haven't selected a branch yet
+    if (branches.length > 0 && !activeBranch && !loading) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            let nearest = null;
+            let minDistance = Infinity;
+
+            branches.forEach(branch => {
+              const bLat = Number(branch.lat);
+              const bLng = Number(branch.lng);
+              if (!isNaN(bLat) && !isNaN(bLng) && bLat !== 0 && bLng !== 0) {
+                const distance = getDistance(latitude, longitude, bLat, bLng);
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  nearest = branch;
+                }
+              }
+            });
+
+            if (nearest) {
+              console.log('GPS Auto-Select Branch:', nearest.address, minDistance.toFixed(2) + 'km');
+              setActiveBranch(nearest);
+              // We could also call handleBranchChange(nearest) if we want to update rates immediately,
+              // but setActiveBranch might trigger the other useEffect if we aren't careful.
+              // Actually, handleBranchChange updates rates. Let's do that to be safe.
+              handleBranchChange(nearest);
+            }
+          },
+          (error) => {
+            console.log('GPS Error or Permission Denied:', error.message);
+            // Fallback is handled by the other useEffect (Best Rate) or default state
+          },
+          { timeout: 5000, maximumAge: 60000 }
+        );
+      }
+    }
+  }, [branches, loading]); // Run when branches defined. ActiveBranch check prevents override.
 
   // Handle hash scrolling and preset currency links
   useEffect(() => {
@@ -193,6 +247,9 @@ function PublicLayout() {
           flag: meta.flag || '🏳️',
           buy_rate: rates.buy,
           sell_rate: rates.sell,
+          wholesale_buy_rate: meta.wholesale_buy_rate,
+          wholesale_sell_rate: meta.wholesale_sell_rate,
+          wholesale_threshold: meta.wholesale_threshold,
           is_popular: meta.is_popular || false,
         };
       });
@@ -241,7 +298,13 @@ function PublicLayout() {
             branchMap[branchId] = branchCurrs;
             branchCurrs.forEach(c => {
               if (!currencyMap.has(c.code)) {
-                currencyMap.set(c.code, c);
+                const meta = currencyMeta[c.code] || {};
+                const merged = { ...meta, ...c };
+                // Fallback for wholesale if branch is missing/zero
+                if (!merged.wholesale_buy_rate) merged.wholesale_buy_rate = meta.wholesale_buy_rate;
+                if (!merged.wholesale_sell_rate) merged.wholesale_sell_rate = meta.wholesale_sell_rate;
+                if (!merged.wholesale_threshold) merged.wholesale_threshold = meta.wholesale_threshold;
+                currencyMap.set(c.code, merged);
               }
             });
           });
@@ -252,7 +315,22 @@ function PublicLayout() {
 
         const allBranchCurrencies = Array.from(currencyMap.values());
         if (allBranchCurrencies.length > 0) {
-          setCurrencies(allBranchCurrencies);
+          // Remove UAH (if unwanted) but user asked for "ALL". I'll apply sort order anyway.
+          // Priority Currencies: USD, EUR, PLN, GBP, CZK
+          const PRIORITY = ['USD', 'EUR', 'PLN', 'GBP', 'CZK'];
+          const sorted = [...allBranchCurrencies].sort((a, b) => {
+            const idxA = PRIORITY.indexOf(a.code);
+            const idxB = PRIORITY.indexOf(b.code);
+
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return 0;
+          });
+
+          setCurrencies(allBranchCurrencies); // Keep main currencies list raw? Or sorted? User said HEADER dropdowns.
+          // Set header currencies to the unique list from all branches (user request)
+          setHeaderCurrencies(sorted);
           const usdOrFirst = allBranchCurrencies.find(c => c.code === 'USD') || allBranchCurrencies[0];
           setGiveCurrency(usdOrFirst);
           setGetCurrency(uah);
@@ -270,11 +348,34 @@ function PublicLayout() {
 
   const calculateExchange = () => {
     if (giveCurrency.code === 'UAH') {
-      const rate = getCurrency.sell_rate || 42.15;
-      setGetAmount(giveAmount / rate);
+      // User BUYS Foreign Currency (gives UAH)
+      // We SELL to user.
+      const threshold = getCurrency.wholesale_threshold || settings?.min_wholesale_amount || 1000;
+      let rate = getCurrency.sell_rate || 42.15;
+
+      // Calculate tentative amount
+      let amount = giveAmount / rate;
+
+      // Check threshold (Amount is in Foreign)
+      if (amount >= threshold && getCurrency.wholesale_sell_rate > 0) {
+        rate = getCurrency.wholesale_sell_rate;
+        amount = giveAmount / rate;
+      }
+      setGetAmount(amount);
+
     } else if (getCurrency.code === 'UAH') {
-      const rate = giveCurrency.buy_rate || 42.10;
+      // User SELLS Foreign Currency (gets UAH)
+      // We BUY from user.
+      const threshold = giveCurrency.wholesale_threshold || settings?.min_wholesale_amount || 1000;
+      let rate = giveCurrency.buy_rate || 42.10;
+
+      // Check threshold (Amount is in Foreign - giveAmount)
+      if (giveAmount >= threshold && giveCurrency.wholesale_buy_rate > 0) {
+        rate = giveCurrency.wholesale_buy_rate;
+      }
+
       setGetAmount(giveAmount * rate);
+
     } else {
       const pair = `${giveCurrency.code}/${getCurrency.code}`;
       const crossRate = crossRates[pair];
@@ -317,20 +418,135 @@ function PublicLayout() {
     setGetCurrency(temp);
   };
 
+  // Auto-Select Branch with Best Rate
+  const prevGiveCode = useRef(giveCurrency?.code);
+  const prevGetCode = useRef(getCurrency?.code);
+
+  useEffect(() => {
+    if (!branches || branches.length === 0 || Object.keys(branchCurrencyMap).length === 0) return;
+
+    const giveChanged = giveCurrency.code !== prevGiveCode.current;
+    const getChanged = getCurrency.code !== prevGetCode.current;
+
+    // Update refs
+    prevGiveCode.current = giveCurrency.code;
+    prevGetCode.current = getCurrency.code;
+
+    // If currency codes haven't changed (e.g. just a rate update due to branch change)
+    // AND we already have an active branch,
+    // DO NOT invoke auto-branch selection. This allows manual branch selection to stick.
+    // Exception: Initial load (when activeBranch is null).
+    const isInitialLoad = !activeBranch;
+
+    if (!giveChanged && !getChanged && !isInitialLoad) {
+      return;
+    }
+
+    let targetCode = null;
+    let type = null; // 'buy' (User gives UAH, Bank Sells) or 'sell' (User gets UAH, Bank Buys)
+
+
+
+    if (giveCurrency.code === 'UAH' && getCurrency.code !== 'UAH') {
+      targetCode = getCurrency.code;
+      type = 'sell'; // Bank Sells Foreign -> Find Min Sell Rate
+    } else if (getCurrency.code === 'UAH' && giveCurrency.code !== 'UAH') {
+      targetCode = giveCurrency.code;
+      type = 'buy'; // Bank Buys Foreign -> Find Max Buy Rate
+    } else {
+      // Cross-rate or incomplete state, ignore for now
+      return;
+    }
+
+    if (!targetCode) return;
+
+    let bestBranch = null;
+    let bestRateObj = null;
+
+    branches.forEach(branch => {
+      const rates = branchCurrencyMap[branch.id];
+      if (!rates) return;
+
+      const currency = rates.find(c => c.code === targetCode);
+      // STRICT CHECK: If this branch doesn't have the currency, skip it.
+      if (!currency) return;
+
+      if (type === 'sell') {
+        const rate = currency.sell_rate;
+        if (rate <= 0) return;
+        // Find LOWEST (Cheapest) Sell Rate
+        if (!bestRateObj || rate < bestRateObj.rate) {
+          bestRateObj = { rate, branch };
+        }
+      } else {
+        const rate = currency.buy_rate;
+        if (rate <= 0) return;
+        // Find HIGHEST (Best Return) Buy Rate
+        if (!bestRateObj || rate > bestRateObj.rate) {
+          bestRateObj = { rate, branch };
+        }
+      }
+    });
+
+    if (bestRateObj) {
+      if (!activeBranch || activeBranch.id !== bestRateObj.branch.id) {
+        handleBranchChange(bestRateObj.branch);
+      }
+    } else {
+      // No branch supports this currency?
+      // We might want to clear activeBranch or show error, but for now let's just do nothing.
+    }
+
+  }, [giveCurrency, getCurrency, branches, branchCurrencyMap]); // Removed specific .code dependencies to catch object updates if needed, though usually .code is enough. Added branchCurrencyMap.
+
   const handleBranchChange = async (branch) => {
     setActiveBranch(branch);
     try {
-      const ratesRes = await currencyService.getBranchRates(branch.id);
-      const allCurrs = ratesRes.data.filter(c => c.code !== 'UAH');
-      setCurrencies(allCurrs);
+      // Use cached branch rates if available, otherwise fetch
+      let branchRatesList = branchCurrencyMap[branch.id];
 
-      if (allCurrs.length > 0) {
-        const uah = { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
-        const firstCurrency = allCurrs[0];
-        setGiveCurrency(firstCurrency);
-        setGetCurrency(uah);
-        setSellCurrency(firstCurrency);
-        setBuyCurrency(firstCurrency);
+      if (!branchRatesList) {
+        const ratesRes = await currencyService.getBranchRates(branch.id);
+        branchRatesList = ratesRes.data.filter(c => c.code !== 'UAH');
+      }
+
+      // Merge branch rates with ALL active currencies (headerCurrencies)
+      // This ensures we don't lose a currency just because the branch doesn't have a rate for it.
+      const mergedCurrencies = headerCurrencies.map(base => {
+        const branchRate = branchRatesList?.find(br => br.code === base.code);
+        if (branchRate) {
+          return branchRate;
+        }
+        // Fallback: Return base currency structure but with 0 rates to indicate "On Request"
+        // OR: Keep the base rates if we want a fallback? 
+        // User request implies "Unavailable" -> "On Request". So 0 is better.
+        return {
+          ...base,
+          buy_rate: 0,
+          sell_rate: 0,
+          wholesale_buy_rate: 0,
+          wholesale_sell_rate: 0
+        };
+      });
+
+      setCurrencies(mergedCurrencies);
+
+      if (mergedCurrencies.length > 0) {
+        // Preserve current selection, finding the new object in the merged list
+        const newSell = mergedCurrencies.find(c => c.code === sellCurrency.code) || mergedCurrencies[0];
+        const newBuy = mergedCurrencies.find(c => c.code === buyCurrency.code) || mergedCurrencies[0];
+
+        setSellCurrency(newSell);
+        setBuyCurrency(newBuy);
+
+        if (giveCurrency.code !== 'UAH') {
+          const newGive = mergedCurrencies.find(c => c.code === giveCurrency.code) || mergedCurrencies[0];
+          setGiveCurrency(newGive);
+        }
+        if (getCurrency.code !== 'UAH') {
+          const newGet = mergedCurrencies.find(c => c.code === getCurrency.code) || mergedCurrencies[0];
+          setGetCurrency(newGet);
+        }
       }
     } catch (error) {
       console.error('Error fetching branch rates:', error);
@@ -422,7 +638,7 @@ function PublicLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-primary">
+    <div className="min-h-screen bg-transparent">
       <Header
         onMenuToggle={() => setMobileMenuOpen(true)}
         onOpenChat={() => {
@@ -443,7 +659,15 @@ function PublicLayout() {
         branches={branches}
         onPresetExchange={handlePresetExchange}
       />
-      <MobileNav isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} settings={settings} />
+      <MobileNav
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        settings={settings}
+        currencies={headerCurrencies}
+        services={services}
+        onPresetExchange={handlePresetExchange}
+        currencyInfoMap={currencyInfoMap}
+      />
 
       <main>
         <Outlet context={contextValue} />
@@ -611,6 +835,7 @@ function App() {
           <Route path="services/:slug" element={<ServicePage />} />
           <Route path="contacts" element={<ContactsPage />} />
           <Route path="faq" element={<FAQPage />} />
+          <Route path="articles/:id" element={<FAQPage />} />
           <Route path="*" element={<HomePage />} />
         </Route>
 

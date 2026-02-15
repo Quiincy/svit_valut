@@ -36,7 +36,7 @@ export default function Footer({ settings }) {
   );
 
   return (
-    <footer id="footer" className="bg-primary-light border-t border-white/10">
+    <footer id="footer" className="bg-primary-light/80 backdrop-blur-md border-t border-white/10">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         {/* Main Footer Content */}
         <div className="py-8 lg:py-12">
@@ -64,8 +64,8 @@ export default function Footer({ settings }) {
           {/* Desktop Footer Grid */}
           <div className="hidden lg:grid grid-cols-4 gap-8">
             <div>
-              <Link to="/" className="flex items-center gap-2 mb-4">
-                <LogoSvg />
+              <Link to="/" className="flex items-center gap-2 mb-4 h-12">
+                <img src="/logo.png" alt="Svit Valut" className="h-full w-auto object-contain" />
               </Link>
               <p className="text-sm text-text-secondary">
                 Надійний обмін валют у Києві з 2015 року

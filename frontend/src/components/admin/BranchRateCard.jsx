@@ -12,31 +12,39 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
     // Initial values from override OR base
     const initialBuy = isOverride ? branchData.buy : currency.buy_rate;
     const initialSell = isOverride ? branchData.sell : currency.sell_rate;
+    const initialWholesaleBuy = isOverride ? (branchData.wholesale_buy || 0) : currency.wholesale_buy_rate;
+    const initialWholesaleSell = isOverride ? (branchData.wholesale_sell || 0) : currency.wholesale_sell_rate;
 
     const [buy, setBuy] = useState(initialBuy || 0);
     const [sell, setSell] = useState(initialSell || 0);
+    const [wholesaleBuy, setWholesaleBuy] = useState(initialWholesaleBuy || 0);
+    const [wholesaleSell, setWholesaleSell] = useState(initialWholesaleSell || 0);
     const [saving, setSaving] = useState(false);
 
     // Update local state if props change (e.g. refresh from backend)
     useEffect(() => {
         setBuy(initialBuy || 0);
         setSell(initialSell || 0);
-    }, [initialBuy, initialSell]);
+        setWholesaleBuy(initialWholesaleBuy || 0);
+        setWholesaleSell(initialWholesaleSell || 0);
+    }, [initialBuy, initialSell, initialWholesaleBuy, initialWholesaleSell]);
 
     const handleBlur = async () => {
         // Determine if values changed
-        if (buy === initialBuy && sell === initialSell) return;
+        if (buy === initialBuy && sell === initialSell &&
+            wholesaleBuy === initialWholesaleBuy && wholesaleSell === initialWholesaleSell) return;
 
         setSaving(true);
         try {
             await onUpdate(branchId, currency.code, {
                 buy_rate: parseFloat(buy),
                 sell_rate: parseFloat(sell),
+                wholesale_buy_rate: parseFloat(wholesaleBuy),
+                wholesale_sell_rate: parseFloat(wholesaleSell),
                 is_active: isActive // Keep current active status
             });
         } catch (err) {
             console.error("Failed to update rate", err);
-            // Revert? Or just show error?
         } finally {
             setSaving(false);
         }
@@ -70,30 +78,69 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                 </button>
             </div>
 
-            <div className="flex gap-2 text-xs">
-                <div className="flex-1">
-                    <input
-                        type="number"
-                        step="0.01"
-                        value={buy}
-                        onChange={(e) => setBuy(e.target.value)}
-                        onBlur={handleBlur}
-                        onKeyDown={handleKeyDown}
-                        disabled={isActive === false}
-                        className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-green-400 focus:outline-none focus:border-green-400/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
-                    />
+            <div className="space-y-2">
+                {/* Retail Rates */}
+                <div className="flex gap-2 text-xs">
+                    <div className="flex-1">
+                        <label className="text-[9px] text-text-secondary block mb-0.5">Роздріб</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={buy}
+                            onChange={(e) => setBuy(e.target.value)}
+                            onBlur={handleBlur}
+                            onKeyDown={handleKeyDown}
+                            disabled={isActive === false}
+                            className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-green-400 focus:outline-none focus:border-green-400/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
+                            placeholder="Куп"
+                        />
+                    </div>
+                    <div className="flex-1">
+                        <label className="text-[9px] text-text-secondary block mb-0.5">&nbsp;</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={sell}
+                            onChange={(e) => setSell(e.target.value)}
+                            onBlur={handleBlur}
+                            onKeyDown={handleKeyDown}
+                            disabled={isActive === false}
+                            className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-red-400 focus:outline-none focus:border-red-400/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
+                            placeholder="Прод"
+                        />
+                    </div>
                 </div>
-                <div className="flex-1">
-                    <input
-                        type="number"
-                        step="0.01"
-                        value={sell}
-                        onChange={(e) => setSell(e.target.value)}
-                        onBlur={handleBlur}
-                        onKeyDown={handleKeyDown}
-                        disabled={isActive === false}
-                        className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-red-400 focus:outline-none focus:border-red-400/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
-                    />
+
+                {/* Wholesale Rates */}
+                <div className="flex gap-2 text-xs">
+                    <div className="flex-1">
+                        <label className="text-[9px] text-accent-yellow/70 block mb-0.5">Опт</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={wholesaleBuy}
+                            onChange={(e) => setWholesaleBuy(e.target.value)}
+                            onBlur={handleBlur}
+                            onKeyDown={handleKeyDown}
+                            disabled={isActive === false}
+                            className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-accent-yellow focus:outline-none focus:border-accent-yellow/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
+                            placeholder="Опт Куп"
+                        />
+                    </div>
+                    <div className="flex-1">
+                        <label className="text-[9px] text-text-secondary block mb-0.5">&nbsp;</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={wholesaleSell}
+                            onChange={(e) => setWholesaleSell(e.target.value)}
+                            onBlur={handleBlur}
+                            onKeyDown={handleKeyDown}
+                            disabled={isActive === false}
+                            className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-accent-yellow focus:outline-none focus:border-accent-yellow/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
+                            placeholder="Опт Прод"
+                        />
+                    </div>
                 </div>
             </div>
 

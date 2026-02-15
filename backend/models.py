@@ -115,6 +115,8 @@ class BranchRate(Base):
     currency_code = Column(String, nullable=False)
     buy_rate = Column(Float, nullable=False)
     sell_rate = Column(Float, nullable=False)
+    wholesale_buy_rate = Column(Float, default=0.0)
+    wholesale_sell_rate = Column(Float, default=0.0)
     is_active = Column(Boolean, default=True)
     
 
@@ -128,6 +130,8 @@ class Currency(Base):
     name_uk = Column(String, nullable=False)
     buy_rate = Column(Float, default=0.0)
     sell_rate = Column(Float, default=0.0)
+    wholesale_buy_rate = Column(Float, default=0.0)
+    wholesale_sell_rate = Column(Float, default=0.0)
     is_active = Column(Boolean, default=True)
     is_popular = Column(Boolean, default=False)
     flag = Column(String, default="🏳️")
@@ -139,3 +143,4 @@ class Currency(Base):
     seo_h2 = Column(String, nullable=True)
     seo_image = Column(String, nullable=True)
     seo_text = Column(Text, nullable=True)
+    wholesale_threshold = Column(Integer, default=1000)

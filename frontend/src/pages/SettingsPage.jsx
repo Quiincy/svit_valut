@@ -227,12 +227,18 @@ export default function SettingsPage() {
     try {
       await adminService.updateCurrency(editingCurrency.code, {
         buy_rate: editingCurrency.buy_rate,
-        sell_rate: editingCurrency.sell_rate
+        sell_rate: editingCurrency.sell_rate,
+        wholesale_threshold: editingCurrency.wholesale_threshold
       });
 
       setCurrencies(currencies.map(c =>
         c.code === editingCurrency.code
-          ? { ...c, buy_rate: editingCurrency.buy_rate, sell_rate: editingCurrency.sell_rate }
+          ? {
+            ...c,
+            buy_rate: editingCurrency.buy_rate,
+            sell_rate: editingCurrency.sell_rate,
+            wholesale_threshold: editingCurrency.wholesale_threshold
+          }
           : c
       ));
 
@@ -706,9 +712,20 @@ export default function SettingsPage() {
                   type="number"
                   step="0.01"
                   value={editingCurrency.sell_rate}
-                  onChange={(e) => setEditingCurrency({ ...editingCurrency, sell_rate: parseFloat(e.target.value) })}
                   className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-red-400 font-bold"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm text-text-secondary mb-2">Поріг опту (сума у валюті)</label>
+                <input
+                  type="number"
+                  value={editingCurrency.wholesale_threshold || 1000}
+                  onChange={(e) => setEditingCurrency({ ...editingCurrency, wholesale_threshold: parseInt(e.target.value) })}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                  placeholder="1000"
+                />
+                <p className="text-xs text-text-secondary mt-1">Сума, від якої діє оптовий курс</p>
               </div>
             </div>
 

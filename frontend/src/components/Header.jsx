@@ -16,8 +16,8 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
 
   const serviceItems = services?.length > 0 ? services : defaultServices;
 
-  // Filter currencies for dropdowns (exclude UAH)
-  const availableCurrencies = currencies.filter(c => c.code !== 'UAH');
+  // Show ALL currencies including UAH
+  const availableCurrencies = currencies;
 
   // Chat availability — 7:30–20:30 Kyiv time
   const isChatAvailable = () => {
@@ -70,58 +70,24 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
     <header className={headerClasses}>
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         <div className="flex items-center justify-between h-auto py-2 lg:h-20 lg:py-0 gap-2">
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Button - Optimized Size */}
           <button
             onClick={onMenuToggle}
-            className="lg:hidden flex flex-col items-center justify-center w-[60px] h-[60px] bg-[#1a1f2e] border border-white/10 rounded-2xl text-text-secondary hover:text-white transition-colors gap-1 shadow-lg"
+            className="lg:hidden flex flex-col items-center justify-center w-12 h-12 bg-[#1a1f2e] border border-white/10 rounded-xl text-text-secondary hover:text-white transition-colors gap-0.5 shadow-lg shrink-0"
           >
-            <Menu className="w-6 h-6 text-[#4488FF]" />
-            <span className="text-[10px] font-medium leading-none text-white">меню</span>
+            <Menu className="w-5 h-5 text-[#4488FF]" />
+            <span className="text-[9px] font-medium leading-none text-white">меню</span>
           </button>
 
-          {/* Logo */}
-          {/* Logo */}
+          {/* Logo - Flexible Width */}
           <Link
             to="/"
             onClick={() => onPresetExchange('sell', 'USD')}
-            className="flex items-center gap-1.5 lg:gap-2 shrink-0 group"
+            className="flex items-center justify-center shrink min-w-0"
           >
-            <div className="h-10 lg:h-12 w-auto">
+            <div className="h-8 sm:h-10 lg:h-12 w-auto max-w-[160px] sm:max-w-none">
               {/* Use the Logo component */}
-              <svg viewBox="0 0 240 60" className="h-full w-auto" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#FDE68A" />
-                    <stop offset="25%" stopColor="#D97706" />
-                    <stop offset="50%" stopColor="#FDE68A" />
-                    <stop offset="75%" stopColor="#B45309" />
-                    <stop offset="100%" stopColor="#F59E0B" />
-                  </linearGradient>
-                </defs>
-
-                {/* Globe/Dollar Icon Group */}
-                <g transform="translate(5, 5)">
-                  {/* Simplified Globe/Coin circle */}
-                  <circle cx="25" cy="25" r="23" stroke="url(#goldGradient)" strokeWidth="2" fill="none" />
-                  <path d="M25 2 V48 M2 25 H48" stroke="url(#goldGradient)" strokeWidth="0.5" opacity="0.3" />
-                  <path d="M12 10 Q2,25 12,40 M38 10 Q48,25 38,40" stroke="url(#goldGradient)" strokeWidth="0.5" fill="none" opacity="0.3" />
-
-                  {/* Heavy Dollar Sign */}
-                  <text x="25" y="42" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="42" fill="url(#goldGradient)" textAnchor="middle" filter="drop-shadow(1px 1px 2px rgba(0,0,0,0.5))">$</text>
-                </g>
-
-                {/* Text Group */}
-                <g transform="translate(60, 0)">
-                  {/* СВІТ */}
-                  <text x="0" y="38" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="36" fill="url(#goldGradient)" letterSpacing="1" filter="drop-shadow(1px 1px 2px rgba(0,0,0,0.5))">
-                    СВІТ
-                  </text>
-                  {/* ВАЛЮТ */}
-                  <text x="0" y="56" fontFamily="Arial, sans-serif" fontWeight="bold" fontSize="14" fill="url(#goldGradient)" letterSpacing="4.5" opacity="0.9">
-                    ВАЛЮТ
-                  </text>
-                </g>
-              </svg>
+              <img src="/logo.png" alt="Svit Valut" className="h-full w-auto object-contain" />
             </div>
           </Link>
 
@@ -262,17 +228,17 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
 
           {/* Right Section */}
           <div className="flex items-center gap-2 lg:gap-4 shrink-0">
-            {/* Location & Hours (Visible on Mobile now) */}
+            {/* Location & Hours (Visible on Mobile now) - Optimized Size */}
             <a
               href="#branches"
-              className="flex flex-col items-center justify-center bg-[#1a1f2e] border border-white/10 rounded-2xl px-2 py-1.5 h-[60px] hover:bg-white/10 transition-colors group min-w-[120px] lg:px-4 shadow-lg"
+              className="flex flex-col items-center justify-center bg-[#1a1f2e] border border-white/10 rounded-xl px-2 py-1 h-12 lg:h-[60px] lg:rounded-2xl hover:bg-white/10 transition-colors group min-w-[100px] lg:min-w-[120px] lg:px-4 shadow-lg shrink-0"
             >
-              <div className="flex items-center gap-1.5">
-                <span className="text-white text-[10px] lg:text-sm font-medium">м. Київ</span>
+              <div className="flex items-center gap-1">
+                <span className="text-white text-[9px] lg:text-sm font-medium">м. Київ</span>
                 <MapPin className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-[#4488FF] fill-[#4488FF]/20" />
-                <span className="text-[#4488FF] text-[10px] lg:text-sm font-bold">{branches?.length > 0 ? branches.length : 5} пунктів</span>
+                <span className="text-[#4488FF] text-[9px] lg:text-sm font-bold">{branches?.length > 0 ? branches.length : 5} пунктів</span>
               </div>
-              <div className="text-[10px] lg:text-[11px] text-text-secondary/80 font-medium whitespace-nowrap">
+              <div className="text-[9px] lg:text-[11px] text-text-secondary/80 font-medium whitespace-nowrap">
                 щодня: 8:00–20:00
               </div>
             </a>

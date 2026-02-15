@@ -6,6 +6,7 @@ import {
   MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X, Globe, Save
 } from 'lucide-react';
 import BranchRateCard from '../components/admin/BranchRateCard';
+
 import { adminService, currencyService } from '../services/api';
 import SettingsPage from './SettingsPage';
 import * as XLSX from 'xlsx';
@@ -166,23 +167,26 @@ export default function AdminDashboard({ user, onLogout }) {
   const handleDownloadTemplate = async () => {
     try {
       const response = await adminService.downloadTemplate();
-      //Create a Blob from the PDF Stream
-      const file = new Blob(
-        [response.data],
-        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
-      );
-      //Build a URL from the file
-      const fileURL = URL.createObjectURL(file);
-      //Open the URL on new Window
+
+      // Axios with responseType: 'blob' returns a Blob in data
+      const blob = response.data;
+
+      // Create object URL directly from the blob
+      const fileURL = URL.createObjectURL(blob);
+
       const link = document.createElement('a');
       link.href = fileURL;
       link.setAttribute('download', 'rates_template.xlsx');
       document.body.appendChild(link);
       link.click();
+
+      // Cleanup
       link.remove();
+      setTimeout(() => URL.revokeObjectURL(fileURL), 100);
+
     } catch (error) {
       console.error('Download error:', error);
-      alert('Помилка завантаження шаблону');
+      alert('Помилка завантаження шаблону: ' + (error.response?.status || error.message));
     }
   };
 
@@ -261,7 +265,14 @@ export default function AdminDashboard({ user, onLogout }) {
 
   const openAddRateModal = (branchId) => {
     setRateModal({ open: true, branchId, currency: null });
-    setRateForm({ currency: 'USD', buy: '', sell: '', is_active: true });
+    setRateForm({
+      currency: 'USD',
+      buy: '',
+      sell: '',
+      wholesale_buy: '',
+      wholesale_sell: '',
+      is_active: true
+    });
   };
 
   const saveRate = async () => {
@@ -270,6 +281,8 @@ export default function AdminDashboard({ user, onLogout }) {
       await adminService.updateBranchRate(branchId, rateForm.currency, {
         buy_rate: parseFloat(rateForm.buy),
         sell_rate: parseFloat(rateForm.sell),
+        wholesale_buy_rate: rateForm.wholesale_buy ? parseFloat(rateForm.wholesale_buy) : 0,
+        wholesale_sell_rate: rateForm.wholesale_sell ? parseFloat(rateForm.wholesale_sell) : 0,
         is_active: rateForm.is_active
       });
       setRateModal({ ...rateModal, open: false });
@@ -614,7 +627,9 @@ export default function AdminDashboard({ user, onLogout }) {
                         <th className="pb-3 pr-4">Валюта</th>
                         <th className="pb-3 pr-4">Назва</th>
                         <th className="pb-3 pr-4 text-right">Купівля</th>
-                        <th className="pb-3 text-right">Продаж</th>
+                        <th className="pb-3 pr-4 text-right">Продаж</th>
+                        <th className="pb-3 pr-4 text-right text-accent-yellow/80">Опт Куп</th>
+                        <th className="pb-3 text-right text-accent-yellow/80">Опт Прод</th>
                         <th className="pb-3 pl-4 text-center">SEO</th>
                       </tr>
                     </thead>
@@ -632,8 +647,14 @@ export default function AdminDashboard({ user, onLogout }) {
                             <td className="py-3 pr-4 text-right font-medium text-green-400">
                               {currency.buy_rate?.toFixed(2)}
                             </td>
-                            <td className="py-3 text-right font-medium text-red-400">
+                            <td className="py-3 pr-4 text-right font-medium text-red-400">
                               {currency.sell_rate?.toFixed(2)}
+                            </td>
+                            <td className="py-3 pr-4 text-right font-medium text-accent-yellow">
+                              {currency.wholesale_buy_rate > 0 ? currency.wholesale_buy_rate?.toFixed(2) : '-'}
+                            </td>
+                            <td className="py-3 text-right font-medium text-accent-yellow">
+                              {currency.wholesale_sell_rate > 0 ? currency.wholesale_sell_rate?.toFixed(2) : '-'}
                             </td>
                             <td className="py-3 pl-4">
                               <button
@@ -748,7 +769,6 @@ export default function AdminDashboard({ user, onLogout }) {
               </div>
             )}
 
-            {/* Branch Rates */}
             {ratesSubTab === 'branches' && (
               <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
                 <h3 className="text-lg font-bold mb-4">Курси по відділеннях</h3>
@@ -997,6 +1017,27 @@ export default function AdminDashboard({ user, onLogout }) {
                       className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
                       value={rateForm.sell}
                       onChange={(e) => setRateForm({ ...rateForm, sell: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-accent-yellow/80 mb-1">Опт Купівля</label>
+                    <input
+                      type="number" step="0.01"
+                      className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
+                      value={rateForm.wholesale_buy}
+                      onChange={(e) => setRateForm({ ...rateForm, wholesale_buy: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-accent-yellow/80 mb-1">Опт Продаж</label>
+                    <input
+                      type="number" step="0.01"
+                      className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
+                      value={rateForm.wholesale_sell}
+                      onChange={(e) => setRateForm({ ...rateForm, wholesale_sell: e.target.value })}
                     />
                   </div>
                 </div>
