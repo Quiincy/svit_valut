@@ -535,53 +535,68 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
 
                 <div className="p-4 bg-accent-blue/10 rounded-xl">
-                  <h4 className="font-medium text-sm mb-3 text-accent-blue">📋 Формат Excel файлу (Шаблон)</h4>
+                  <h4 className="font-medium text-sm mb-3 text-accent-blue">📋 Формат Excel файлу (Матриця 34 валюти)</h4>
                   <div className="text-xs text-text-secondary overflow-x-auto">
-                    <p className="mb-2">Ліва частина - індивідуальні курси відділень (Матриця):</p>
-                    <table className="w-full border-collapse border border-white/20 mb-4 text-[10px] text-center">
+                    <p className="mb-2 italic">Файл повинен містити основний аркуш (наприклад "Відділення"), де в рядках - всі 34 валюти, а в стовпцях - дані по кожному відділенню.</p>
+                    <table className="w-full border-collapse border border-white/20 mb-4 text-[10px] text-center bg-primary/40">
                       <thead>
-                        <tr className="bg-white/5">
-                          <th className="border border-white/10 p-1">Каса</th>
-                          <th className="border border-white/10 p-1 text-green-400">$</th>
-                          <th className="border border-white/10 p-1 text-red-400">$</th>
-                          <th className="border border-white/10 p-1 text-green-400">€</th>
-                          <th className="border border-white/10 p-1 text-red-400">€</th>
+                        <tr className="bg-white/10 text-white">
+                          <th className="border border-white/10 p-2">Код</th>
+                          <th className="border border-white/10 p-2">Прапор</th>
+                          <th className="border border-white/10 p-2">Валюта</th>
+                          <th className="border-x-2 border-white/30 p-2 bg-accent-blue/5" colSpan="4">1 вул. Старовокзальна, 23</th>
+                          <th className="border-x-2 border-white/30 p-2 bg-accent-blue/5" colSpan="4">2 вул. Під Дубом, 2А</th>
+                          <th className="border border-white/10 p-2">...</th>
+                        </tr>
+                        <tr className="bg-white/5 text-[9px]">
+                          <th className="border border-white/10 p-1"></th>
+                          <th className="border border-white/10 p-1"></th>
+                          <th className="border border-white/10 p-1"></th>
+                          <th className="border border-white/10 p-1 text-green-400">Куп</th>
+                          <th className="border border-white/10 p-1 text-red-400">Прод</th>
+                          <th className="border border-white/10 p-1 text-accent-yellow">Опт К.</th>
+                          <th className="border border-white/10 p-1 text-accent-yellow">Опт П.</th>
+                          <th className="border border-white/10 p-1 text-green-400">Куп</th>
+                          <th className="border border-white/10 p-1 text-red-400">Прод</th>
+                          <th className="border border-white/10 p-1 text-accent-yellow">Опт К.</th>
+                          <th className="border border-white/10 p-1 text-accent-yellow">Опт П.</th>
                           <th className="border border-white/10 p-1">...</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr>
-                          <td className="border border-white/10 p-1 text-left">Вул. Городоцька</td>
+                          <td className="border border-white/10 p-1 font-bold">USD</td>
+                          <td className="border border-white/10 p-1">🇺🇸</td>
+                          <td className="border border-white/10 p-1 text-left">Долар США</td>
                           <td className="border border-white/10 p-1">41.50</td>
                           <td className="border border-white/10 p-1">42.00</td>
-                          <td className="border border-white/10 p-1">45.10</td>
+                          <td className="border border-white/10 p-1">41.80</td>
+                          <td className="border border-white/10 p-1">41.95</td>
+                          <td className="border border-white/10 p-1">41.55</td>
+                          <td className="border border-white/10 p-1">42.05</td>
+                          <td className="border border-white/10 p-1">41.85</td>
+                          <td className="border border-white/10 p-1">42.00</td>
+                          <td className="border border-white/10 p-1">...</td>
+                        </tr>
+                        <tr>
+                          <td className="border border-white/10 p-1 font-bold">EUR</td>
+                          <td className="border border-white/10 p-1">🇪🇺</td>
+                          <td className="border border-white/10 p-1 text-left">Євро</td>
+                          <td className="border border-white/10 p-1">45.20</td>
+                          <td className="border border-white/10 p-1">45.90</td>
+                          <td className="border border-white/10 p-1">45.50</td>
+                          <td className="border border-white/10 p-1">45.75</td>
+                          <td className="border border-white/10 p-1">45.25</td>
+                          <td className="border border-white/10 p-1">45.95</td>
+                          <td className="border border-white/10 p-1">45.55</td>
                           <td className="border border-white/10 p-1">45.80</td>
                           <td className="border border-white/10 p-1">...</td>
                         </tr>
                       </tbody>
                     </table>
-
-                    <p className="mb-2">Права частина - базові курси (вертикально):</p>
-                    <table className="w-full border-collapse border border-white/20 text-[10px] text-center">
-                      <thead>
-                        <tr className="bg-white/5">
-                          <th className="border border-white/10 p-1">Прапор</th>
-                          <th className="border border-white/10 p-1">Назва</th>
-                          <th className="border border-white/10 p-1 text-green-400">Куп</th>
-                          <th className="border border-white/10 p-1 text-red-400">Прод</th>
-                          <th className="border border-white/10 p-1">Код</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="border border-white/10 p-1">🇨🇦</td>
-                          <td className="border border-white/10 p-1">Канадський долар</td>
-                          <td className="border border-white/10 p-1">30.50</td>
-                          <td className="border border-white/10 p-1">31.20</td>
-                          <td className="border border-white/10 p-1">CAD</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                    <p className="text-[10px] text-accent-yellow/80 mt-2">
+                      💡 При завантаженні система оновить всі 34 валюти. Якщо ціна 0 або порожня - будуть використані базові курси.
+                    </p>
                   </div>
                 </div>
               </div>

@@ -493,7 +493,7 @@ export default function HeroSection({
           style={{ backgroundImage: "url('/mobile-pattern.png')" }}
         ></div>
         <div className="absolute inset-0 bg-gradient-to-b from-primary/90 via-primary/80 to-primary/90"></div> */}
-        <div className="relative z-10 px-4 py-10 flex flex-col gap-8">
+        <div className="relative z-10 py-10 flex flex-col gap-8">
           <div className="flex flex-col gap-4 text-center items-center">
             <h1 className="text-3xl font-bold leading-tight">
               <span className="text-accent-yellow text-4xl">Обмін валют</span>
@@ -509,7 +509,7 @@ export default function HeroSection({
           </div>
 
           <div
-            className="rounded-3xl p-6"
+            className="p-0"
             style={{
               backgroundImage: "url('/hero-bg.jpg')",
               backgroundSize: 'cover',
@@ -920,23 +920,23 @@ function ExchangeCard({
   isMobile
 }) {
   return (
-    <div className={`bg-primary-card backdrop-blur-sm rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'p-4' : 'p-6 lg:p-8 max-w-xl w-full'}`}>
-      <h3 className="text-lg lg:text-xl font-bold text-center mb-1">Забронювати валюту</h3>
-      <p className="text-xs lg:text-sm text-text-secondary text-center mb-6">
+    <div className={`backdrop-blur-md rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'bg-primary-card/20 px-8 py-8' : 'bg-primary-card/80 p-6 lg:p-8 max-w-xl w-full'}`}>
+      <h3 className={`${isMobile ? 'text-base' : 'text-lg lg:text-xl'} font-bold text-center mb-1 text-white`}>Забронювати валюту</h3>
+      <p className="text-[10px] lg:text-sm text-text-secondary text-center mb-6">
         Фіксація курсу на {reservationTime} хвилин
       </p>
 
       {/* Row 1: I SELL */}
       <div className="mb-3 transition-all rounded-xl border p-1 bg-primary-light border-white/10">
         <div className="flex flex-col md:flex-row gap-3">
-          <div className="flex-1 flex items-center">
+          <div className="flex-1 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
             <div className="pl-3 pr-2 py-2 w-full">
-              <span className="text-xs text-text-secondary block">Я продаю</span>
+              <span className="text-[10px] text-text-secondary block">Я продаю</span>
               <input
                 type="text"
                 value={sellInputValue}
                 onChange={(e) => handleSellChange(e.target.value)}
-                className="w-full bg-transparent text-xl font-bold outline-none text-white min-w-[80px]"
+                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
               />
             </div>
             <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10" onClick={() => onOpenCurrencyModal('sell_currency')}>
@@ -945,9 +945,9 @@ function ExchangeCard({
               <ChevronDown className="w-3 h-3 text-text-secondary" />
             </div>
           </div>
-          <div className="flex-1 border-l border-white/10 pl-3 flex items-center">
+          <div className="flex-1 border-l border-white/10 md:pl-3 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
             <div className="pl-3 pr-2 py-2 w-full">
-              <span className="text-xs text-text-secondary block">Я отримаю</span>
+              <span className="text-[10px] text-text-secondary block">Я отримаю</span>
               <input
                 type="text"
                 value={((isSellMode && !buyInputValue && sellInputValue) ? getAmount : ((Number(sellInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(sellCurrency, Number(sellInputValue.replace(/[^\d.]/g, '')) || 0, 'buy') : (sellCurrency?.buy_rate || 0)))).toFixed(2)}
@@ -962,7 +962,7 @@ function ExchangeCard({
                     setGetCurrency({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 });
                   }
                 }}
-                className="w-full bg-transparent text-xl font-bold outline-none text-right text-green-400"
+                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-right text-green-400`}
               />
             </div>
             <div className="pr-3 py-2">
@@ -975,14 +975,14 @@ function ExchangeCard({
       {/* Row 2: I BUY */}
       <div className="mb-3 transition-all rounded-xl border p-1 bg-primary-light border-white/10">
         <div className="flex flex-col md:flex-row gap-3">
-          <div className="flex-1 flex items-center">
+          <div className="flex-1 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
             <div className="pl-3 pr-2 py-2 w-full">
-              <span className="text-xs text-text-secondary block">Я купую</span>
+              <span className="text-[10px] text-text-secondary block">Я купую</span>
               <input
                 type="text"
                 value={buyInputValue}
                 onChange={(e) => handleBuyChange(e.target.value)}
-                className="w-full bg-transparent text-xl font-bold outline-none text-white min-w-[80px]"
+                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
               />
             </div>
             <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10" onClick={() => onOpenCurrencyModal('buy_currency')}>
@@ -991,9 +991,9 @@ function ExchangeCard({
               <ChevronDown className="w-3 h-3 text-text-secondary" />
             </div>
           </div>
-          <div className="flex-1 border-l border-white/10 pl-3 flex items-center">
+          <div className="flex-1 border-l border-white/10 md:pl-3 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
             <div className="pl-3 pr-2 py-2 w-full">
-              <span className="text-xs text-text-secondary block">Мені знадобиться</span>
+              <span className="text-[10px] text-text-secondary block">Мені знадобиться</span>
               <input
                 type="text"
                 value={((!isSellMode && buyInputValue) ? giveAmount : ((Number(buyInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(buyCurrency, Number(buyInputValue.replace(/[^\d.]/g, '')) || 0, 'sell') : (buyCurrency?.sell_rate || 0)))).toFixed(2)}
@@ -1008,7 +1008,7 @@ function ExchangeCard({
                     setGiveCurrency({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 });
                   }
                 }}
-                className="w-full bg-transparent text-xl font-bold outline-none text-right text-red-400 placeholder-red-400/50"
+                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-right text-red-400 placeholder-red-400/50`}
               />
             </div>
             <div className="pr-3 py-2">
@@ -1069,7 +1069,7 @@ function ExchangeCard({
         </span>
       </div>
 
-      <button onClick={onReserve} className="w-full py-4 bg-accent-yellow rounded-xl text-primary font-bold text-lg">
+      <button onClick={onReserve} className={`w-full ${isMobile ? 'py-3 text-base' : 'py-4 text-lg'} bg-accent-yellow rounded-xl text-primary font-bold`}>
         Забронювати
       </button>
 
