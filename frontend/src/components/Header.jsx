@@ -82,7 +82,6 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
           {/* Logo - Flexible Width */}
           <Link
             to="/"
-            onClick={() => onPresetExchange('sell', 'USD')}
             className="flex items-center justify-center shrink min-w-0"
           >
             <div className="h-8 sm:h-10 lg:h-12 w-auto max-w-[160px] sm:max-w-none">

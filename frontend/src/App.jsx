@@ -30,6 +30,8 @@ import {
 function PublicLayout() {
   const { hash, pathname } = useLocation();
   const navigate = useNavigate();
+  // Track previous path to detect navigation events
+  const prevPathRef = useRef(pathname);
   const [currencies, setCurrencies] = useState([]);
   const [branches, setBranches] = useState([]);
   const [settings, setSettings] = useState(null);
@@ -147,6 +149,26 @@ function PublicLayout() {
   // Handle SEO URL routing (URL -> State)
   useEffect(() => {
     if (!loading && Object.keys(currencyInfoMap).length > 0) {
+      // 1. Handle Root Path - Reset to Default (Sell USD)
+      if (pathname === '/') {
+        if (giveCurrency.code !== 'USD' || getCurrency.code !== 'UAH') {
+          // Find USD currency object to ensure we have full data
+          const usd = currencies.find(c => c.code === 'USD');
+          const uah = currencies.find(c => c.code === 'UAH') || { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
+
+          if (usd) {
+            setGiveCurrency(usd);
+            setGetCurrency(uah);
+            setSellCurrency(usd);
+            setBuyCurrency(usd);
+            // Trigger preset action to reset inputs in HeroSection
+            setPresetAction({ type: 'sell', currency: usd, timestamp: Date.now() });
+          }
+        }
+        return;
+      }
+
+      // 2. Handle Specific SEO URLs
       for (const [code, info] of Object.entries(currencyInfoMap)) {
         if (info.buy_url && pathname === info.buy_url) {
           if (getCurrency.code === code && giveCurrency.code === 'UAH') return;
@@ -160,7 +182,7 @@ function PublicLayout() {
         }
       }
     }
-  }, [pathname, loading, currencyInfoMap, giveCurrency, getCurrency]);
+  }, [pathname, loading, currencyInfoMap, giveCurrency, getCurrency, currencies]);
 
   // Handle State -> URL & Metadata Sync
   useEffect(() => {
@@ -180,12 +202,19 @@ function PublicLayout() {
     if (targetCode && mode && currencyInfoMap[targetCode]) {
       const info = currencyInfoMap[targetCode];
 
-      if (info.seo_h1) {
-        document.title = `${info.seo_h1} | Світ Валют`;
-      }
+      // 1. UPDATE METADATA (Title & Description)
+      const isBuy = mode === 'buy';
+      const isSell = mode === 'sell';
+
+      // Priority: Specific Buy/Sell Config -> Generic Config -> Default Fallback
+      const metaTitle = (isBuy ? info.seo_buy_title : isSell ? info.seo_sell_title : null) || info.seo_h1 || `${info.name} - Світ Валют`;
+      const metaDescText = (isBuy ? info.seo_buy_desc : isSell ? info.seo_sell_desc : null) || info.seo_text || '';
+
+      document.title = metaTitle.includes('Світ Валют') ? metaTitle : `${metaTitle} | Світ Валют`;
+
       const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc && info.seo_text) {
-        const plainText = info.seo_text.replace(/<[^>]*>?/gm, '').substring(0, 160);
+      if (metaDesc && metaDescText) {
+        const plainText = metaDescText.replace(/<[^>]*>?/gm, '').substring(0, 160);
         metaDesc.setAttribute('content', plainText);
       }
       // 2. Update URL if needed
@@ -193,10 +222,23 @@ function PublicLayout() {
 
       // Prevent automatic redirect from homepage to the default currency SEO URL (Sell USD)
       const isOnDedicatedPage = pathname.startsWith('/contacts') || pathname.startsWith('/faq') || pathname.startsWith('/services') || pathname.startsWith('/rates');
+
+      // Check if we are in Default State (Sell USD)
+      const isDefaultState = mode === 'sell' && targetCode === 'USD';
+
+      // Check if path just changed (navigation event)
+      const pathChanged = pathname !== prevPathRef.current;
+      prevPathRef.current = pathname;
+
       if (isOnDedicatedPage) {
         // Don't redirect when on dedicated pages
+      } else if (pathname === '/' && (isDefaultState || pathChanged)) {
+        // STAY on homepage for default state OR if we just navigated there (allow state to catch up)
       } else if (targetUrl && pathname !== targetUrl) {
-        navigate(targetUrl, { replace: true });
+        // Only redirect if path is STABLE and incorrect
+        if (!pathChanged) {
+          navigate(targetUrl, { replace: true });
+        }
       }
     } else {
       document.title = 'Світ Валют | Обмін валют в Києві';
@@ -255,7 +297,9 @@ function PublicLayout() {
       const uah = { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
       const finalCurrencies = baseCurrencies.length > 0 ? baseCurrencies : allCurrs;
 
-      setCurrencies(finalCurrencies);
+      let currenciesResolved = false;
+      // setCurrencies(finalCurrencies); // MOVED: To prevent zero-rate flash, we wait for branch rates
+
 
       const fullHeaderCurrencies = allCurrs.map(c => {
         const rates = baseRates[c.code] || {};
@@ -276,6 +320,8 @@ function PublicLayout() {
         setRatesUpdated(ratesRes.data.updated_at);
       }
 
+      // MOVED: Initial state setting moved to after branch confirmation to ensure best rates
+      /*
       if (finalCurrencies.length > 0) {
         const defaultCurrency = finalCurrencies.find(c => c.code === 'USD') || finalCurrencies[0];
         setGiveCurrency(defaultCurrency);
@@ -283,6 +329,7 @@ function PublicLayout() {
         setSellCurrency(defaultCurrency);
         setBuyCurrency(defaultCurrency);
       }
+      */
 
       if (branchesRes.data.length > 0) {
         const branchMap = {};
@@ -295,14 +342,32 @@ function PublicLayout() {
           allBranchRates.forEach(({ branchId, currencies: branchCurrs }) => {
             branchMap[branchId] = branchCurrs;
             branchCurrs.forEach(c => {
+              const meta = currencyMeta[c.code] || {}; // Always needed for merging
+              const baseRateObj = baseRates[c.code] || {};
+
+              const merged = { ...meta, ...c };
+
+              // Fallback to base rates if branch rates are missing/zero
+              if (!merged.buy_rate && baseRateObj.buy) merged.buy_rate = baseRateObj.buy;
+              if (!merged.sell_rate && baseRateObj.sell) merged.sell_rate = baseRateObj.sell;
+
+              // Fallback for wholesale if branch is missing/zero
+              if (!merged.wholesale_buy_rate) merged.wholesale_buy_rate = meta.wholesale_buy_rate;
+              if (!merged.wholesale_sell_rate) merged.wholesale_sell_rate = meta.wholesale_sell_rate;
+              if (!merged.wholesale_threshold) merged.wholesale_threshold = meta.wholesale_threshold;
+
               if (!currencyMap.has(c.code)) {
-                const meta = currencyMeta[c.code] || {};
-                const merged = { ...meta, ...c };
-                // Fallback for wholesale if branch is missing/zero
-                if (!merged.wholesale_buy_rate) merged.wholesale_buy_rate = meta.wholesale_buy_rate;
-                if (!merged.wholesale_sell_rate) merged.wholesale_sell_rate = meta.wholesale_sell_rate;
-                if (!merged.wholesale_threshold) merged.wholesale_threshold = meta.wholesale_threshold;
                 currencyMap.set(c.code, merged);
+              } else {
+                // If existing entry has 0 rates, but this branch has valid rates, update it
+                // This prevents initial load from showing 0.00 if the first branch was bad
+                const existing = currencyMap.get(c.code);
+                const hasValidRates = (c.buy_rate > 0 || c.sell_rate > 0);
+                const existingHasRates = (existing.buy_rate > 0 || existing.sell_rate > 0);
+
+                if (hasValidRates && !existingHasRates) {
+                  currencyMap.set(c.code, merged);
+                }
               }
             });
           });
@@ -334,6 +399,19 @@ function PublicLayout() {
           setGetCurrency(uah);
           setSellCurrency(usdOrFirst);
           setBuyCurrency(usdOrFirst);
+          currenciesResolved = true;
+        }
+      }
+
+      // Fallback if no branches or branch fetching failed
+      if (!currenciesResolved) {
+        setCurrencies(finalCurrencies);
+        if (finalCurrencies.length > 0) {
+          const defaultCurrency = finalCurrencies.find(c => c.code === 'USD') || finalCurrencies[0];
+          setGiveCurrency(defaultCurrency);
+          setGetCurrency(uah);
+          setSellCurrency(defaultCurrency);
+          setBuyCurrency(defaultCurrency);
         }
       }
     } catch (error) {
@@ -349,7 +427,7 @@ function PublicLayout() {
       // User BUYS Foreign Currency (gives UAH)
       // We SELL to user.
       const threshold = getCurrency.wholesale_threshold || settings?.min_wholesale_amount || 1000;
-      let rate = getCurrency.sell_rate || 42.15;
+      let rate = getCurrency.sell_rate || 0;
 
       // Calculate tentative amount
       let amount = giveAmount / rate;
@@ -360,12 +438,14 @@ function PublicLayout() {
         amount = giveAmount / rate;
       }
       setGetAmount(amount);
+      console.log(`[Exchange] Buy Mode: Foreign=${amount.toFixed(2)}, UAH=${giveAmount.toFixed(2)}, Rate=${rate.toFixed(2)} (${amount >= threshold ? 'Wholesale' : 'Regular'})`);
+
 
     } else if (getCurrency.code === 'UAH') {
       // User SELLS Foreign Currency (gets UAH)
       // We BUY from user.
       const threshold = giveCurrency.wholesale_threshold || settings?.min_wholesale_amount || 1000;
-      let rate = giveCurrency.buy_rate || 42.10;
+      let rate = giveCurrency.buy_rate || 0;
 
       // Check threshold (Amount is in Foreign - giveAmount)
       if (giveAmount >= threshold && giveCurrency.wholesale_buy_rate > 0) {
@@ -373,6 +453,8 @@ function PublicLayout() {
       }
 
       setGetAmount(giveAmount * rate);
+      console.log(`[Exchange] Sell Mode: Foreign=${giveAmount.toFixed(2)}, UAH=${(giveAmount * rate).toFixed(2)}, Rate=${rate.toFixed(2)} (${giveAmount >= threshold ? 'Wholesale' : 'Regular'})`);
+
 
     } else {
       const pair = `${giveCurrency.code}/${getCurrency.code}`;
@@ -436,7 +518,9 @@ function PublicLayout() {
     // Exception: Initial load (when activeBranch is null).
     const isInitialLoad = !activeBranch;
 
-    if (!giveChanged && !getChanged && !isInitialLoad) {
+    // FIX: If we already have an active branch, NEVER auto-switch even if currency changes (e.g. Sell -> Buy mode).
+    // The user's manual selection should persist unless they explicitly change it or the branch doesn't support the new currency.
+    if (!isInitialLoad) {
       return;
     }
 
@@ -495,7 +579,7 @@ function PublicLayout() {
       // We might want to clear activeBranch or show error, but for now let's just do nothing.
     }
 
-  }, [giveCurrency, getCurrency, branches, branchCurrencyMap]); // Removed specific .code dependencies to catch object updates if needed, though usually .code is enough. Added branchCurrencyMap.
+  }, [giveCurrency, getCurrency, branches, branchCurrencyMap, activeBranch]); // Added activeBranch to ensure it runs when activeBranch is initially null then becomes populated? No, we want it to run when it IS null.
 
   const handleBranchChange = async (branch) => {
     setActiveBranch(branch);
@@ -513,17 +597,28 @@ function PublicLayout() {
       const mergedCurrencies = headerCurrencies.map(base => {
         const branchRate = branchRatesList?.find(br => br.code === base.code);
         if (branchRate) {
-          return branchRate;
+          // Fallback to base rates if branch rates are zero
+          // Also fallback for wholesale if branch rate has them as 0
+          return {
+            ...branchRate,
+            buy_rate: (branchRate.buy_rate > 0) ? branchRate.buy_rate : (base.buy_rate || 0),
+            sell_rate: (branchRate.sell_rate > 0) ? branchRate.sell_rate : (base.sell_rate || 0),
+            wholesale_buy_rate: (branchRate.wholesale_buy_rate > 0) ? branchRate.wholesale_buy_rate : (base.wholesale_buy_rate || 0),
+            wholesale_sell_rate: (branchRate.wholesale_sell_rate > 0) ? branchRate.wholesale_sell_rate : (base.wholesale_sell_rate || 0),
+            wholesale_threshold: (branchRate.wholesale_threshold > 0) ? branchRate.wholesale_threshold : (base.wholesale_threshold || 1000)
+          };
         }
         // Fallback: Return base currency structure but with 0 rates to indicate "On Request"
-        // OR: Keep the base rates if we want a fallback? 
-        // User request implies "Unavailable" -> "On Request". So 0 is better.
+        // actually if we have base rates, we should use them here too!
         return {
           ...base,
-          buy_rate: 0,
-          sell_rate: 0,
-          wholesale_buy_rate: 0,
-          wholesale_sell_rate: 0
+          // If accessing via this path, it means branch doesn't have the currency record at all.
+          // We can use base rates as indicative.
+          buy_rate: base.buy_rate || 0,
+          sell_rate: base.sell_rate || 0,
+          wholesale_buy_rate: base.wholesale_buy_rate || 0,
+          wholesale_sell_rate: base.wholesale_sell_rate || 0,
+          wholesale_threshold: base.wholesale_threshold || 1000
         };
       });
 
@@ -594,9 +689,6 @@ function PublicLayout() {
     if (pathname !== '/' && !isCorrectUrl) {
       navigate('/');
     }
-
-    // Scroll to calculator is handled by HeroSection via presetAction
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Context to pass to children (HomePage, RatesPage, etc.)

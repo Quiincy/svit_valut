@@ -192,6 +192,15 @@ export const adminService = {
       }
     });
   },
+  uploadImage: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/upload/image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
   downloadTemplate: () => api.get('/admin/rates/template', { responseType: 'blob' }),
   getAllRates: async () => {
     try {

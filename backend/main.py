@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
+from fastapi.staticfiles import StaticFiles
 # Reload trigger
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -12,6 +13,8 @@ import io
 import os
 from sqlalchemy.orm import Session
 import models, database
+import shutil
+import uuid
 import urllib.request
 import urllib.parse
 import json
@@ -35,6 +38,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files
+os.makedirs("static/uploads", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ============== SITE SETTINGS ==============
 class SiteSettingsBase(BaseModel):
@@ -169,6 +176,29 @@ class Currency(BaseModel):
     wholesale_threshold: int = 1000
     is_popular: bool = False
     is_active: bool = True  # New: ability to enable/disable currency
+    
+    # SEO Fields
+    buy_url: Optional[str] = None
+    sell_url: Optional[str] = None
+    seo_h1: Optional[str] = None
+    seo_h2: Optional[str] = None
+    seo_image: Optional[str] = None
+    seo_text: Optional[str] = None
+    
+    # Split SEO Fields
+    seo_buy_h1: Optional[str] = None
+    seo_buy_h2: Optional[str] = None
+    seo_buy_title: Optional[str] = None
+    seo_buy_desc: Optional[str] = None
+    seo_buy_text: Optional[str] = None
+    seo_buy_image: Optional[str] = None
+
+    seo_sell_h1: Optional[str] = None
+    seo_sell_h2: Optional[str] = None
+    seo_sell_title: Optional[str] = None
+    seo_sell_desc: Optional[str] = None
+    seo_sell_text: Optional[str] = None
+    seo_sell_image: Optional[str] = None
 
 class Order(BaseModel):
     id: int
@@ -524,7 +554,25 @@ async def get_currencies(branch_id: int = 1, db: Session = Depends(get_db)):
             wholesale_sell_rate=ov.wholesale_sell_rate if (ov and ov.is_active) else base.wholesale_sell_rate,
             wholesale_threshold=base.wholesale_threshold,
             is_popular=base.is_popular,
-            is_active=True
+            is_active=True,
+            buy_url=base.buy_url,
+            sell_url=base.sell_url,
+            seo_h1=base.seo_h1,
+            seo_h2=base.seo_h2,
+            seo_image=base.seo_image,
+            seo_text=base.seo_text,
+            seo_buy_h1=base.seo_buy_h1,
+            seo_buy_h2=base.seo_buy_h2,
+            seo_buy_title=base.seo_buy_title,
+            seo_buy_desc=base.seo_buy_desc,
+            seo_buy_text=base.seo_buy_text,
+            seo_buy_image=base.seo_buy_image,
+            seo_sell_h1=base.seo_sell_h1,
+            seo_sell_h2=base.seo_sell_h2,
+            seo_sell_title=base.seo_sell_title,
+            seo_sell_desc=base.seo_sell_desc,
+            seo_sell_text=base.seo_sell_text,
+            seo_sell_image=base.seo_sell_image
         ))
         
     return result
@@ -605,7 +653,25 @@ async def get_branch_rates(branch_id: int, db: Session = Depends(get_db)):
             wholesale_sell_rate=rate.wholesale_sell_rate,
             wholesale_threshold=curr.wholesale_threshold,
             is_popular=curr.is_popular,
-            is_active=curr.is_active
+            is_active=curr.is_active,
+            buy_url=curr.buy_url,
+            sell_url=curr.sell_url,
+            seo_h1=curr.seo_h1,
+            seo_h2=curr.seo_h2,
+            seo_image=curr.seo_image,
+            seo_text=curr.seo_text,
+            seo_buy_h1=curr.seo_buy_h1,
+            seo_buy_h2=curr.seo_buy_h2,
+            seo_buy_title=curr.seo_buy_title,
+            seo_buy_desc=curr.seo_buy_desc,
+            seo_buy_text=curr.seo_buy_text,
+            seo_buy_image=curr.seo_buy_image,
+            seo_sell_h1=curr.seo_sell_h1,
+            seo_sell_h2=curr.seo_sell_h2,
+            seo_sell_title=curr.seo_sell_title,
+            seo_sell_desc=curr.seo_sell_desc,
+            seo_sell_text=curr.seo_sell_text,
+            seo_sell_image=curr.seo_sell_image
         ))
     return result
 
@@ -627,7 +693,9 @@ async def get_rates(db: Session = Depends(get_db)):
     # Python 3.7+ preserves insertion order in dicts
     rates_dict = {}
     for r, c in db_rates:
-        rates_dict[r.currency_code] = {"buy": r.buy_rate, "sell": r.sell_rate}
+        buy = r.buy_rate if r.buy_rate > 0 else c.buy_rate
+        sell = r.sell_rate if r.sell_rate > 0 else c.sell_rate
+        rates_dict[r.currency_code] = {"buy": buy, "sell": sell}
         
     return {
         "updated_at": rates_updated_at.isoformat(),
@@ -912,6 +980,33 @@ async def get_current_user(user: User = Depends(verify_credentials)):
 
 
 # ============== ADMIN ENDPOINTS ==============
+
+@app.post("/api/upload/image")
+async def upload_image(
+    file: UploadFile = File(...),
+    user: User = Depends(require_admin)
+):
+    """Upload an image for SEO or other purposes"""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Generate unique filename
+    ext = os.path.splitext(file.filename)[1]
+    if not ext:
+        ext = ".jpg" # Default fallback
+    
+    filename = f"{uuid.uuid4()}{ext}"
+    file_path = f"static/uploads/{filename}"
+    
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Return URL relative to root (frontend should prepend domain if needed, 
+        # but usually /static works if proxied or same origin)
+        return {"url": f"/static/uploads/{filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not save image: {str(e)}")
 
 @app.post("/api/admin/rates/upload", response_model=RatesUploadResponseV2)
 async def upload_rates(
@@ -2600,6 +2695,22 @@ class CurrencyUpdate(BaseModel):
     seo_h2: Optional[str] = None
     seo_image: Optional[str] = None
     seo_text: Optional[str] = None
+    
+    # Split SEO Fields
+    seo_buy_h1: Optional[str] = None
+    seo_buy_h2: Optional[str] = None
+    seo_buy_title: Optional[str] = None
+    seo_buy_desc: Optional[str] = None
+    seo_buy_text: Optional[str] = None
+    seo_buy_image: Optional[str] = None
+
+    seo_sell_h1: Optional[str] = None
+    seo_sell_h2: Optional[str] = None
+    seo_sell_title: Optional[str] = None
+    seo_sell_desc: Optional[str] = None
+    seo_sell_text: Optional[str] = None
+    seo_sell_image: Optional[str] = None
+    
     wholesale_threshold: Optional[int] = None
 
 @app.get("/api/currencies/info/all")
@@ -2618,6 +2729,18 @@ async def get_all_currency_info(db: Session = Depends(get_db)):
             "seo_h2": c.seo_h2,
             "seo_image": c.seo_image,
             "seo_text": c.seo_text,
+            "seo_buy_h1": c.seo_buy_h1,
+            "seo_buy_h2": c.seo_buy_h2,
+            "seo_buy_title": c.seo_buy_title,
+            "seo_buy_desc": c.seo_buy_desc,
+            "seo_buy_text": c.seo_buy_text,
+            "seo_buy_image": c.seo_buy_image,
+            "seo_sell_h1": c.seo_sell_h1,
+            "seo_sell_h2": c.seo_sell_h2,
+            "seo_sell_title": c.seo_sell_title,
+            "seo_sell_desc": c.seo_sell_desc,
+            "seo_sell_text": c.seo_sell_text,
+            "seo_sell_image": c.seo_sell_image,
         }
     return result
 
@@ -2643,6 +2766,18 @@ async def get_admin_currencies(user: models.User = Depends(require_admin), db: S
             "seo_h2": c.seo_h2,
             "seo_image": c.seo_image,
             "seo_text": c.seo_text,
+            "seo_buy_h1": c.seo_buy_h1,
+            "seo_buy_h2": c.seo_buy_h2,
+            "seo_buy_title": c.seo_buy_title,
+            "seo_buy_desc": c.seo_buy_desc,
+            "seo_buy_text": c.seo_buy_text,
+            "seo_buy_image": c.seo_buy_image,
+            "seo_sell_h1": c.seo_sell_h1,
+            "seo_sell_h2": c.seo_sell_h2,
+            "seo_sell_title": c.seo_sell_title,
+            "seo_sell_desc": c.seo_sell_desc,
+            "seo_sell_text": c.seo_sell_text,
+            "seo_sell_image": c.seo_sell_image,
         })
     return result
 
@@ -2675,6 +2810,22 @@ async def update_currency(code: str, update: CurrencyUpdate, user: models.User =
         c.seo_image = update.seo_image
     if update.seo_text is not None:
         c.seo_text = update.seo_text
+        
+    # Split SEO updates
+    if update.seo_buy_h1 is not None: c.seo_buy_h1 = update.seo_buy_h1
+    if update.seo_buy_h2 is not None: c.seo_buy_h2 = update.seo_buy_h2
+    if update.seo_buy_title is not None: c.seo_buy_title = update.seo_buy_title
+    if update.seo_buy_desc is not None: c.seo_buy_desc = update.seo_buy_desc
+    if update.seo_buy_text is not None: c.seo_buy_text = update.seo_buy_text
+    if update.seo_buy_image is not None: c.seo_buy_image = update.seo_buy_image
+
+    if update.seo_sell_h1 is not None: c.seo_sell_h1 = update.seo_sell_h1
+    if update.seo_sell_h2 is not None: c.seo_sell_h2 = update.seo_sell_h2
+    if update.seo_sell_title is not None: c.seo_sell_title = update.seo_sell_title
+    if update.seo_sell_desc is not None: c.seo_sell_desc = update.seo_sell_desc
+    if update.seo_sell_text is not None: c.seo_sell_text = update.seo_sell_text
+    if update.seo_sell_image is not None: c.seo_sell_image = update.seo_sell_image
+
     if update.wholesale_threshold is not None:
         c.wholesale_threshold = update.wholesale_threshold
     
@@ -2699,6 +2850,18 @@ async def update_currency(code: str, update: CurrencyUpdate, user: models.User =
         "seo_h2": c.seo_h2,
         "seo_image": c.seo_image,
         "seo_text": c.seo_text,
+        "seo_buy_h1": c.seo_buy_h1,
+        "seo_buy_h2": c.seo_buy_h2,
+        "seo_buy_title": c.seo_buy_title,
+        "seo_buy_desc": c.seo_buy_desc,
+        "seo_buy_text": c.seo_buy_text,
+        "seo_buy_image": c.seo_buy_image,
+        "seo_sell_h1": c.seo_sell_h1,
+        "seo_sell_h2": c.seo_sell_h2,
+        "seo_sell_title": c.seo_sell_title,
+        "seo_sell_desc": c.seo_sell_desc,
+        "seo_sell_text": c.seo_sell_text,
+        "seo_sell_image": c.seo_sell_image,
     }
 
 

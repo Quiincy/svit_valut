@@ -98,3 +98,213 @@ input:-webkit-autofill:focus {
   background: transparent;
   border: none;
 }
+
+/* ===== Quill Rich Text Editor — Dark Theme ===== */
+.seo-quill-editor .ql-toolbar.ql-snow {
+  background: #1a1d2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px 8px 0 0;
+  padding: 6px 8px;
+}
+
+.seo-quill-editor .ql-container.ql-snow {
+  background: #141922;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  color: #ffffff;
+  font-size: 14px;
+  min-height: 120px;
+}
+
+.seo-quill-editor .ql-editor {
+  min-height: 120px;
+  padding: 12px 14px;
+  line-height: 1.6;
+}
+
+.seo-quill-editor .ql-editor.ql-blank::before {
+  color: rgba(255, 255, 255, 0.3);
+  font-style: normal;
+}
+
+/* Toolbar buttons */
+.seo-quill-editor .ql-snow .ql-stroke {
+  stroke: rgba(255, 255, 255, 0.5);
+}
+
+.seo-quill-editor .ql-snow .ql-fill {
+  fill: rgba(255, 255, 255, 0.5);
+}
+
+.seo-quill-editor .ql-snow .ql-picker-label {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.seo-quill-editor .ql-snow button:hover .ql-stroke,
+.seo-quill-editor .ql-snow .ql-picker-label:hover .ql-stroke {
+  stroke: #f5c542;
+}
+
+.seo-quill-editor .ql-snow button:hover .ql-fill,
+.seo-quill-editor .ql-snow .ql-picker-label:hover .ql-fill {
+  fill: #f5c542;
+}
+
+.seo-quill-editor .ql-snow button:hover,
+.seo-quill-editor .ql-snow .ql-picker-label:hover {
+  color: #f5c542;
+}
+
+.seo-quill-editor .ql-snow button.ql-active .ql-stroke {
+  stroke: #f5c542;
+}
+
+.seo-quill-editor .ql-snow button.ql-active .ql-fill {
+  fill: #f5c542;
+}
+
+/* Dropdown menus */
+.seo-quill-editor .ql-snow .ql-picker-options {
+  background: #1a1d2e;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.seo-quill-editor .ql-snow .ql-picker-item {
+  color: rgba(255, 255, 255, 0.7);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.seo-quill-editor .ql-snow .ql-picker-item:hover {
+  color: #f5c542;
+  background: rgba(245, 197, 66, 0.1);
+}
+
+/* Link tooltip */
+.seo-quill-editor .ql-snow .ql-tooltip {
+  background: #1a1d2e;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.seo-quill-editor .ql-snow .ql-tooltip input[type="text"] {
+  background: #141922;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border-radius: 4px;
+}
+
+.seo-quill-editor .ql-snow .ql-tooltip a {
+  color: #f5c542;
+}
+
+/* Focus ring */
+.seo-quill-editor .ql-container.ql-snow:focus-within {
+  border-color: #f5c542;
+}
+
+.seo-quill-editor .ql-toolbar.ql-snow+.ql-container.ql-snow:focus-within {
+  border-color: #f5c542;
+}
+
+/* Editor content styles */
+.seo-quill-editor .ql-editor h2 {
+  font-size: 1.25em;
+  font-weight: 700;
+  margin: 0.5em 0 0.25em;
+}
+
+.seo-quill-editor .ql-editor h3 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+
+.seo-quill-editor .ql-editor a {
+  color: #f5c542;
+  text-decoration: underline;
+}
+
+.seo-quill-editor .ql-editor ul,
+.seo-quill-editor .ql-editor ol {
+  padding-left: 1.5em;
+}
+
+/* ===== Public SEO Content Section ===== */
+.seo-page-content {
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.8;
+  font-size: 15px;
+}
+
+.seo-page-content h2 {
+  font-size: 1.4em;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 1.2em 0 0.5em;
+}
+
+.seo-page-content h3 {
+  font-size: 1.15em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 1em 0 0.4em;
+}
+
+.seo-page-content h4 {
+  font-size: 1.05em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0.8em 0 0.3em;
+}
+
+.seo-page-content p {
+  margin: 0.6em 0;
+}
+
+.seo-page-content ul,
+.seo-page-content ol {
+  padding-left: 1.5em;
+  margin: 0.6em 0;
+}
+
+.seo-page-content li {
+  margin: 0.3em 0;
+}
+
+.seo-page-content a {
+  color: #f5c542;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: opacity 0.15s;
+}
+
+.seo-page-content a:hover {
+  opacity: 0.8;
+}
+
+.seo-page-content strong,
+.seo-page-content b {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.seo-page-content em,
+.seo-page-content i {
+  font-style: italic;
+}
+
+.seo-page-content u {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.seo-page-content s {
+  text-decoration: line-through;
+  opacity: 0.6;
+}

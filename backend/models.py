@@ -139,8 +139,24 @@ class Currency(Base):
     # SEO / Info fields
     buy_url = Column(String, nullable=True)
     sell_url = Column(String, nullable=True)
-    seo_h1 = Column(String, nullable=True)
+    seo_h1 = Column(String, nullable=True) # Keeping for backward compatibility or migration reference? Or deprecating?
     seo_h2 = Column(String, nullable=True)
     seo_image = Column(String, nullable=True)
     seo_text = Column(Text, nullable=True)
+    
+    # Split SEO Fields
+    seo_buy_h1 = Column(String, nullable=True)
+    seo_buy_h2 = Column(String, nullable=True)
+    seo_buy_title = Column(String, nullable=True)
+    seo_buy_desc = Column(String, nullable=True)
+    seo_buy_text = Column(Text, nullable=True)
+    seo_buy_image = Column(String, nullable=True)
+
+    seo_sell_h1 = Column(String, nullable=True)
+    seo_sell_h2 = Column(String, nullable=True)
+    seo_sell_title = Column(String, nullable=True)
+    seo_sell_desc = Column(String, nullable=True)
+    seo_sell_text = Column(Text, nullable=True)
+    seo_sell_image = Column(String, nullable=True)
+
     wholesale_threshold = Column(Integer, default=1000)

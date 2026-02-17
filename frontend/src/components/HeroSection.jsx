@@ -252,8 +252,8 @@ export default function HeroSection({
 
   // Handlers
   const handleSellChange = (val) => {
-    // Sanitize input to allow only digits and dot
-    const sanitized = val.replace(/[^\d.]/g, '');
+    // Sanitize input to allow only digits (no dots)
+    const sanitized = val.replace(/[^\d]/g, '');
 
     setSellInputValue(sanitized);
     setBuyInputValue(''); // Enforce Exclusive Input
@@ -265,19 +265,16 @@ export default function HeroSection({
       setGetCurrency({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 });
     }
 
-    // Calculate effective rate (We BUY from user)
-    // Rate depends on the amount user is selling
-    // If user sells 1000 USD, we use wholesale buy rate.
-    // However, giveAmount store the amount user GIVES. 
-    // If User Sells USD, GiveAmount is USD.
+    // Sell Mode: numVal IS the foreign amount we GIVE.
+    // App.jsx will calculate getAmount (UAH).
     setGiveAmount(numVal);
   };
 
 
   console.log('Render GiveAmount:', giveAmount);
   const handleBuyChange = (val) => {
-    // Sanitize input to allow only digits and dot
-    const sanitized = val.replace(/[^\d.]/g, '');
+    // Sanitize input to allow only digits (no dots)
+    const sanitized = val.replace(/[^\d]/g, '');
 
     setBuyInputValue(sanitized);
     setSellInputValue(''); // Enforce Exclusive Input
@@ -332,7 +329,11 @@ export default function HeroSection({
   const currencyInfo = currencyInfoMap[currentCurrencyCode] || null;
   // Only show SEO content if we are NOT on the homepage (root path)
   // AND we have actual SEO info to show
-  const hasCurrencyInfo = location.pathname !== '/' && currencyInfo && (currencyInfo.seo_h1 || currencyInfo.seo_h2 || currencyInfo.seo_text);
+  const hasCurrencyInfo = location.pathname !== '/' && currencyInfo && (
+    (currencyInfo.seo_h1 || currencyInfo.seo_h2 || currencyInfo.seo_text) ||
+    (isSellMode && (currencyInfo.seo_sell_h1 || currencyInfo.seo_sell_h2 || currencyInfo.seo_sell_text)) ||
+    (!isSellMode && (currencyInfo.seo_buy_h1 || currencyInfo.seo_buy_h2 || currencyInfo.seo_buy_text))
+  );
 
   return (
     <section className="pt-20 lg:pt-24">
@@ -345,31 +346,39 @@ export default function HeroSection({
         <div className="relative z-10 max-w-7xl mx-auto px-8 py-16">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left Content — Dynamic Currency Info or Default */}
-            <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-8 min-h-[400px]">
               {hasCurrencyInfo ? (
                 <>
                   {/* Dynamic SEO H1 */}
                   <h1 className="text-5xl xl:text-7xl font-bold leading-tight">
-                    <span className="text-accent-yellow">{currencyInfo.seo_h1}</span>
-                    {currencyInfo.seo_h2 && (
+                    <span className="text-accent-yellow">
+                      {(isSellMode ? currencyInfo.seo_sell_h1 : currencyInfo.seo_buy_h1) || currencyInfo.seo_h1}
+                    </span>
+                    {((isSellMode ? currencyInfo.seo_sell_h2 : currencyInfo.seo_buy_h2) || currencyInfo.seo_h2) && (
                       <>
                         <br />
-                        <span className="text-white font-light text-4xl xl:text-6xl">{currencyInfo.seo_h2}</span>
+                        <span className="text-white font-light text-4xl xl:text-6xl">
+                          {(isSellMode ? currencyInfo.seo_sell_h2 : currencyInfo.seo_buy_h2) || currencyInfo.seo_h2}
+                        </span>
                       </>
                     )}
                   </h1>
 
                   {/* SEO Image */}
-                  {currencyInfo.seo_image && (
+                  {((isSellMode ? currencyInfo.seo_sell_image : currencyInfo.seo_buy_image) || currencyInfo.seo_image) && (
                     <div className="rounded-2xl overflow-hidden border border-white/10 max-w-md">
-                      <img src={currencyInfo.seo_image} alt={currencyInfo.seo_h1} className="w-full h-48 object-cover" />
+                      <img
+                        src={(isSellMode ? currencyInfo.seo_sell_image : currencyInfo.seo_buy_image) || currencyInfo.seo_image}
+                        alt={(isSellMode ? currencyInfo.seo_sell_h1 : currencyInfo.seo_buy_h1) || currencyInfo.seo_h1}
+                        className="w-full h-48 object-cover"
+                      />
                     </div>
                   )}
 
                   {/* SEO Text */}
-                  {currencyInfo.seo_text && (
+                  {((isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text) && (
                     <div className="text-gray-400 text-base leading-relaxed max-w-lg whitespace-pre-line">
-                      {currencyInfo.seo_text}
+                      {(isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text}
                     </div>
                   )}
                 </>
@@ -392,47 +401,49 @@ export default function HeroSection({
                 </>
               )}
 
-              {/* Contact Block */}
-              <div className="mt-8">
-                <p className="text-gray-400 mb-2 text-xl font-light">
-                  Маєте питання?
-                </p>
-                <p className="text-gray-300 mb-8 text-xl font-light">
-                  Напишіть нам — відповімо за кілька хвилин.
-                </p>
+              {/* Contact Block — only on default homepage */}
+              {!hasCurrencyInfo && (
+                <div className="mt-8">
+                  <p className="text-gray-400 mb-2 text-xl font-light">
+                    Маєте питання?
+                  </p>
+                  <p className="text-gray-300 mb-8 text-xl font-light">
+                    Напишіть нам — відповімо за кілька хвилин.
+                  </p>
 
-                <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">Напишіть нам:</p>
-                <div className="flex items-center gap-6">
-                  {/* Avatar & Status */}
-                  <div className="flex items-center gap-4">
-                    <div className="relative">
-                      <img
-                        src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
-                        alt="Irina"
-                        className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
-                      />
-                      <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-white text-lg">Ірина</div>
-                      <div className={`text-sm font-medium ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
-                        {chatOnline ? 'в мережі' : 'не в мережі'}
+                  <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">Напишіть нам:</p>
+                  <div className="flex items-center gap-6">
+                    {/* Avatar & Status */}
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <img
+                          src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
+                          alt="Irina"
+                          className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
+                        />
+                        <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                      </div>
+                      <div>
+                        <div className="font-bold text-white text-lg">Ірина</div>
+                        <div className={`text-sm font-medium ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
+                          {chatOnline ? 'в мережі' : 'не в мережі'}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Chat Button */}
-                  <button
-                    onClick={onOpenChat}
-                    className="px-10 py-4 bg-accent-yellow rounded-full text-primary font-bold text-lg hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:-translate-y-0.5"
-                  >
-                    Відкрити чат
-                  </button>
+                    {/* Chat Button */}
+                    <button
+                      onClick={onOpenChat}
+                      className="px-10 py-4 bg-accent-yellow rounded-full text-primary font-bold text-lg hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:-translate-y-0.5"
+                    >
+                      Відкрити чат
+                    </button>
+                  </div>
+                  {!chatOnline && (
+                    <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 7:30 до 20:30</p>
+                  )}
                 </div>
-                {!chatOnline && (
-                  <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 7:30 до 20:30</p>
-                )}
-              </div>
+              )}
             </div>
 
             {/* Right - Exchange Card */}
@@ -495,20 +506,6 @@ export default function HeroSection({
         ></div>
         <div className="absolute inset-0 bg-gradient-to-b from-primary/90 via-primary/80 to-primary/90"></div> */}
         <div className="relative z-10 py-10 flex flex-col gap-8 px-[10px]">
-          <div className="flex flex-col gap-4 text-center items-center">
-            <h1 className="text-3xl font-bold leading-tight">
-              <span className="text-accent-yellow text-4xl">Обмін валют</span>
-              <br />
-              <span className="text-white font-light text-2xl">без ризиків та переплат</span>
-            </h1>
-            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
-              <div className="w-8 h-8 bg-accent-blue/20 rounded-full flex items-center justify-center">
-                <ArrowRight className="w-4 h-4 text-accent-blue transform -rotate-45" />
-              </div>
-              <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
-            </div>
-          </div>
-
           <div
             className="p-0 rounded-3xl overflow-hidden"
             style={{
@@ -557,23 +554,47 @@ export default function HeroSection({
             />
           </div>
 
+          <div className="flex flex-col gap-4 text-center items-center">
+            <h1 className="text-3xl font-bold leading-tight">
+              <span className="text-accent-yellow text-4xl">Обмін валют</span>
+              <br />
+              <span className="text-white font-light text-2xl">без ризиків та переплат</span>
+            </h1>
+            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
+              <div className="w-8 h-8 bg-accent-blue/20 rounded-full flex items-center justify-center">
+                <ArrowRight className="w-4 h-4 text-accent-blue transform -rotate-45" />
+              </div>
+              <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
+            </div>
+          </div>
+
           {/* Mobile Currency Info + Chat (below form) */}
           <div className="mt-6 px-2">
             {hasCurrencyInfo && (
               <div className="mb-6">
                 <h2 className="text-3xl font-bold leading-tight">
-                  <span className="text-accent-yellow">{currencyInfo.seo_h1}</span>
+                  <span className="text-accent-yellow">
+                    {(isSellMode ? currencyInfo.seo_sell_h1 : currencyInfo.seo_buy_h1) || currencyInfo.seo_h1}
+                  </span>
                   <br />
-                  {currencyInfo.seo_h2 && (
-                    <span className="text-white font-light text-2xl">{currencyInfo.seo_h2}</span>
+                  {((isSellMode ? currencyInfo.seo_sell_h2 : currencyInfo.seo_buy_h2) || currencyInfo.seo_h2) && (
+                    <span className="text-white font-light text-2xl">
+                      {(isSellMode ? currencyInfo.seo_sell_h2 : currencyInfo.seo_buy_h2) || currencyInfo.seo_h2}
+                    </span>
                   )}
                 </h2>
-                {currencyInfo.seo_text && (
-                  <p className="text-gray-400 text-sm mt-3 whitespace-pre-line">{currencyInfo.seo_text}</p>
+                {((isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text) && (
+                  <p className="text-gray-400 text-sm mt-3 whitespace-pre-line">
+                    {(isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text}
+                  </p>
                 )}
-                {currencyInfo.seo_image && (
+                {((isSellMode ? currencyInfo.seo_sell_image : currencyInfo.seo_buy_image) || currencyInfo.seo_image) && (
                   <div className="rounded-xl overflow-hidden border border-white/10 mt-4">
-                    <img src={currencyInfo.seo_image} alt={currencyInfo.seo_h1} className="w-full h-40 object-cover" />
+                    <img
+                      src={(isSellMode ? currencyInfo.seo_sell_image : currencyInfo.seo_buy_image) || currencyInfo.seo_image}
+                      alt={(isSellMode ? currencyInfo.seo_sell_h1 : currencyInfo.seo_buy_h1) || currencyInfo.seo_h1}
+                      className="w-full h-40 object-cover"
+                    />
                   </div>
                 )}
               </div>
@@ -620,14 +641,7 @@ export default function HeroSection({
             </div>
           </div>
 
-          <p className="text-center text-sm text-text-secondary">
-            Фіксація курсу на {settings?.reservation_time_minutes || 60} хвилин.<br />
-            {(!activeCurrency?.wholesale_threshold && !settings?.min_wholesale_amount) ? (
-              <span>Курс та наявність уточнюйте у оператора.</span>
-            ) : (
-              <span>Оптовий курс від {activeCurrency?.wholesale_threshold || settings?.min_wholesale_amount || 1000} {activeCurrency?.code || 'USD'}.</span>
-            )}
-          </p>
+
         </div>
       </div>
 
@@ -896,8 +910,8 @@ function ExchangeCard({
 }) {
   return (
     <div className={`rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'bg-transparent px-8 py-8' : 'backdrop-blur-md bg-primary-card/80 p-6 lg:p-8 max-w-xl w-full'}`}>
-      <h3 className={`${isMobile ? 'text-base' : 'text-lg lg:text-xl'} font-bold text-center mb-1 text-white`}>Забронювати валюту</h3>
-      <p className="text-[10px] lg:text-sm text-text-secondary text-center mb-6">
+      <h3 className={`${isMobile ? 'text-2xl' : 'text-lg lg:text-xl'} font-bold text-center mb-1 text-white`}>Забронювати валюту</h3>
+      <p className={`${isMobile ? 'text-sm' : 'text-[10px] lg:text-sm'} text-text-secondary text-center mb-6`}>
         Фіксація курсу на {reservationTime} хвилин
       </p>
 
@@ -926,22 +940,14 @@ function ExchangeCard({
               <input
                 type="text"
                 value={((isSellMode && !buyInputValue && sellInputValue) ? getAmount : ((Number(sellInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(sellCurrency, Number(sellInputValue.replace(/[^\d.]/g, '')) || 0, 'buy') : (sellCurrency?.buy_rate || 0)))).toFixed(2)}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^\d.]/g, '');
-                  const rate = sellCurrency?.buy_rate || 1;
-                  const foreign = val / rate;
-                  setSellInputValue(foreign.toFixed(2));
-                  setBuyInputValue('');
-                  if (!isSellMode) {
-                    setGiveCurrency(sellCurrency);
-                    setGetCurrency({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 });
-                  }
-                }}
-                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-right text-green-400`}
+                readOnly
+                onChange={() => { }}
+                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-left text-green-400`}
               />
             </div>
-            <div className="pr-3 py-2">
-              <span className="font-bold text-sm text-text-secondary">UAH</span>
+            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 mr-1.5 pointer-events-none">
+              <span className="text-lg">🇺🇦</span>
+              <span className="font-bold text-sm">UAH</span>
             </div>
           </div>
         </div>
@@ -974,22 +980,14 @@ function ExchangeCard({
               <input
                 type="text"
                 value={((!isSellMode && buyInputValue) ? giveAmount : ((Number(buyInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(buyCurrency, Number(buyInputValue.replace(/[^\d.]/g, '')) || 0, 'sell') : (buyCurrency?.sell_rate || 0)))).toFixed(2)}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^\d.]/g, '');
-                  const rate = (buyCurrency?.sell_rate && buyCurrency?.sell_rate > 0) ? buyCurrency?.sell_rate : 42.15;
-                  const foreign = val / rate;
-                  setBuyInputValue(foreign.toFixed(2));
-                  setSellInputValue('');
-                  if (isSellMode) {
-                    setGetCurrency(buyCurrency);
-                    setGiveCurrency({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 });
-                  }
-                }}
-                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-right text-red-400 placeholder-red-400/50`}
+                readOnly
+                onChange={() => { }}
+                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-left text-red-400 placeholder-red-400/50`}
               />
             </div>
-            <div className="pr-3 py-2">
-              <span className="font-bold text-sm text-text-secondary">UAH</span>
+            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 mr-1.5 pointer-events-none">
+              <span className="text-lg">🇺🇦</span>
+              <span className="font-bold text-sm">UAH</span>
             </div>
           </div>
         </div>
@@ -1041,11 +1039,20 @@ function ExchangeCard({
         )}
       </div>
 
-      <div className="flex justify-between items-center px-4 mb-4 bg-white/5 py-2 rounded-xl border border-white/10">
-        <span className="text-sm text-text-secondary">Поточний курс:</span>
-        <span className="text-lg font-bold text-accent-yellow">
-          1 {isSellMode ? sellCurrency?.code : buyCurrency?.code} = {(getEffectiveRate ? getEffectiveRate(isSellMode ? sellCurrency : buyCurrency, Number((isSellMode ? sellInputValue : buyInputValue).replace(/[^\d.]/g, '')) || 0, isSellMode ? 'buy' : 'sell') : 0).toFixed(2)} UAH
-        </span>
+      <div className="flex flex-col gap-2 px-4 mb-4 bg-white/5 py-3 rounded-xl border border-white/10">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+          <span className="text-xs text-text-secondary">Курс:</span>
+          <div className="text-right flex flex-col items-end">
+            <span className="text-sm sm:text-base font-bold text-accent-yellow leading-tight">
+              1 {isSellMode ? sellCurrency?.code : buyCurrency?.code} = {(isSellMode ? (sellCurrency?.buy_rate || 0) : (buyCurrency?.sell_rate || 0)).toFixed(2)} UAH
+            </span>
+            {((isSellMode ? sellCurrency?.wholesale_threshold : buyCurrency?.wholesale_threshold) > 0) && (
+              <span className="text-[10px] text-text-secondary leading-tight mt-0.5">
+                (від {(isSellMode ? sellCurrency?.wholesale_threshold : buyCurrency?.wholesale_threshold) || 1000} {isSellMode ? sellCurrency?.code : buyCurrency?.code} — {(isSellMode ? sellCurrency?.wholesale_buy_rate : buyCurrency?.wholesale_sell_rate).toFixed(2)} опт)
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       <button onClick={onReserve} className={`w-full ${isMobile ? 'py-3 text-base' : 'py-4 text-lg'} bg-accent-yellow rounded-xl text-primary font-bold`}>
@@ -1054,7 +1061,7 @@ function ExchangeCard({
 
       <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10 text-center">
         <p className="text-sm text-accent-yellow">
-          Оптовий курс діє від {minAmount}
+          Оптовий курс від 1000$ або в еквіваленті
         </p>
       </div>
     </div>
