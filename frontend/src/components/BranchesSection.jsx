@@ -183,7 +183,7 @@ export default function BranchesSection({ branches = [], settings }) {
   // I will revert to "Re-enable Fallback" and rely on the UI "Approximate" label.
 
   return (
-    <section id="branches" className="py-12 lg:py-20 bg-primary-light px-4 lg:px-8">
+    <section id="branches" className="py-12 lg:py-20 bg-primary-light rounded-2xl border border-white/10 px-4 lg:px-8 mb-12">
       <div className="max-w-7xl mx-auto">
         <h2 className="text-2xl lg:text-4xl font-bold mb-8">Відділення в Києві</h2>
 

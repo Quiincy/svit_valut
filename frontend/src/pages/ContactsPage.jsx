@@ -1,5 +1,6 @@
 import { useOutletContext } from 'react-router-dom';
 import { MapPin, Phone, Clock, Send, MessageSquare } from 'lucide-react';
+import BranchesSection from '../components/BranchesSection';
 
 export default function ContactsPage() {
     const { branches, settings, onOpenChat } = useOutletContext();
@@ -58,6 +59,9 @@ export default function ContactsPage() {
                     </button>
                 </div>
 
+                {/* Branches Map & Cards */}
+                <BranchesSection branches={branches} settings={settings} />
+
                 {/* Social Links */}
                 {(settings?.telegram_url || settings?.instagram_url || settings?.facebook_url) && (
                     <div className="bg-primary-light border border-white/10 rounded-2xl p-8 mb-12 text-center">
@@ -104,40 +108,6 @@ export default function ContactsPage() {
                     </div>
                 )}
 
-                {/* Branches */}
-                <div>
-                    <h2 className="text-2xl font-bold text-white mb-6 text-center">Наші відділення</h2>
-                    <div className="grid md:grid-cols-2 gap-4">
-                        {branches?.map(branch => (
-                            <div
-                                key={branch.id}
-                                className="bg-primary-light border border-white/10 rounded-2xl p-6 hover:border-white/20 transition-colors"
-                            >
-                                <div className="flex items-start gap-3 mb-3">
-                                    <MapPin className="w-5 h-5 text-accent-yellow mt-0.5 shrink-0" />
-                                    <div>
-                                        <h3 className="text-white font-bold text-lg">{branch.name}</h3>
-                                        <p className="text-text-secondary text-sm mt-1">{branch.address}</p>
-                                    </div>
-                                </div>
-                                {branch.working_hours && (
-                                    <div className="flex items-center gap-2 text-sm text-text-secondary ml-8">
-                                        <Clock className="w-4 h-4 text-green-400" />
-                                        <span>{branch.working_hours}</span>
-                                    </div>
-                                )}
-                                {branch.phone && (
-                                    <div className="flex items-center gap-2 text-sm ml-8 mt-1">
-                                        <Phone className="w-4 h-4 text-accent-yellow" />
-                                        <a href={`tel:${branch.phone.replace(/[^\d+]/g, '')}`} className="text-accent-yellow hover:opacity-80">
-                                            {branch.phone}
-                                        </a>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
             </div>
         </div>
     );

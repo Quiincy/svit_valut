@@ -103,7 +103,6 @@ function PublicLayout() {
             });
 
             if (nearest) {
-              console.log('GPS Auto-Select Branch:', nearest.address, minDistance.toFixed(2) + 'km');
               setActiveBranch(nearest);
               // We could also call handleBranchChange(nearest) if we want to update rates immediately,
               // but setActiveBranch might trigger the other useEffect if we aren't careful.
@@ -112,7 +111,6 @@ function PublicLayout() {
             }
           },
           (error) => {
-            console.log('GPS Error or Permission Denied:', error.message);
             // Fallback is handled by the other useEffect (Best Rate) or default state
           },
           { timeout: 5000, maximumAge: 60000 }
@@ -438,7 +436,6 @@ function PublicLayout() {
         amount = giveAmount / rate;
       }
       setGetAmount(amount);
-      console.log(`[Exchange] Buy Mode: Foreign=${amount.toFixed(2)}, UAH=${giveAmount.toFixed(2)}, Rate=${rate.toFixed(2)} (${amount >= threshold ? 'Wholesale' : 'Regular'})`);
 
 
     } else if (getCurrency.code === 'UAH') {
@@ -453,7 +450,6 @@ function PublicLayout() {
       }
 
       setGetAmount(giveAmount * rate);
-      console.log(`[Exchange] Sell Mode: Foreign=${giveAmount.toFixed(2)}, UAH=${(giveAmount * rate).toFixed(2)}, Rate=${rate.toFixed(2)} (${giveAmount >= threshold ? 'Wholesale' : 'Regular'})`);
 
 
     } else {
@@ -649,7 +645,6 @@ function PublicLayout() {
   const handleReservation = async (data) => {
     try {
       const response = await reservationService.create(data);
-      console.log('Reservation created:', response.data);
       setSuccessModalOpen(true);
       setGiveAmount(500);
     } catch (error) {

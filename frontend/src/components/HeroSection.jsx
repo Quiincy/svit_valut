@@ -271,7 +271,7 @@ export default function HeroSection({
   };
 
 
-  console.log('Render GiveAmount:', giveAmount);
+
   const handleBuyChange = (val) => {
     // Sanitize input to allow only digits (no dots)
     const sanitized = val.replace(/[^\d]/g, '');
@@ -505,7 +505,7 @@ export default function HeroSection({
           style={{ backgroundImage: "url('/mobile-pattern.png')" }}
         ></div>
         <div className="absolute inset-0 bg-gradient-to-b from-primary/90 via-primary/80 to-primary/90"></div> */}
-        <div className="relative z-10 py-10 flex flex-col gap-8 px-[10px]">
+        <div className="relative z-10 pt-2 pb-10 flex flex-col gap-8 px-[10px]">
           <div
             className="p-0 rounded-3xl overflow-hidden"
             style={{
@@ -600,45 +600,47 @@ export default function HeroSection({
               </div>
             )}
 
-            {/* Questions / Chat Section (mobile) */}
-            <div className="mb-4">
-              <p className="text-gray-400 text-sm mb-2">
-                Маєте питання?
-              </p>
-              <p className="text-gray-500 text-sm mb-1">— Наявність на відділеннях</p>
-              <p className="text-gray-500 text-sm mb-1">— Оптовий курс</p>
-              <p className="text-gray-500 text-sm mb-3">— інше.</p>
+            {/* Questions / Chat Section (mobile) — only on default homepage */}
+            {!hasCurrencyInfo && (
+              <div className="mb-4">
+                <p className="text-gray-400 text-sm mb-2">
+                  Маєте питання?
+                </p>
+                <p className="text-gray-500 text-sm mb-1">— Наявність на відділеннях</p>
+                <p className="text-gray-500 text-sm mb-1">— Оптовий курс</p>
+                <p className="text-gray-500 text-sm mb-3">— інше.</p>
 
-              <p className="text-gray-500 text-sm mb-3">Напишіть нам:</p>
+                <p className="text-gray-500 text-sm mb-3">Напишіть нам:</p>
 
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <img
-                      src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
-                      alt="Irina"
-                      className="w-10 h-10 rounded-full object-cover border-2 border-white/10"
-                    />
-                    <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-                  </div>
-                  <div>
-                    <div className="font-medium text-white text-sm">Ірина</div>
-                    <div className={`text-xs ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
-                      {chatOnline ? 'в мережі' : 'не в мережі'}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <img
+                        src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
+                        alt="Irina"
+                        className="w-10 h-10 rounded-full object-cover border-2 border-white/10"
+                      />
+                      <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                    </div>
+                    <div>
+                      <div className="font-medium text-white text-sm">Ірина</div>
+                      <div className={`text-xs ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
+                        {chatOnline ? 'в мережі' : 'не в мережі'}
+                      </div>
                     </div>
                   </div>
+                  <button
+                    onClick={onOpenChat}
+                    className="px-6 py-2.5 bg-gradient-to-r from-accent-yellow to-yellow-600 rounded-full text-primary font-bold text-sm hover:shadow-lg transition-all"
+                  >
+                    Відкрити чат
+                  </button>
                 </div>
-                <button
-                  onClick={onOpenChat}
-                  className="px-6 py-2.5 bg-gradient-to-r from-accent-yellow to-yellow-600 rounded-full text-primary font-bold text-sm hover:shadow-lg transition-all"
-                >
-                  Відкрити чат
-                </button>
+                {!chatOnline && (
+                  <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 7:30 до 20:30</p>
+                )}
               </div>
-              {!chatOnline && (
-                <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 7:30 до 20:30</p>
-              )}
-            </div>
+            )}
           </div>
 
 

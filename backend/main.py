@@ -1701,6 +1701,7 @@ class BranchRateUpdate(BaseModel):
     sell_rate: Optional[float] = None
     wholesale_buy_rate: Optional[float] = None
     wholesale_sell_rate: Optional[float] = None
+    wholesale_threshold: Optional[int] = None
     is_active: Optional[bool] = None
 
 @app.put("/api/admin/rates/branch/{branch_id}/{currency_code}")
@@ -1746,6 +1747,7 @@ async def update_branch_rate(
             sell_rate=data.sell_rate if data.sell_rate is not None else 0.0,
             wholesale_buy_rate=data.wholesale_buy_rate if data.wholesale_buy_rate is not None else 0.0,
             wholesale_sell_rate=data.wholesale_sell_rate if data.wholesale_sell_rate is not None else 0.0,
+            wholesale_threshold=data.wholesale_threshold if data.wholesale_threshold is not None else 1000,
             is_active=data.is_active if data.is_active is not None else True
         )
         db.add(rate)
@@ -1759,6 +1761,8 @@ async def update_branch_rate(
             rate.wholesale_buy_rate = data.wholesale_buy_rate
         if data.wholesale_sell_rate is not None:
             rate.wholesale_sell_rate = data.wholesale_sell_rate
+        if data.wholesale_threshold is not None:
+            rate.wholesale_threshold = data.wholesale_threshold
         if data.is_active is not None:
             rate.is_active = data.is_active
         if data.sell_rate is not None:
@@ -1795,6 +1799,7 @@ async def get_all_rates_admin(user: models.User = Depends(require_admin), db: Se
             "sell": br.sell_rate,
             "wholesale_buy": br.wholesale_buy_rate,
             "wholesale_sell": br.wholesale_sell_rate,
+            "wholesale_threshold": br.wholesale_threshold or 1000,
             "is_active": br.is_active
         }
         

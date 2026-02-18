@@ -14,11 +14,13 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
     const initialSell = isOverride ? branchData.sell : currency.sell_rate;
     const initialWholesaleBuy = isOverride ? (branchData.wholesale_buy || 0) : currency.wholesale_buy_rate;
     const initialWholesaleSell = isOverride ? (branchData.wholesale_sell || 0) : currency.wholesale_sell_rate;
+    const initialThreshold = isOverride ? (branchData.wholesale_threshold || 1000) : (currency.wholesale_threshold || 1000);
 
     const [buy, setBuy] = useState(initialBuy || 0);
     const [sell, setSell] = useState(initialSell || 0);
     const [wholesaleBuy, setWholesaleBuy] = useState(initialWholesaleBuy || 0);
     const [wholesaleSell, setWholesaleSell] = useState(initialWholesaleSell || 0);
+    const [threshold, setThreshold] = useState(initialThreshold || 1000);
     const [saving, setSaving] = useState(false);
 
     // Update local state if props change (e.g. refresh from backend)
@@ -27,12 +29,14 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
         setSell(initialSell || 0);
         setWholesaleBuy(initialWholesaleBuy || 0);
         setWholesaleSell(initialWholesaleSell || 0);
-    }, [initialBuy, initialSell, initialWholesaleBuy, initialWholesaleSell]);
+        setThreshold(initialThreshold || 1000);
+    }, [initialBuy, initialSell, initialWholesaleBuy, initialWholesaleSell, initialThreshold]);
 
     const handleBlur = async () => {
         // Determine if values changed
         if (buy === initialBuy && sell === initialSell &&
-            wholesaleBuy === initialWholesaleBuy && wholesaleSell === initialWholesaleSell) return;
+            wholesaleBuy === initialWholesaleBuy && wholesaleSell === initialWholesaleSell &&
+            threshold == initialThreshold) return;
 
         setSaving(true);
         try {
@@ -41,6 +45,7 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                 sell_rate: parseFloat(sell),
                 wholesale_buy_rate: parseFloat(wholesaleBuy),
                 wholesale_sell_rate: parseFloat(wholesaleSell),
+                wholesale_threshold: parseInt(threshold) || 1000,
                 is_active: isActive // Keep current active status
             });
         } catch (err) {
@@ -141,6 +146,21 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                             placeholder="Опт Прод"
                         />
                     </div>
+                </div>
+
+                {/* Wholesale Threshold */}
+                <div className="text-xs">
+                    <label className="text-[9px] text-accent-yellow/70 block mb-0.5">Поріг опту</label>
+                    <input
+                        type="number"
+                        value={threshold}
+                        onChange={(e) => setThreshold(e.target.value)}
+                        onBlur={handleBlur}
+                        onKeyDown={handleKeyDown}
+                        disabled={isActive === false}
+                        className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-white/70 focus:outline-none focus:border-accent-yellow/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
+                        placeholder="1000"
+                    />
                 </div>
             </div>
 

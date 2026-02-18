@@ -105,7 +105,7 @@ export default function AdminDashboard({ user, onLogout }) {
         const allRatesRes = await adminService.getAllRates();
         setAllRates(allRatesRes.data);
       } catch (e) {
-        console.log('All rates endpoint not available');
+        // All rates endpoint not available
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -642,58 +642,88 @@ export default function AdminDashboard({ user, onLogout }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {currencies.map((currency) => (
-                        <Fragment key={currency.code}>
-                          <tr className="border-b border-white/5">
-                            <td className="py-3 pr-4">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xl">{currency.flag}</span>
-                                <span className="font-bold">{currency.code}</span>
-                              </div>
-                            </td>
-                            <td className="py-3 pr-4 text-text-secondary">{currency.name_uk}</td>
-                            <td className="py-3 pr-4 text-right font-medium text-green-400">
-                              {currency.buy_rate?.toFixed(2)}
-                            </td>
-                            <td className="py-3 pr-4 text-right font-medium text-red-400">
-                              {currency.sell_rate?.toFixed(2)}
-                            </td>
-                            <td className="py-3 pr-4 text-right font-medium text-accent-yellow">
-                              {currency.wholesale_buy_rate > 0 ? currency.wholesale_buy_rate?.toFixed(2) : '-'}
-                            </td>
-                            <td className="py-3 text-right font-medium text-accent-yellow">
-                              {currency.wholesale_sell_rate > 0 ? currency.wholesale_sell_rate?.toFixed(2) : '-'}
-                            </td>
-                            <td className="py-3 pl-4">
-                              <div className="flex items-center justify-center gap-2">
-                                {(currency.seo_buy_image || currency.seo_sell_image) && (
-                                  <img
-                                    src={currency.seo_buy_image || currency.seo_sell_image}
-                                    alt="SEO"
-                                    className="w-8 h-8 rounded-md object-cover border border-white/10"
-                                  />
+                      {currencies.map((currency) => {
+                        // Compute min/max rates across branches
+                        let minBuy = Infinity, maxBuy = -Infinity, minSell = Infinity, maxSell = -Infinity;
+                        let hasBranchRates = false;
+                        if (allRates?.branch_rates) {
+                          Object.values(allRates.branch_rates).forEach(branchCurrs => {
+                            const r = branchCurrs?.[currency.code];
+                            if (r) {
+                              if (r.buy > 0) { minBuy = Math.min(minBuy, r.buy); maxBuy = Math.max(maxBuy, r.buy); hasBranchRates = true; }
+                              if (r.sell > 0) { minSell = Math.min(minSell, r.sell); maxSell = Math.max(maxSell, r.sell); hasBranchRates = true; }
+                            }
+                          });
+                        }
+                        if (minBuy === Infinity) minBuy = 0;
+                        if (maxBuy === -Infinity) maxBuy = 0;
+                        if (minSell === Infinity) minSell = 0;
+                        if (maxSell === -Infinity) maxSell = 0;
+
+                        return (
+                          <Fragment key={currency.code}>
+                            <tr className="border-b border-white/5">
+                              <td className="py-3 pr-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xl">{currency.flag}</span>
+                                  <span className="font-bold">{currency.code}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 pr-4 text-text-secondary">{currency.name_uk}</td>
+                              <td className="py-3 pr-4 text-right font-medium text-green-400">
+                                {currency.buy_rate?.toFixed(2)}
+                                {hasBranchRates && minBuy > 0 && (
+                                  <div className="text-[10px] text-text-secondary font-normal">
+                                    {minBuy === maxBuy ? minBuy.toFixed(2) : `${minBuy.toFixed(2)}–${maxBuy.toFixed(2)}`}
+                                  </div>
                                 )}
-                                <button
-                                  onClick={() => handleSeoEdit(currency)}
-                                  className={`p-1.5 rounded-lg transition-colors ${expandedSeoIds.includes(currency.code) ? 'bg-accent-yellow/20 text-accent-yellow' : 'text-text-secondary hover:text-white hover:bg-white/5'}`}
-                                  title="SEO інформація"
-                                >
-                                  <Globe className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                          {/* SEO Editing Form Row */}
-                          {/* SEO Editing Form Row */}
-                          {expandedSeoIds.includes(currency.code) && (
-                            <SeoEditRow
-                              key={`${currency.code}-seo`}
-                              currency={currency}
-                              onSave={handleSeoSave}
-                              onCancel={() => handleSeoCancel(currency.code)}
-                            />
-                          )}
-                        </Fragment>))}
+                              </td>
+                              <td className="py-3 pr-4 text-right font-medium text-red-400">
+                                {currency.sell_rate?.toFixed(2)}
+                                {hasBranchRates && minSell > 0 && (
+                                  <div className="text-[10px] text-text-secondary font-normal">
+                                    {minSell === maxSell ? minSell.toFixed(2) : `${minSell.toFixed(2)}–${maxSell.toFixed(2)}`}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3 pr-4 text-right font-medium text-accent-yellow">
+                                {currency.wholesale_buy_rate > 0 ? currency.wholesale_buy_rate?.toFixed(2) : '-'}
+                              </td>
+                              <td className="py-3 text-right font-medium text-accent-yellow">
+                                {currency.wholesale_sell_rate > 0 ? currency.wholesale_sell_rate?.toFixed(2) : '-'}
+                              </td>
+                              <td className="py-3 pl-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  {(currency.seo_buy_image || currency.seo_sell_image) && (
+                                    <img
+                                      src={currency.seo_buy_image || currency.seo_sell_image}
+                                      alt="SEO"
+                                      className="w-8 h-8 rounded-md object-cover border border-white/10"
+                                    />
+                                  )}
+                                  <button
+                                    onClick={() => handleSeoEdit(currency)}
+                                    className={`p-1.5 rounded-lg transition-colors ${expandedSeoIds.includes(currency.code) ? 'bg-accent-yellow/20 text-accent-yellow' : 'text-text-secondary hover:text-white hover:bg-white/5'}`}
+                                    title="SEO інформація"
+                                  >
+                                    <Globe className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {/* SEO Editing Form Row */}
+                            {/* SEO Editing Form Row */}
+                            {expandedSeoIds.includes(currency.code) && (
+                              <SeoEditRow
+                                key={`${currency.code}-seo`}
+                                currency={currency}
+                                onSave={handleSeoSave}
+                                onCancel={() => handleSeoCancel(currency.code)}
+                              />
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

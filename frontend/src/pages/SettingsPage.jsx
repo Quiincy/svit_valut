@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import {
   Save, Plus, Trash2, Edit2, X, Phone, Mail, Clock,
   MapPin, MessageSquare, Send, Globe, HelpCircle, Briefcase,
-  ToggleLeft, ToggleRight, DollarSign, Users
+  Users
 } from 'lucide-react';
-import { settingsService, faqService, servicesService, branchService, adminService, currencyService } from '../services/api';
+import { settingsService, faqService, servicesService, branchService, adminService } from '../services/api';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('contacts');
@@ -12,7 +12,7 @@ export default function SettingsPage() {
   const [faqItems, setFaqItems] = useState([]);
   const [services, setServices] = useState([]);
   const [branches, setBranches] = useState([]);
-  const [currencies, setCurrencies] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingFaq, setEditingFaq] = useState(null);
@@ -34,19 +34,17 @@ export default function SettingsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [settingsRes, faqRes, servicesRes, branchesRes, currenciesRes, usersRes] = await Promise.all([
+      const [settingsRes, faqRes, servicesRes, branchesRes, usersRes] = await Promise.all([
         settingsService.get(),
         faqService.getAll(),
         servicesService.getAll(),
         branchService.getAll(),
-        adminService.getCurrencies(),
         adminService.getUsers(),
       ]);
       setSettings(settingsRes.data);
       setFaqItems(faqRes.data);
       setServices(servicesRes.data);
       setBranches(branchesRes.data);
-      setCurrencies(currenciesRes.data);
       setUsers(usersRes.data);
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -210,45 +208,7 @@ export default function SettingsPage() {
     }
   };
 
-  const [editingCurrency, setEditingCurrency] = useState(null);
 
-  const handleToggleCurrency = async (code, isActive) => {
-    try {
-      await adminService.updateCurrency(code, { is_active: !isActive });
-      setCurrencies(currencies.map(c => c.code === code ? { ...c, is_active: !isActive } : c));
-      showMessage(`Валюту ${code} ${!isActive ? 'увімкнено' : 'вимкнено'}`);
-    } catch (error) {
-      showMessage('Помилка оновлення', 'error');
-    }
-  };
-
-  const handleSaveCurrency = async () => {
-    if (!editingCurrency) return;
-    try {
-      await adminService.updateCurrency(editingCurrency.code, {
-        buy_rate: editingCurrency.buy_rate,
-        sell_rate: editingCurrency.sell_rate,
-        wholesale_threshold: editingCurrency.wholesale_threshold
-      });
-
-      setCurrencies(currencies.map(c =>
-        c.code === editingCurrency.code
-          ? {
-            ...c,
-            buy_rate: editingCurrency.buy_rate,
-            sell_rate: editingCurrency.sell_rate,
-            wholesale_threshold: editingCurrency.wholesale_threshold
-          }
-          : c
-      ));
-
-      setEditingCurrency(null);
-      showMessage(`Курс ${editingCurrency.code} оновлено`);
-    } catch (error) {
-      console.error('Error saving currency:', error);
-      showMessage('Помилка збереження курсу', 'error');
-    }
-  };
 
   if (loading) {
     return (
@@ -274,7 +234,6 @@ export default function SettingsPage() {
           { id: 'contacts', label: 'Контакти', icon: Phone },
           { id: 'branches', label: 'Відділення', icon: MapPin },
           { id: 'operators', label: 'Оператори', icon: Users },
-          { id: 'currencies', label: 'Валюти', icon: DollarSign },
           { id: 'faq', label: 'FAQ', icon: HelpCircle },
           { id: 'services', label: 'Послуги', icon: Briefcase },
         ].map((tab) => (
@@ -621,131 +580,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Currencies Tab */}
-      {activeTab === 'currencies' && (
-        <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold">Валюти</h3>
-            <p className="text-sm text-text-secondary">Увімкніть/вимкніть відображення валют</p>
-          </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {currencies.map((currency) => (
-              <div
-                key={currency.code}
-                className={`p-4 rounded-xl border transition-all ${currency.is_active !== false
-                  ? 'bg-primary border-white/10'
-                  : 'bg-primary/50 border-white/5 opacity-60'
-                  }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{currency.flag}</span>
-                    <div>
-                      <div className="font-medium">{currency.code}</div>
-                      <div className="text-xs text-text-secondary">{currency.name_uk}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setEditingCurrency(currency)}
-                      className="p-2 rounded-lg text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
-                      title="Редагувати курс"
-                    >
-                      <Edit2 className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleToggleCurrency(currency.code, currency.is_active !== false)}
-                      className={`p-2 rounded-lg transition-colors ${currency.is_active !== false
-                        ? 'text-green-400 hover:bg-green-400/10'
-                        : 'text-text-secondary hover:bg-white/5'
-                        }`}
-                      title={currency.is_active !== false ? 'Вимкнути' : 'Увімкнути'}
-                    >
-                      {currency.is_active !== false ? (
-                        <ToggleRight className="w-6 h-6" />
-                      ) : (
-                        <ToggleLeft className="w-6 h-6" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-2 flex justify-between text-sm">
-                  <span className="text-green-400">Купівля: {currency.buy_rate?.toFixed(2)}</span>
-                  <span className="text-red-400">Продаж: {currency.sell_rate?.toFixed(2)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Currency Edit Modal */}
-      {editingCurrency && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-primary-light rounded-2xl p-6 max-w-sm w-full border border-white/10">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold flex items-center gap-2">
-                <span className="text-2xl">{editingCurrency.flag}</span>
-                Редагувати {editingCurrency.code}
-              </h3>
-              <button onClick={() => setEditingCurrency(null)} className="p-2 hover:bg-white/5 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-text-secondary mb-2">Курс Купівлі (Ми купуємо)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={editingCurrency.buy_rate}
-                  onChange={(e) => setEditingCurrency({ ...editingCurrency, buy_rate: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-green-400 font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-text-secondary mb-2">Курс Продажу (Ми продаємо)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={editingCurrency.sell_rate}
-                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-red-400 font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-text-secondary mb-2">Поріг опту (сума у валюті)</label>
-                <input
-                  type="number"
-                  value={editingCurrency.wholesale_threshold || 1000}
-                  onChange={(e) => setEditingCurrency({ ...editingCurrency, wholesale_threshold: parseInt(e.target.value) })}
-                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
-                  placeholder="1000"
-                />
-                <p className="text-xs text-text-secondary mt-1">Сума, від якої діє оптовий курс</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setEditingCurrency(null)}
-                className="flex-1 py-3 bg-white/5 rounded-xl hover:bg-white/10"
-              >
-                Скасувати
-              </button>
-              <button
-                onClick={handleSaveCurrency}
-                className="flex-1 py-3 bg-accent-yellow text-primary rounded-xl font-bold hover:brightness-110"
-              >
-                Зберегти
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* FAQ Tab */}
       {activeTab === 'faq' && (

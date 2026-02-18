@@ -117,6 +117,7 @@ class BranchRate(Base):
     sell_rate = Column(Float, nullable=False)
     wholesale_buy_rate = Column(Float, default=0.0)
     wholesale_sell_rate = Column(Float, default=0.0)
+    wholesale_threshold = Column(Integer, default=1000)
     is_active = Column(Boolean, default=True)
     
 
