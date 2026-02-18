@@ -57,7 +57,7 @@ export default function SeoEditRow({ currency, onSave, onCancel }) {
                 seo_sell_image: currency.seo_sell_image || '',
             });
         }
-    }, [currency]);
+    }, [currency.code]);
 
     const handleSave = async () => {
         setIsSaving(true);
