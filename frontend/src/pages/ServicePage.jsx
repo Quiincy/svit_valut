@@ -33,7 +33,10 @@ export default function ServicePage() {
         )}
 
         <h1 className="text-3xl lg:text-4xl font-bold mb-4">{service.title}</h1>
-        <p className="text-lg text-text-secondary mb-8">{service.description}</p>
+        <div
+          className="text-lg text-text-secondary mb-8 prose prose-invert max-w-none"
+          dangerouslySetInnerHTML={{ __html: service.description }}
+        />
 
         {/* Placeholder content - can be dynamic if backend supports content body */}
         <div className="prose prose-invert max-w-none">

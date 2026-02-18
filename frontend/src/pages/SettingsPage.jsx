@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import {
   Save, Plus, Trash2, Edit2, X, Phone, Mail, Clock,
   MapPin, MessageSquare, Send, Globe, HelpCircle, Briefcase,
-  Users
+  Users, Upload, Loader2
 } from 'lucide-react';
 import { settingsService, faqService, servicesService, branchService, adminService } from '../services/api';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('contacts');
@@ -26,6 +28,25 @@ export default function SettingsPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [userForm, setUserForm] = useState({ username: '', password: '', name: '', branch_id: '' });
   const [userSaving, setUserSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const res = await adminService.uploadImage(file);
+      if (res.data && res.data.url) {
+        setEditingService(prev => ({ ...prev, image_url: res.data.url }));
+      }
+    } catch (error) {
+      console.error('Image upload failed:', error);
+      showMessage('Помилка завантаження зображення', 'error');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -829,22 +850,60 @@ export default function SettingsPage() {
 
               <div>
                 <label className="block text-sm text-text-secondary mb-2">Опис</label>
-                <textarea
-                  value={editingService.description}
-                  onChange={(e) => setEditingService({ ...editingService, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none resize-none"
-                />
+                <div className="seo-quill-editor bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                  <ReactQuill
+                    theme="snow"
+                    value={editingService.description}
+                    onChange={(value) => setEditingService({ ...editingService, description: value })}
+                    modules={{
+                      toolbar: [
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                        ['link', 'clean']
+                      ]
+                    }}
+                    className="text-white"
+                    placeholder="Опис послуги..."
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm text-text-secondary mb-2">URL зображення</label>
-                <input
-                  type="text"
-                  value={editingService.image_url || ''}
-                  onChange={(e) => setEditingService({ ...editingService, image_url: e.target.value })}
-                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editingService.image_url || ''}
+                    onChange={(e) => setEditingService({ ...editingService, image_url: e.target.value })}
+                    className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                    placeholder="https://..."
+                  />
+                  <label className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-3 flex items-center justify-center transition-colors">
+                    {uploadingImage ? (
+                      <Loader2 className="w-5 h-5 text-accent-yellow animate-spin" />
+                    ) : (
+                      <Upload className="w-5 h-5 text-text-secondary" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                      disabled={uploadingImage}
+                    />
+                  </label>
+                </div>
+                {editingService.image_url && (
+                  <div className="mt-2 relative w-full h-32 bg-black/20 rounded-xl overflow-hidden border border-white/5 group">
+                    <img src={editingService.image_url} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => setEditingService({ ...editingService, image_url: '' })}
+                      className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
