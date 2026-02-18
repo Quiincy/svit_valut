@@ -377,9 +377,10 @@ export default function HeroSection({
 
                   {/* SEO Text */}
                   {((isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text) && (
-                    <div className="text-gray-400 text-base leading-relaxed max-w-lg whitespace-pre-line">
-                      {(isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text}
-                    </div>
+                    <div
+                      className="seo-page-content max-w-lg"
+                      dangerouslySetInnerHTML={{ __html: (isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text }}
+                    />
                   )}
                 </>
               ) : (
@@ -554,19 +555,21 @@ export default function HeroSection({
             />
           </div>
 
-          <div className="flex flex-col gap-4 text-center items-center">
-            <h1 className="text-3xl font-bold leading-tight">
-              <span className="text-accent-yellow text-4xl">Обмін валют</span>
-              <br />
-              <span className="text-white font-light text-2xl">без ризиків та переплат</span>
-            </h1>
-            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
-              <div className="w-8 h-8 bg-accent-blue/20 rounded-full flex items-center justify-center">
-                <ArrowRight className="w-4 h-4 text-accent-blue transform -rotate-45" />
+          {!hasCurrencyInfo && (
+            <div className="flex flex-col gap-4 text-center items-center">
+              <h1 className="text-3xl font-bold leading-tight">
+                <span className="text-accent-yellow text-4xl">Обмін валют</span>
+                <br />
+                <span className="text-white font-light text-2xl">без ризиків та переплат</span>
+              </h1>
+              <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
+                <div className="w-8 h-8 bg-accent-blue/20 rounded-full flex items-center justify-center">
+                  <ArrowRight className="w-4 h-4 text-accent-blue transform -rotate-45" />
+                </div>
+                <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
               </div>
-              <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
             </div>
-          </div>
+          )}
 
           {/* Mobile Currency Info + Chat (below form) */}
           <div className="mt-6 px-2">
@@ -584,9 +587,10 @@ export default function HeroSection({
                   )}
                 </h2>
                 {((isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text) && (
-                  <p className="text-gray-400 text-sm mt-3 whitespace-pre-line">
-                    {(isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text}
-                  </p>
+                  <div
+                    className="seo-page-content text-sm mt-3"
+                    dangerouslySetInnerHTML={{ __html: (isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text }}
+                  />
                 )}
                 {((isSellMode ? currencyInfo.seo_sell_image : currencyInfo.seo_buy_image) || currencyInfo.seo_image) && (
                   <div className="rounded-xl overflow-hidden border border-white/10 mt-4">
