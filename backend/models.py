@@ -68,6 +68,7 @@ class ArticleItem(Base):
 class Branch(Base):
     __tablename__ = "branches"
     id = Column(Integer, primary_key=True, index=True)
+    number = Column(Integer, default=0)
     address = Column(String, nullable=False)
     hours = Column(String, nullable=False)
     lat = Column(Float, nullable=False)
@@ -76,6 +77,7 @@ class Branch(Base):
     phone = Column(String, nullable=True)
     telegram_chat = Column(String, nullable=True)
     cashier = Column(String, nullable=True)
+    order = Column(Integer, default=0)
     
     reservations = relationship("Reservation", back_populates="branch")
     rates = relationship("BranchRate", back_populates="branch")
@@ -161,3 +163,28 @@ class Currency(Base):
     seo_sell_image = Column(String, nullable=True)
 
     wholesale_threshold = Column(Integer, default=1000)
+
+class ChatSessionStatus(str, enum.Enum):
+    ACTIVE = "active"
+    CLOSED = "closed"
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, unique=True, index=True, nullable=False) # UUID from frontend
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    last_message_at = Column(DateTime, default=datetime.datetime.utcnow)
+    status = Column(SQLEnum(ChatSessionStatus), default=ChatSessionStatus.ACTIVE)
+    
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=False)
+    sender = Column(String, nullable=False) # 'user' or 'admin'
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    is_read = Column(Boolean, default=False)
+    
+    session = relationship("ChatSession", back_populates="messages")

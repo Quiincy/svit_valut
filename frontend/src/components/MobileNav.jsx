@@ -46,7 +46,9 @@ export default function MobileNav({ isOpen, onClose, settings, currencies = [], 
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/5">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Svit Valut" className="h-8 w-auto object-contain" />
+            <div onClick={() => { onClose(); navigate('/'); }} className="cursor-pointer">
+              <img src="/logo.png" alt="Svit Valut" className="h-8 w-auto object-contain" />
+            </div>
           </div>
           <button
             onClick={onClose}

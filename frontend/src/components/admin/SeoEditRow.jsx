@@ -8,6 +8,7 @@ import 'react-quill/dist/quill.snow.css';
 const QUILL_MODULES = {
     toolbar: [
         [{ 'header': [2, 3, 4, false] }],
+        [{ 'size': ['small', false, 'large', 'huge'] }],
         ['bold', 'italic', 'underline', 'strike'],
         [{ 'list': 'ordered' }, { 'list': 'bullet' }],
         ['link'],
@@ -16,7 +17,7 @@ const QUILL_MODULES = {
 };
 
 const QUILL_FORMATS = [
-    'header', 'bold', 'italic', 'underline', 'strike',
+    'header', 'size', 'bold', 'italic', 'underline', 'strike',
     'list', 'bullet', 'link'
 ];
 

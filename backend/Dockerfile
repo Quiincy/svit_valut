@@ -4,9 +4,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# System dependencies are pre-installed in psycopg2-binary, so no apt-get needed here.
 
 # Copy requirements first for caching
 COPY requirements.txt .

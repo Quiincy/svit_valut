@@ -3,13 +3,14 @@ import {
   Upload, Download, LogOut, RefreshCw, CheckCircle,
   XCircle, Clock, DollarSign, TrendingUp, FileSpreadsheet,
   AlertCircle, ChevronDown, Search, Building2, ArrowRightLeft,
-  MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X, Globe, Save
+  MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X, Globe, Save, MessageCircle, MessageSquare
 } from 'lucide-react';
 import BranchRateCard from '../components/admin/BranchRateCard';
 import SeoEditRow from '../components/admin/SeoEditRow';
 
 import { adminService, currencyService } from '../services/api';
 import SettingsPage from './SettingsPage';
+import { useAudioNotification } from '../hooks/useAudioNotification';
 import * as XLSX from 'xlsx';
 
 const STATUS_CONFIG = {
@@ -59,8 +60,9 @@ export default function AdminDashboard({ user, onLogout }) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [newReservationAlert, setNewReservationAlert] = useState(false);
+  const playNotification = useAudioNotification();
 
-  const [lastReservationCount, setLastReservationCount] = useState(0);
+  const [lastReservationTime, setLastReservationTime] = useState(null);
   const fileInputRef = useRef(null);
 
   const [branches, setBranches] = useState([]);
@@ -77,6 +79,13 @@ export default function AdminDashboard({ user, onLogout }) {
   // SEO
   const [expandedSeoIds, setExpandedSeoIds] = useState([]); // List of currency codes being edited
 
+  // Chat state
+  const [chatSessions, setChatSessions] = useState([]);
+  const [activeChatId, setActiveChatId] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatMessagesEndRef = useRef(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -94,11 +103,16 @@ export default function AdminDashboard({ user, onLogout }) {
       const items = reservationsRes.data.items || [];
 
       // Check for new reservations
-      if (items.length > lastReservationCount && lastReservationCount > 0) {
-        setNewReservationAlert(true);
-        setTimeout(() => setNewReservationAlert(false), 5000);
+      if (items.length > 0) {
+        const currentLatestTime = new Date(items[0].created_at).getTime();
+        if (lastReservationTime && currentLatestTime > lastReservationTime) {
+          setNewReservationAlert(true);
+          // Play notification sound
+          playNotification();
+          setTimeout(() => setNewReservationAlert(false), 5000);
+        }
+        setLastReservationTime(currentLatestTime);
       }
-      setLastReservationCount(items.length);
       setReservations(items);
 
       try {
@@ -120,7 +134,7 @@ export default function AdminDashboard({ user, onLogout }) {
     } finally {
       setLoading(false);
     }
-  }, [lastReservationCount, dateFrom, dateTo]);
+  }, [lastReservationTime, dateFrom, dateTo]);
 
   // Initial fetch and auto-refresh every 15 seconds
   useEffect(() => {
@@ -129,8 +143,89 @@ export default function AdminDashboard({ user, onLogout }) {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
+  // Extract customer name from the first auto-message
+  const getCustomerName = (sessionList, id) => {
+    const session = sessionList.find(s => s.session_id === id);
+    if (!session) return '';
+    const welcomeMsg = session.messages?.find(m => m.sender === 'user' && m.content.includes('Мене звати'));
+    const nameMatch = welcomeMsg?.content.match(/Мене звати (.*?)\./);
+    return nameMatch ? nameMatch[1] : '';
+  };
+
+
+  // Chat polling
+  const prevUnreadRef = useRef(0);
+  useEffect(() => {
+    const fetchChats = async () => {
+      try {
+        const res = await adminService.getChatSessions();
+        if (res?.data) {
+          const sessions = res.data;
+          setChatSessions(sessions);
+
+          let totalUnread = 0;
+          sessions.forEach(s => {
+            totalUnread += s.messages?.filter(m => m.sender === 'user' && !m.is_read).length || 0;
+          });
+
+          if (totalUnread > prevUnreadRef.current) {
+            playNotification();
+          }
+          prevUnreadRef.current = totalUnread;
+        }
+      } catch (err) { }
+    };
+    fetchChats();
+    const chatInterval = setInterval(fetchChats, 3000);
+    return () => clearInterval(chatInterval);
+  }, [playNotification]);
+
+  useEffect(() => {
+    if (activeChatId) {
+      const fetchMsgs = async () => {
+        try {
+          const res = await adminService.getChatMessages(activeChatId);
+          if (res?.data) {
+            setChatMessages(res.data);
+            adminService.markChatRead(activeChatId).catch(() => { });
+          }
+        } catch (err) { }
+      };
+      fetchMsgs();
+      const msgInterval = setInterval(fetchMsgs, 3000);
+      return () => clearInterval(msgInterval);
+    }
+  }, [activeChatId]);
+
+  useEffect(() => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, activeChatId]);
+
+  const handleSendAdminMessage = async (e) => {
+    if (e) e.preventDefault();
+    if (!chatInput.trim() || !activeChatId) return;
+
+    const content = chatInput.trim();
+    setChatInput('');
+
+    const optimisticMessage = {
+      id: Date.now(),
+      sender: 'admin',
+      content,
+      created_at: new Date().toISOString()
+    };
+    setChatMessages(prev => [...prev, optimisticMessage]);
+
+    try {
+      setChatLoading(true);
+      await adminService.sendChatMessage(activeChatId, { sender: 'admin', content });
+    } catch (err) { } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
     if (!file) return;
 
     setUploading(true);
@@ -342,6 +437,14 @@ export default function AdminDashboard({ user, onLogout }) {
           </div>
 
           <div className="flex items-center gap-4">
+            <button
+              onClick={playNotification}
+              className="p-2 bg-accent-yellow/20 text-accent-yellow hover:bg-accent-yellow hover:text-primary rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              title="Перевірити звук"
+            >
+              <Bell className="w-4 h-4" />
+              Тест звуку
+            </button>
             <div className="text-right">
               <div className="font-medium text-sm">{user.name}</div>
               <div className="text-xs text-accent-yellow">Адміністратор</div>
@@ -426,13 +529,36 @@ export default function AdminDashboard({ user, onLogout }) {
           </button>
           <button
             onClick={() => setActiveTab('reservations')}
-            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${activeTab === 'reservations'
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all relative ${activeTab === 'reservations'
               ? 'bg-accent-yellow text-primary'
-              : 'bg-primary-light text-text-secondary hover:text-white'
+              : dashboard?.pending_reservations > 0
+                ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 animate-pulse'
+                : 'bg-primary-light text-text-secondary hover:text-white'
               }`}
           >
             <Building2 className="w-4 h-4 inline mr-2" />
             Бронювання
+            {dashboard?.pending_reservations > 0 && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-ping"></span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('chats')}
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all relative ${activeTab === 'chats'
+              ? 'bg-accent-yellow text-primary'
+              : chatSessions.some(c => c.messages?.some(m => m.sender === 'user' && !m.is_read))
+                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 animate-pulse'
+                : 'bg-primary-light text-text-secondary hover:text-white'
+              }`}
+          >
+            <MessageSquare className="w-4 h-4 inline mr-2" />
+            Чати
+            {chatSessions.some(c => c.messages?.some(m => m.sender === 'user' && !m.is_read)) && (
+              <Fragment>
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
+              </Fragment>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -742,7 +868,7 @@ export default function AdminDashboard({ user, onLogout }) {
                           <div className="flex items-center gap-2">
                             <MapPin className="w-4 h-4 text-accent-blue" />
                             <span className="font-medium">{branch.address}</span>
-                            <span className="text-xs text-text-secondary">(ID: {branch.id})</span>
+                            <span className="text-xs text-text-secondary">(№ {branch.number || branch.id})</span>
                           </div>
                           <button
                             onClick={() => openAddRateModal(branch.id)}
@@ -874,7 +1000,13 @@ export default function AdminDashboard({ user, onLogout }) {
                       const StatusIcon = statusCfg.icon;
 
                       return (
-                        <tr key={res.id} className="border-b border-white/5 hover:bg-white/5">
+                        <tr
+                          key={res.id}
+                          className={`border-b border-white/5 transition-colors ${res.status === 'pending_admin'
+                            ? 'bg-accent-yellow/10 animate-pulse hover:bg-accent-yellow/20'
+                            : 'hover:bg-white/5'
+                            }`}
+                        >
                           <td className="py-4 pr-4 font-mono text-sm">#{res.id}</td>
                           <td className="py-4 pr-4">
                             <div className="text-sm font-medium">{res.customer_name || '—'}</div>
@@ -1024,6 +1156,120 @@ export default function AdminDashboard({ user, onLogout }) {
             </div>
           </div>
         )}
+
+        {/* Chats Tab */}
+        {activeTab === 'chats' && (
+          <div className="flex gap-6 h-[600px] mt-4">
+            {/* Chat List */}
+            <div className="w-1/3 bg-primary-light border border-white/10 rounded-2xl flex flex-col overflow-hidden">
+              <div className="p-4 border-b border-white/10 bg-white/5 font-bold flex items-center gap-2">
+                <MessageCircle className="w-5 h-5 text-accent-yellow" />
+                Активні чати
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                {chatSessions.length === 0 ? (
+                  <div className="text-center text-text-secondary py-8 text-sm">Немає активних чатів</div>
+                ) : (
+                  chatSessions.map(session => {
+                    const unread = session.messages?.filter(m => m.sender === 'user' && !m.is_read).length || 0;
+                    const cName = getCustomerName(chatSessions, session.session_id);
+                    return (
+                      <button
+                        key={session.session_id}
+                        onClick={() => setActiveChatId(session.session_id)}
+                        className={`w-full text-left p-4 rounded-xl transition-all border ${activeChatId === session.session_id ? 'bg-primary border-accent-yellow' : 'bg-primary/50 border-white/5 hover:bg-primary border-transparent'}`}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-sm text-white">Чат {session.session_id.substring(0, 8)} {cName && <span className="text-text-secondary font-normal">({cName})</span>}</span>
+                          {unread > 0 && <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{unread} нових</span>}
+                        </div>
+                        <div className="text-xs text-text-secondary truncate">
+                          {session.messages?.[session.messages.length - 1]?.content || 'Немає повідомлень'}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Chat View */}
+            <div className="w-2/3 bg-primary-light border border-white/10 rounded-2xl flex flex-col overflow-hidden">
+              {!activeChatId ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-text-secondary opacity-50">
+                  <MessageSquare className="w-12 h-12 mb-4" />
+                  <p>Оберіть чат зі списку зліва</p>
+                </div>
+              ) : (
+                <>
+                  <div className="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
+                    <div className="font-bold text-white flex items-center gap-2">
+                      <MessageCircle className="w-4 h-4 text-accent-yellow" />
+                      Чат {activeChatId.substring(0, 8)} {getCustomerName(chatSessions, activeChatId) && <span className="text-text-secondary font-normal">({getCustomerName(chatSessions, activeChatId)})</span>}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (window.confirm('Закрити цей чат?')) {
+                          await adminService.closeChatSession(activeChatId);
+                          setActiveChatId(null);
+                          // refresh list
+                          const res = await adminService.getChatSessions();
+                          if (res?.data) setChatSessions(res.data);
+                        }
+                      }}
+                      className="text-xs text-red-400 hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Закрити чат
+                    </button>
+                  </div>
+
+                  <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-primary/30">
+                    {chatMessages.length === 0 ? (
+                      <div className="text-center text-text-secondary py-8">Немає повідомлень</div>
+                    ) : (
+                      chatMessages.map(msg => {
+                        const isAdmin = msg.sender === 'admin';
+                        return (
+                          <div key={msg.id} className={`flex flex-col ${isAdmin ? 'items-end' : 'items-start'}`}>
+                            <div className={`max-w-[80%] rounded-2xl px-4 py-2 ${isAdmin ? 'bg-accent-yellow text-primary rounded-br-none' : 'bg-white/10 text-white rounded-bl-none'}`}>
+                              <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                            </div>
+                            <span className="text-[10px] text-text-secondary mt-1 px-1">
+                              {new Date(msg.created_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                    <div ref={chatMessagesEndRef} />
+                  </div>
+
+                  <div className="p-4 border-t border-white/10 bg-white/5">
+                    <form onSubmit={handleSendAdminMessage} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={chatInput}
+                        onChange={e => setChatInput(e.target.value)}
+                        placeholder="Введіть відповідь..."
+                        disabled={chatLoading}
+                        className="flex-1 px-4 py-3 bg-primary border border-white/10 rounded-xl focus:border-accent-yellow focus:outline-none text-sm text-white disabled:opacity-50"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!chatInput.trim() || chatLoading}
+                        className="px-6 py-3 bg-accent-yellow text-primary font-bold rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        <Send className="w-4 h-4" />
+                        Відправити
+                      </button>
+                    </form>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
 
         {/* Reservation Edit Modal */}
         {editingReservation && (

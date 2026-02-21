@@ -1,67 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Send, MessageSquare, Minimize2, User } from 'lucide-react';
+import { chatService } from '../services/api';
 
 // Generate unique chat ID
 const getChatId = () => {
   let chatId = localStorage.getItem('chatId');
   if (!chatId) {
-    chatId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    chatId = crypto.randomUUID();
     localStorage.setItem('chatId', chatId);
   }
   return chatId;
-};
-
-// Get/save chat messages from localStorage
-const getChatMessages = (chatId) => {
-  try {
-    const stored = localStorage.getItem(`chat_messages_${chatId}`);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveChatMessages = (chatId, messages) => {
-  localStorage.setItem(`chat_messages_${chatId}`, JSON.stringify(messages));
-  // Also save to global chats list for admin
-  const allChats = getAllChats();
-  const existingIndex = allChats.findIndex(c => c.id === chatId);
-  const chatData = {
-    id: chatId,
-    lastMessage: messages[messages.length - 1]?.text || '',
-    lastTime: messages[messages.length - 1]?.time || new Date().toISOString(),
-    unread: messages.filter(m => m.from === 'customer' && !m.read).length,
-    customerName: localStorage.getItem('chatCustomerName') || 'Гість',
-  };
-  if (existingIndex >= 0) {
-    allChats[existingIndex] = chatData;
-  } else {
-    allChats.push(chatData);
-  }
-  localStorage.setItem('allChats', JSON.stringify(allChats));
-};
-
-export const getAllChats = () => {
-  try {
-    return JSON.parse(localStorage.getItem('allChats') || '[]');
-  } catch {
-    return [];
-  }
-};
-
-export const getChatById = (chatId) => {
-  return getChatMessages(chatId);
-};
-
-export const sendOperatorMessage = (chatId, text) => {
-  const messages = getChatMessages(chatId);
-  messages.push({
-    id: Date.now(),
-    from: 'operator',
-    text,
-    time: new Date().toISOString(),
-  });
-  saveChatMessages(chatId, messages);
 };
 
 export default function LiveChat({ isOpen, onClose }) {
@@ -72,6 +20,7 @@ export default function LiveChat({ isOpen, onClose }) {
   const [minimized, setMinimized] = useState(false);
   const messagesEndRef = useRef(null);
   const chatId = getChatId();
+  const pollIntervalRef = useRef(null);
 
   // Chat availability — 7:30–20:30 Kyiv time
   const isChatAvailable = () => {
@@ -89,68 +38,86 @@ export default function LiveChat({ isOpen, onClose }) {
       setNameSubmitted(true);
     }
 
-    const savedMessages = getChatMessages(chatId);
-    setMessages(savedMessages);
+    // Initialize session on backend
+    chatService.initSession({ session_id: chatId }).catch(console.error);
 
-    // Poll for new messages
-    const interval = setInterval(() => {
-      const updated = getChatMessages(chatId);
-      setMessages(updated);
-    }, 2000);
+    fetchMessages();
+    pollIntervalRef.current = setInterval(fetchMessages, 3000);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
   }, [chatId]);
+
+  const fetchMessages = async () => {
+    try {
+      const res = await chatService.getMessages(chatId);
+      if (res && res.data) {
+        setMessages(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching messages:', err);
+    }
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!input.trim()) return;
 
+    const messageContent = input.trim();
+    setInput('');
+
+    // Optimistic update
     const newMessage = {
       id: Date.now(),
-      from: 'customer',
-      text: input.trim(),
-      time: new Date().toISOString(),
+      sender: 'user',
+      content: messageContent,
+      created_at: new Date().toISOString(),
     };
+    setMessages(prev => [...prev, newMessage]);
 
-    const updatedMessages = [...messages, newMessage];
-    setMessages(updatedMessages);
-    saveChatMessages(chatId, updatedMessages);
-    setInput('');
+    try {
+      await chatService.sendMessage(chatId, { sender: 'user', content: messageContent });
+      fetchMessages();
+    } catch (err) {
+      console.error('Error sending message:', err);
+    }
   };
 
-  const handleNameSubmit = () => {
+  const handleNameSubmit = async () => {
     if (!customerName.trim()) return;
     localStorage.setItem('chatCustomerName', customerName.trim());
     setNameSubmitted(true);
 
-    // Send welcome message
-    const welcomeMessage = {
-      id: Date.now(),
-      from: 'operator',
-      text: `Привіт, ${customerName.trim()}! Чим можу допомогти?`,
-      time: new Date().toISOString(),
-      auto: true,
-    };
-    const updatedMessages = [welcomeMessage];
-    setMessages(updatedMessages);
-    saveChatMessages(chatId, updatedMessages);
+    // Instead of local fake welcome message, we send a system-like automated first message 
+    // to give the admin the user's name, or we can just send it as a regular message from the user.
+    try {
+      await chatService.sendMessage(chatId, {
+        sender: 'user',
+        content: `👋 Привіт! Мене звати ${customerName.trim()}.\n(Користувач розпочав чат)`
+      });
+      fetchMessages();
+    } catch (err) {
+      console.error('Error sending welcome ping:', err);
+    }
   };
 
   if (!isOpen) return null;
 
   if (minimized) {
+    const unreadAdminCount = messages.filter(m => m.sender === 'admin' && !m.is_read).length;
     return (
       <button
         onClick={() => setMinimized(false)}
         className="fixed bottom-4 right-4 z-[100] w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
       >
         <MessageSquare className="w-6 h-6 text-primary" />
-        {messages.filter(m => m.from === 'operator' && !m.read).length > 0 && (
+        {unreadAdminCount > 0 && (
           <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center text-white">
-            !
+            {unreadAdminCount}
           </span>
         )}
       </button>
@@ -224,17 +191,17 @@ export default function LiveChat({ isOpen, onClose }) {
               messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex ${msg.from === 'customer' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${msg.from === 'customer'
+                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${msg.sender === 'user'
                       ? 'bg-accent-yellow text-primary rounded-br-sm'
-                      : 'bg-primary border border-white/10 rounded-bl-sm'
+                      : 'bg-primary border border-white/10 rounded-bl-sm text-white'
                       }`}
                   >
-                    <p className="text-sm">{msg.text}</p>
-                    <p className={`text-xs mt-1 ${msg.from === 'customer' ? 'text-primary/60' : 'text-text-secondary'}`}>
-                      {new Date(msg.time).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-primary/60' : 'text-text-secondary'}`}>
+                      {new Date(msg.created_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
@@ -253,7 +220,7 @@ export default function LiveChat({ isOpen, onClose }) {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Напишіть повідомлення..."
-                  className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm"
+                  className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm text-white"
                 />
                 <button
                   onClick={handleSendMessage}
@@ -274,7 +241,7 @@ export default function LiveChat({ isOpen, onClose }) {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Залишити повідомлення..."
-                    className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm"
+                    className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm text-white"
                   />
                   <button
                     onClick={handleSendMessage}

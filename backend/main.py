@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, Response
 # Reload trigger
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -33,6 +34,10 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:3000",
         "https://svit-valut-front.onrender.com",
+        "https://mirvalut.com",
+        "http://mirvalut.com",
+        "https://test.mirvalut.com",
+        "http://test.mirvalut.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -212,6 +217,7 @@ class Order(BaseModel):
 
 class Branch(BaseModel):
     id: int
+    number: int = 0
     address: str
     hours: str
     lat: float
@@ -233,6 +239,42 @@ class RatesUploadResponse(BaseModel):
     message: str
     updated_currencies: int
     errors: List[str] = []
+
+class ChatMessageBase(BaseModel):
+    sender: str
+    content: str
+
+class ChatMessageCreate(ChatMessageBase):
+    pass
+
+class ChatMessage(ChatMessageBase):
+    id: int
+    session_id: int
+    created_at: datetime
+    is_read: bool
+    
+    class Config:
+        from_attributes = True
+
+class ChatSessionStatusEnum(str, enum.Enum):
+    ACTIVE = "active"
+    CLOSED = "closed"
+
+class ChatSessionBase(BaseModel):
+    session_id: str
+    
+class ChatSessionCreate(ChatSessionBase):
+    pass
+
+class ChatSession(ChatSessionBase):
+    id: int
+    created_at: datetime
+    last_message_at: datetime
+    status: ChatSessionStatusEnum
+    messages: List[ChatMessage] = []
+
+    class Config:
+        from_attributes = True
 
 class DashboardStats(BaseModel):
     total_reservations: int
@@ -511,7 +553,40 @@ def get_branch_address(branch_id: int) -> Optional[str]:
     return branch.address if branch else None
 
 # Routes
-@app.get("/")
+@app.get("/api/my-location")
+async def get_my_location():
+    """Detect user location via IP using external services (Server-side to avoid CORS)"""
+    import json
+    
+    # List of providers with their parser logic
+    # (url, lambda data: (lat, lng))
+    providers = [
+        ("https://ipwho.is/", lambda d: (d.get("latitude"), d.get("longitude")) if d.get("success") is not False else (None, None)),
+        ("https://freeipapi.com/api/json", lambda d: (d.get("latitude"), d.get("longitude"))),
+        ("https://ipapi.co/json/", lambda d: (d.get("latitude"), d.get("longitude"))),
+    ]
+
+    for url, parser in providers:
+        try:
+            # Set a user agent to avoid being blocked by some APIs
+            req = urllib.request.Request(
+                url, 
+                data=None, 
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            )
+            with urllib.request.urlopen(req, timeout=3) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode())
+                    lat, lng = parser(data)
+                    if lat is not None and lng is not None:
+                        return {"lat": float(lat), "lng": float(lng), "source": url}
+        except Exception as e:
+            print(f"Geo provider {url} failed: {e}")
+            continue
+            
+    raise HTTPException(status_code=500, detail="Could not determine location")
+
+@app.get("/api/")
 async def root():
     return {"message": "Світ Валют API", "version": "2.0.0"}
 
@@ -811,7 +886,7 @@ async def get_orders_count():
 @app.get("/api/branches", response_model=list[Branch])
 async def get_branches(db: Session = Depends(get_db)):
     """Get all branches"""
-    return db.query(models.Branch).all()
+    return db.query(models.Branch).order_by(models.Branch.order.asc()).all()
 
 @app.get("/api/branches/{branch_id}", response_model=Branch)
 async def get_branch(branch_id: int, db: Session = Depends(get_db)):
@@ -1048,6 +1123,7 @@ async def upload_rates(
         errors = []
         base_updated = 0
         branch_updated = 0
+        processed_codes = set()
         
         # 1. Process BASE RATES
         base_sheet = None
@@ -1058,7 +1134,120 @@ async def upload_rates(
         else:
             base_sheet = xlsx.sheet_names[0]
         
-        df_base = pd.read_excel(xlsx, sheet_name=base_sheet)
+        # Detect format:
+        # Standard: Row 0 = Headers
+        # Old "ID" row: Row 0 = ID, Row 1 = Headers
+        # New "3-row": Row 0 = Number, Row 1 = Address, Row 2 = Headers
+        
+        # Read first 3 rows
+        df_preview = pd.read_excel(xlsx, sheet_name=base_sheet, header=None, nrows=3)
+        
+        header_row = 0
+        branch_col_map = {} # {col_idx: branch_id} - actually branch object or ID
+        branch_col_definitions = {} # {col_idx: {'branch_id': ..., 'type': ...}}
+        
+        if not df_preview.empty and df_preview.shape[0] >= 3:
+             row0 = df_preview.iloc[0].astype(str).values
+             row1 = df_preview.iloc[1].astype(str).values
+             # Check for "№" or "ID" in Row 0
+             has_id_row0 = any(x for x in row0 if 'ID:' in str(x) or '№' in str(x) or 'No' in str(x))
+             
+             # Check for "Address" like strings in Row 1? 
+             # Actually, if Row 0 has "№", we assume it's one of the fancy formats.
+             # If Row 1 has strings that look like addresses, we likely have 3-row format.
+             # If Row 2 has "Code/Currency" headers, then it's 3-row.
+             
+             row2 = df_preview.iloc[2].astype(str).values
+             has_headers_row2 = any(x for x in row2 if 'Код' in str(x) or 'Code' in str(x) or 'Валюта' in str(x))
+             
+             if has_id_row0 and has_headers_row2:
+                 header_row = 2
+                 # 3-Row Format Detected
+                 current_branch = None
+                 
+                 for i in range(3, len(row0)):
+                     # Check if this column starts a new branch block (merged cell)
+                     addr_val = str(row1[i]).strip()
+                     number_val = str(row0[i]).strip()
+                     
+                     if addr_val and addr_val != 'nan':
+                         # New branch block start
+                         branch = db.query(models.Branch).filter(models.Branch.address == addr_val).first()
+                         if not branch:
+                             branch = db.query(models.Branch).filter(models.Branch.address.ilike(f"%{addr_val}%")).first()
+                         
+                         if branch:
+                             current_branch = branch
+                             # Update number and order logic
+                             new_number = None
+                             if number_val and number_val != 'nan':
+                                 import re
+                                 match = re.search(r'(\d+)', number_val)
+                                 if match:
+                                     new_number = int(match.group(1))
+                             
+                             needs_update = False
+                             if new_number is not None and new_number != branch.number:
+                                 branch.number = new_number
+                                 needs_update = True
+                                 
+                             # The order matches the sequence of encounters in the row, 1-indexed (could track separately)
+                             # Or use logic to set order based on the 'i' column index directly. 
+                             # Since each branch starts at 'i', 'i' naturally sorts them left-to-right.
+                             if branch.order != i:
+                                 branch.order = i
+                                 needs_update = True
+                                 
+                             if needs_update:
+                                 db.add(branch)
+                     
+                     # Map THIS column based on header in Row 2
+                     if current_branch:
+                         header_val = str(row2[i]).lower()
+                         rate_type = None
+                         print(f"DEBUG: Col {i} Header: '{header_val}'")
+                         
+                         if 'опт' in header_val:
+                             if 'куп' in header_val: rate_type = 'wholesale_buy'
+                             elif 'прод' in header_val: rate_type = 'wholesale_sell'
+                         else:
+                             if 'куп' in header_val: rate_type = 'buy'
+                             elif 'прод' in header_val: rate_type = 'sell'
+                         
+                         print(f"DEBUG: Rate Type: {rate_type}")
+                         
+                         if rate_type:
+                             branch_col_definitions[i] = {'branch_id': current_branch.id, 'type': rate_type}
+                 
+                 print(f"DEBUG: Final Definitions: {branch_col_definitions}")
+
+             elif has_id_row0:
+                 # 2-Row Format (Old "ID" row)
+                 header_row = 1
+                 # Parse IDs from Row 0
+                 order_counter = 1
+                 for i in range(3, len(row0)):
+                    val = str(row0[i])
+                    if any(marker in val for marker in ['ID:', '№', 'Nr', 'No']):
+                        try:
+                            import re
+                            match = re.search(r'(\d+)', val)
+                            if match:
+                                bid = int(match.group(1))
+                                branch_col_map[i] = bid
+                                
+                                # Update order in DB
+                                b = db.query(models.Branch).filter(models.Branch.id == bid).first()
+                                if b and b.order != order_counter:
+                                    b.order = order_counter
+                                    db.add(b)
+                                order_counter += 1
+                        except:
+                            pass
+
+        # Read actual data
+        df_base = pd.read_excel(xlsx, sheet_name=base_sheet, header=header_row)
+        print(f"DEBUG: Header Row: {header_row}, DF Shape: {df_base.shape}")
         
         # Deduplicate base columns
         new_cols_base = []
@@ -1074,13 +1263,11 @@ async def upload_rates(
         df_base.columns = new_cols_base
         
         # Find columns
-        # Find columns (Improved logic for 'Валюта' header)
+        # ... (standard find logic)
         code_col = next((c for c in df_base.columns if any(x in c for x in ['код', 'code', 'iso'])), None)
-        # If code col not found with strict names, try softer ones (but avoid 'назва')
         if not code_col:
              code_col = next((c for c in df_base.columns if any(x in c for x in ['валют', 'currency']) and not any(x in c for x in ['назва', 'name'])), None)
              
-        # Name col: Must be distinct from code_col
         name_col = next((c for c in df_base.columns if c != code_col and any(x in c for x in ['назва', 'name', 'валют', 'currency'])), None)
         buy_col = next((c for c in df_base.columns if any(x in c for x in ['купів', 'buy', 'покуп']) and not 'опт' in str(c).lower()), None)
         sell_col = next((c for c in df_base.columns if any(x in c for x in ['прода', 'sell']) and not 'опт' in str(c).lower()), None)
@@ -1088,45 +1275,49 @@ async def upload_rates(
         wholesale_sell_col = next((c for c in df_base.columns if 'опт' in str(c).lower() and any(x in c for x in ['прода', 'sell'])), None)
         flag_col = next((c for c in df_base.columns if any(x in c for x in ['прапор', 'flag'])), None)
         
-        # Heuristic: If code_col looks like "Name" (e.g. "Назва валюти"), try searching for 3-letter codes
-        # (This is handled by ensuring code_col avoids 'назва' above, but let's keep logic safe)
         if code_col and 'валют' in code_col and not 'код' in code_col:
              first_valid = df_base[df_base[code_col].notna()].head(1)
              if not first_valid.empty and len(str(first_valid.iloc[0][code_col])) > 3:
                  code_col = None
-
+ 
         if not code_col or code_col == buy_col or code_col == sell_col:
              for col in df_base.columns:
                  sample = df_base[df_base[col].notna()].head(3)
                  if not sample.empty and all(len(str(x).strip()) == 3 and str(x).strip().isalpha() for x in sample[col]):
                      code_col = col
                      break
-
+ 
         if code_col and buy_col and sell_col:
-            for _, row in df_base.iterrows():
+            for idx, row in df_base.iterrows():
+                if idx < 3: print(f"DEBUG: Process Loop Row {idx}")
                 try:
                     code_val = row[code_col]
                     if pd.isna(code_val): continue
                     code = str(code_val).strip().upper()
                     if len(code) != 3: continue
                     
-                    buy_rate = float(row[buy_col])
-                    sell_rate = float(row[sell_col])
+                    try:
+                        b_val = str(row[buy_col]).replace(',', '.').replace(' ', '').strip()
+                        buy_rate = float(b_val)
+                        s_val = str(row[sell_col]).replace(',', '.').replace(' ', '').strip()
+                        sell_rate = float(s_val)
+                    except:
+                        continue
                     
                     if buy_rate <= 0 or sell_rate <= 0: continue
                     
                     wholesale_buy = 0.0
                     wholesale_sell = 0.0
                     if wholesale_buy_col and pd.notna(row[wholesale_buy_col]):
-                        try:
-                            wholesale_buy = float(row[wholesale_buy_col])
-                        except:
-                            pass
+                         try: 
+                             wb_val = str(row[wholesale_buy_col]).replace(',', '.').replace(' ', '').strip()
+                             wholesale_buy = float(wb_val)
+                         except: pass
                     if wholesale_sell_col and pd.notna(row[wholesale_sell_col]):
-                        try:
-                            wholesale_sell = float(row[wholesale_sell_col])
-                        except:
-                            pass
+                         try: 
+                             ws_val = str(row[wholesale_sell_col]).replace(',', '.').replace(' ', '').strip()
+                             wholesale_sell = float(ws_val)
+                         except: pass
                     
                     # Determine Flag
                     flag = "🏳️"
@@ -1140,6 +1331,58 @@ async def upload_rates(
                     if name_col and pd.notna(row[name_col]):
                         name_uk = str(row[name_col]).strip()
                     
+                    # 2. Process BRANCH RATES
+                    branch_updates = {} # {branch_id: {buy: ..., sell: ..., ...}}
+                    
+                    if branch_col_definitions:
+                        # Pre-fill all branches so backfill works even if local rates are empty
+                        for defs in branch_col_definitions.values():
+                             if defs['branch_id'] not in branch_updates:
+                                 branch_updates[defs['branch_id']] = {}
+
+                        if idx < 3:
+                             print(f"DEBUG: Row {idx} Values: {row.values.tolist()}")
+                        
+                        for col_idx, defs in branch_col_definitions.items():
+                            if col_idx >= len(row): continue
+                            
+                            val = row.iloc[col_idx]
+                            
+                            if pd.isna(val): continue
+                            
+                            try:
+                                val_str = str(val).replace(',', '.').replace(' ', '').strip()
+                                val_float = float(val_str)
+                                
+                                if val_float <= 0: continue
+                                
+                                b_id = defs['branch_id']
+                                r_type = defs['type']
+                                
+                                if b_id not in branch_updates:
+                                    branch_updates[b_id] = {}
+                                branch_updates[b_id][r_type] = val_float
+                            except Exception as e:
+                                pass
+                        
+                        if idx < 3:
+                            print(f"DEBUG: Branch Updates Row {idx}: {branch_updates}")
+
+                    # Backfill Global Wholesale if missing
+                    if wholesale_buy <= 0 and branch_updates:
+                        for b_data in branch_updates.values():
+                            if b_data.get('wholesale_buy', 0) > 0:
+                                wholesale_buy = b_data['wholesale_buy']
+                                if idx < 3: print(f"DEBUG: Backfilled Wholesale Buy: {wholesale_buy}")
+                                break
+                    
+                    if wholesale_sell <= 0 and branch_updates:
+                        for b_data in branch_updates.values():
+                            if b_data.get('wholesale_sell', 0) > 0:
+                                wholesale_sell = b_data['wholesale_sell']
+                                if idx < 3: print(f"DEBUG: Backfilled Wholesale Sell: {wholesale_sell}")
+                                break
+
                     # Upsert Currency (Base Rate)
                     curr_db = db.query(models.Currency).filter(models.Currency.code == code).first()
                     if curr_db:
@@ -1152,25 +1395,27 @@ async def upload_rates(
                             curr_db.flag = flag
                         if name_uk:
                              curr_db.name_uk = name_uk
-                             # Optional: update 'name' too if you want English to follow suit or keep as is?
-                             # Assuming 'name' can be same as name_uk for simplicity if one provided
+                             # Optional: update 'name' too
                              curr_db.name = name_uk 
                         base_updated += 1
                     else:
                         names = CURRENCY_NAMES.get(code, (code, code))
-                        # Override if name fetched from excel
                         final_name = name_uk if name_uk else names[0]
                         final_name_uk = name_uk if name_uk else names[1]
                         
-                        new_currency = models.Currency(
+                        curr_db = models.Currency(
                             code=code, name=final_name, name_uk=final_name_uk,
                             buy_rate=buy_rate, sell_rate=sell_rate,
                             wholesale_buy_rate=wholesale_buy, wholesale_sell_rate=wholesale_sell,
                             flag=flag,
                             is_active=True, is_popular=code in POPULAR_CURRENCIES
                         )
-                        db.add(new_currency)
+                        db.add(curr_db)
+                        db.commit()
+                        db.refresh(curr_db)
                         base_updated += 1
+                    
+                    processed_codes.add(code)
                         
                     # Update cache
                     existing_cache = next((c for c in currencies_data if c.code == code), None)
@@ -1180,8 +1425,133 @@ async def upload_rates(
                         existing_cache.wholesale_buy_rate = wholesale_buy
                         existing_cache.wholesale_sell_rate = wholesale_sell
                 
-                except Exception as e:
-                    # errors.append(f"Базові курси {code}: {str(e)}")
+                
+                
+                    # 2. Process BRANCH RATES
+                    # If we found branch_col_definitions (New 3-Row Format), use it
+                    if branch_col_definitions:
+                        if idx < 3:
+                             print(f"DEBUG: Row {idx} Values: {row.values.tolist()}")
+                             
+                        # Group values by branch first
+                        branch_updates = {} # {branch_id: {buy: ..., sell: ..., ...}}
+                        
+                        for col_idx, defs in branch_col_definitions.items():
+                            if col_idx >= len(row): continue
+                            
+                            val = row.iloc[col_idx]
+                            if idx < 3: print(f"DEBUG: Row {idx} Col {col_idx} RAW: {val} (isna: {pd.isna(val)})")
+                            
+                            if pd.isna(val): continue
+                            
+                            try:
+                                val_str = str(val).replace(',', '.').replace(' ', '').strip()
+                                val_float = float(val_str)
+                                if index < 5: # Only debug first few rows
+                                     print(f"DEBUG: Row {index} Col {col_idx} ({defs['type']}): '{val}' -> {val_float}")
+                                
+                                if val_float <= 0: continue
+                                
+                                b_id = defs['branch_id']
+                                r_type = defs['type']
+                                
+                                if b_id not in branch_updates:
+                                    branch_updates[b_id] = {}
+                                branch_updates[b_id][r_type] = val_float
+                            except Exception as e:
+                                if index < 5:
+                                    print(f"DEBUG: Failed to parse '{val}': {e}")
+                                pass
+                        
+                        # Apply updates
+                        if index < 5:
+                            print(f"DEBUG: Branch Updates Row {index}: {branch_updates}")
+                        
+                        for b_id, rates in branch_updates.items():
+                            # Continue even if local rates are empty, IF global fallback exists
+                            has_fallback = (wholesale_buy > 0 or wholesale_sell > 0)
+                            if not rates and not has_fallback: continue
+                            
+                            br_rate = db.query(models.BranchRate).filter(
+                                models.BranchRate.branch_id == b_id,
+                                models.BranchRate.currency_code == code
+                            ).first()
+                            
+                            # Fallback to global wholesale if missing
+                            w_buy = rates.get('wholesale_buy', 0)
+                            if w_buy <= 0 and wholesale_buy > 0: w_buy = wholesale_buy
+                            
+                            w_sell = rates.get('wholesale_sell', 0)
+                            if w_sell <= 0 and wholesale_sell > 0: w_sell = wholesale_sell
+                            
+                            if not br_rate:
+                                br_rate = models.BranchRate(
+                                    branch_id=b_id,
+                                    currency_code=code,
+                                    buy_rate=rates.get('buy', 0),
+                                    sell_rate=rates.get('sell', 0),
+                                    wholesale_buy_rate=w_buy,
+                                    wholesale_sell_rate=w_sell
+                                )
+                                db.add(br_rate)
+                            else:
+                                if 'buy' in rates: br_rate.buy_rate = rates['buy']
+                                if 'sell' in rates: br_rate.sell_rate = rates['sell']
+                                if w_buy > 0: br_rate.wholesale_buy_rate = w_buy
+                                if w_sell > 0: br_rate.wholesale_sell_rate = w_sell
+                            
+                            branch_updated += 1
+
+                    elif branch_col_map:
+                        # Old key-based map fallback
+                         for col_idx, branch_id in branch_col_map.items():
+                             if col_idx + 1 >= len(df.columns): continue
+                             
+                             try:
+                                 val_buy = row.iloc[col_idx]
+                                 val_sell = row.iloc[col_idx+1]
+                                 
+                                 if pd.isna(val_buy) or pd.isna(val_sell): continue
+                                 
+                                 b_buy = float(val_buy)
+                                 b_sell = float(val_sell)
+                                 
+                                 if b_buy <= 0 or b_sell <= 0: continue
+                                 
+                                 b_wh_buy = 0.0
+                                 b_wh_sell = 0.0
+                                 
+                                 # Try to read next 2 cols for wholesale
+                                 try: b_wh_buy = float(row.iloc[col_idx+2])
+                                 except: pass
+                                 try: b_wh_sell = float(row.iloc[col_idx+3])
+                                 except: pass
+                                 
+                                 br_rate = db.query(models.BranchRate).filter(
+                                     models.BranchRate.branch_id == branch_id,
+                                     models.BranchRate.currency_code == code
+                                 ).first()
+                                 
+                                 if br_rate:
+                                     br_rate.buy_rate = b_buy
+                                     br_rate.sell_rate = b_sell
+                                     br_rate.wholesale_buy_rate = b_wh_buy
+                                     br_rate.wholesale_sell_rate = b_wh_sell
+                                 else:
+                                      br_rate = models.BranchRate(
+                                          branch_id=branch_id,
+                                          currency_code=code,
+                                          buy_rate=b_buy,
+                                          sell_rate=b_sell,
+                                          wholesale_buy_rate=b_wh_buy,
+                                          wholesale_sell_rate=b_wh_sell
+                                      )
+                                      db.add(br_rate)
+                                 branch_updated += 1
+                             except:
+                                 pass
+            
+                except Exception:
                     pass
             
             db.commit()
@@ -1255,16 +1625,16 @@ async def upload_rates(
                         found_curr = curr_map[c_clean]
                     
                     # If we found a "Buy" column, the next one is "Sell"
-                    # If we found a "Buy" column, the next one is "Sell"
                     if found_curr and idx + 1 < len(df_branch.columns):
                          mc = {'code': found_curr, 'buy_idx': idx, 'sell_idx': idx + 1}
                          
                          # Check for Wholesale columns (idx+2, idx+3)
                          # We enable wholesale reading if we have enough columns and they are not another currency's start
-                         # Simplest check: just see if idx+3 exists.
                          if idx + 3 < len(df_branch.columns):
-                             mc['wh_buy_idx'] = idx + 2
-                             mc['wh_sell_idx'] = idx + 3
+                             next_c_clean = str(df_branch.columns[idx+2]).strip()
+                             if next_c_clean not in curr_map:
+                                 mc['wh_buy_idx'] = idx + 2
+                                 mc['wh_sell_idx'] = idx + 3
                          
                          matrix_cols.append(mc)
 
@@ -1279,7 +1649,7 @@ async def upload_rates(
                          if b.cashier:
                              branch_cashier_map[b.cashier.strip().lower()] = b.id
 
-                for _, row in df_branch.iterrows():
+                for row_idx, (_, row) in enumerate(df_branch.iterrows(), start=1):
                     try:
                         branch_id = None
                         # Resolve Branch ID
@@ -1297,6 +1667,14 @@ async def upload_rates(
                             branch_id = branch_cashier_map.get(c_val)
                         
                         if not branch_id: continue
+                        
+                        # Update branch order by row index
+                        try:
+                            br_model = db.query(models.Branch).filter(models.Branch.id == branch_id).first()
+                            if br_model and br_model.order != row_idx:
+                                br_model.order = row_idx
+                                db.add(br_model)
+                        except: pass
 
                         # 1. Process Matrix Columns (Hybrid/Row-Matrix)
                         if use_hybrid:
@@ -1305,9 +1683,13 @@ async def upload_rates(
                                     buy_val = row.iloc[mc['buy_idx']]
                                     sell_val = row.iloc[mc['sell_idx']]
                                     if pd.isna(buy_val) or pd.isna(sell_val): continue
-                                    buy = float(buy_val)
-                                    buy = float(buy_val)
-                                    sell = float(sell_val)
+                                    
+                                    buy_str = str(buy_val).replace(',', '.').replace(' ', '').strip()
+                                    sell_str = str(sell_val).replace(',', '.').replace(' ', '').strip()
+                                    if buy_str == '-' or sell_str == '-': continue
+                                    
+                                    buy = float(buy_str)
+                                    sell = float(sell_str)
 
                                     wh_buy = 0.0
                                     wh_sell = 0.0
@@ -1315,8 +1697,12 @@ async def upload_rates(
                                         try:
                                             wh_buy_val = row.iloc[mc['wh_buy_idx']]
                                             wh_sell_val = row.iloc[mc['wh_sell_idx']]
-                                            if pd.notna(wh_buy_val): wh_buy = float(wh_buy_val)
-                                            if pd.notna(wh_sell_val): wh_sell = float(wh_sell_val)
+                                            if pd.notna(wh_buy_val):
+                                                wh_b_str = str(wh_buy_val).replace(',', '.').replace(' ', '').strip()
+                                                if wh_b_str and wh_b_str != '-': wh_buy = float(wh_b_str)
+                                            if pd.notna(wh_sell_val):
+                                                wh_s_str = str(wh_sell_val).replace(',', '.').replace(' ', '').strip()
+                                                if wh_s_str and wh_s_str != '-': wh_sell = float(wh_s_str)
                                         except: pass
                                     
                                     # Upsert
@@ -1330,6 +1716,7 @@ async def upload_rates(
                                         rate_entry.wholesale_buy_rate = wh_buy
                                         rate_entry.wholesale_sell_rate = wh_sell
                                         rate_entry.is_active = True
+                                        processed_codes.add(mc['code'])
                                     else:
                                         # Check if currency exists, if not construct it (safe fallback)
                                         key_active = db.query(models.Currency).filter(models.Currency.code == mc['code']).first()
@@ -1479,6 +1866,32 @@ async def upload_rates(
 
             db.commit()
 
+        if processed_codes:
+            # Final database sync for missing currencies
+            missing_currencies = db.query(models.Currency).filter(
+                models.Currency.is_active == True,
+                ~models.Currency.code.in_(processed_codes)
+            ).all()
+            
+            for mc in missing_currencies:
+                mc.is_active = False
+                print(f"SYNC: Deactivating currency {mc.code} (missing from Excel)")
+            
+            # Also deactivate branch overrides for these
+            db.query(models.BranchRate).filter(
+                ~models.BranchRate.currency_code.in_(processed_codes)
+            ).update({models.BranchRate.is_active: False}, synchronize_session=False)
+            
+            db.commit()
+            
+            # Update global cache
+            global currencies_data
+            for cd in currencies_data:
+                if cd.code not in processed_codes:
+                    cd.is_active = False
+                else:
+                    cd.is_active = True
+            
         rates_updated_at = datetime.now()
         
         return RatesUploadResponseV2(
@@ -1495,12 +1908,14 @@ async def upload_rates(
 
 @app.get("/api/admin/rates/template")
 async def download_rates_template(
-    user: User = Depends(require_admin),
+    user: User = Depends(require_operator_or_admin),
     db: Session = Depends(get_db)
 ):
     """Download Excel template for rates upload with vertical layout (Rows=Currencies, Cols=Branches)"""
     from fastapi.responses import StreamingResponse
     import pandas as pd
+    from openpyxl.utils import get_column_letter
+    from openpyxl.styles import Alignment, Font, PatternFill
     
     output = io.BytesIO()
     
@@ -1508,7 +1923,7 @@ async def download_rates_template(
         # Sheet "Курси"
         
         # 1. Fetch Data
-        branches = db.query(models.Branch).order_by(models.Branch.id).all()
+        branches = db.query(models.Branch).order_by(models.Branch.number).all()
         all_rates = db.query(models.BranchRate).all()
         
         # Map: (branch_id, code) -> rate
@@ -1518,20 +1933,13 @@ async def download_rates_template(
         db_currencies = db.query(models.Currency).all()
         curr_info_map = {c.code: c for c in db_currencies}
 
-        # 2. Prepare Columns
+        # 2. Prepare Columns (Row 3 headers)
         # Base Columns
         columns = ['Код', 'Прапор', 'Валюта']
         
-        # Branch Columns
-        # For each branch, we add 4 columns
+        # Branch Columns - repeated for each branch
         for branch in branches:
-            b_name = f"{branch.id} {branch.address}"
-            columns.extend([
-                f"{b_name} Купівля",
-                f"{b_name} Продаж",
-                f"{b_name} Опт Купівля",
-                f"{b_name} Опт Продаж"
-            ])
+            columns.extend(['Купівля', 'Продаж', 'Опт Купівля', 'Опт Продаж'])
             
         data_rows = []
         
@@ -1544,14 +1952,9 @@ async def download_rates_template(
             flag = curr_info.flag if curr_info else CURRENCY_FLAGS.get(code, "🏳️")
             name_uk = curr_info.name_uk if curr_info else CURRENCY_NAMES.get(code, (code, code))[1]
             
-            row = {
-                'Код': code,
-                'Прапор': flag,
-                'Валюта': name_uk
-            }
+            row = [code, flag, name_uk]
             
             for branch in branches:
-                b_name = f"{branch.id} {branch.address}"
                 rate = rates_map.get((branch.id, code))
                 
                 # Default to 0.00 if no rate exists
@@ -1560,26 +1963,89 @@ async def download_rates_template(
                 wh_buy = rate.wholesale_buy_rate if rate else 0.00
                 wh_sell = rate.wholesale_sell_rate if rate else 0.00
                 
-                row[f"{b_name} Купівля"] = buy
-                row[f"{b_name} Продаж"] = sell
-                row[f"{b_name} Опт Купівля"] = wh_buy
-                row[f"{b_name} Опт Продаж"] = wh_sell
+                row.extend([buy, sell, wh_buy, wh_sell])
             
             data_rows.append(row)
             
         # Create DataFrame
         df = pd.DataFrame(data_rows, columns=columns)
         
-        # Write to Excel
-        df.to_excel(writer, index=False, sheet_name='Курси')
+        # Write to Excel, starting at row 2 (0-indexed logic in pandas, so startrow=2 means Excel Row 3)
+        # We need space for Top Headers (Row 1 & 2)
+        df.to_excel(writer, index=False, sheet_name='Курси', startrow=2)
         
-        # Auto-adjust column widths (basic)
+        # Access the workbook and sheet
+        workbook = writer.book
         worksheet = writer.sheets['Курси']
+        
+        # Styles
+        header_font = Font(bold=True)
+        center_align = Alignment(horizontal='center', vertical='center')
+        
+        # Colors (approximate brand or logical colors)
+        fill_buy = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid") # Light Green
+        fill_sell = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid") # Light Red/Pink
+        fill_opt_buy = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid") # Pale Green
+        fill_opt_sell = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid") # Pale Orange
+        fill_neutral = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid") # Grey
+
+        # 4. Add Top Headers (Row 1 & 2)
+        # ... (Same as before) ...
+        # Apply Logic for Row 3 Styling (Headers)
+        for col_idx, col_name in enumerate(columns, 1):
+             cell = worksheet.cell(row=3, column=col_idx)
+             name_str = str(col_name).lower()
+             
+             if 'опт' in name_str and 'купів' in name_str:
+                 cell.fill = fill_opt_buy
+             elif 'опт' in name_str and 'прода' in name_str:
+                 cell.fill = fill_opt_sell
+             elif 'купів' in name_str:
+                 cell.fill = fill_buy
+             elif 'прода' in name_str:
+                 cell.fill = fill_sell
+             else:
+                 cell.fill = fill_neutral
+                 
+             cell.font = header_font
+             cell.alignment = center_align
+        # Row 1: Branch Numbers
+        # Row 2: Branch Addresses
+        
+        current_col = 4 # Column D (1-based index)
+        for branch in branches:
+            # Merge 4 cells
+            start_col_letter = get_column_letter(current_col)
+            end_col_letter = get_column_letter(current_col + 3)
+            cell_range_r1 = f"{start_col_letter}1:{end_col_letter}1"
+            cell_range_r2 = f"{start_col_letter}2:{end_col_letter}2"
+            
+            # Row 1: Number (Editable)
+            worksheet.merge_cells(cell_range_r1)
+            cell_r1 = worksheet.cell(row=1, column=current_col)
+            # Just the number, maybe with "№" prefix or just raw number? 
+            # User asked for "Number", let's put just number or "№ X"
+            # If user edits it to just "5", we need to parse.
+            # Let's stick to "№ {number}" for display, but user can edit.
+            cell_r1.value = f"№ {branch.number if branch.number else branch.id}" 
+            cell_r1.font = header_font
+            cell_r1.alignment = center_align
+
+            # Row 2: Address (Identifier for logic if number changes)
+            worksheet.merge_cells(cell_range_r2)
+            cell_r2 = worksheet.cell(row=2, column=current_col)
+            cell_r2.value = branch.address
+            cell_r2.font = header_font
+            cell_r2.alignment = center_align
+            
+            current_col += 4
+            
+        # Adjust column widths
         for i, col in enumerate(df.columns):
-            column_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
-            # Cap width
-            if column_len > 30: column_len = 30
-            # worksheet.column_dimensions[chr(65 + i)].width = column_len # simple A-Z checks needed, skipping for now
+            # +1 because openpyxl is 1-indexed
+            col_letter = get_column_letter(i + 1)
+            worksheet.column_dimensions[col_letter].width = 15 if i > 2 else 10 # Wider for rates
+            
     
     output.seek(0)
     
@@ -1784,8 +2250,8 @@ async def get_all_rates_admin(user: models.User = Depends(require_admin), db: Se
     }
     
     # Branches (DB)
-    branches_list = db.query(models.Branch).all()
-    branches_out = [{"id": b.id, "address": b.address} for b in branches_list]
+    branches_list = db.query(models.Branch).order_by(models.Branch.order.asc()).all()
+    branches_out = [{"id": b.id, "address": b.address, "number": b.number, "order": b.order} for b in branches_list]
     
     # Branch rates (DB)
     branch_rates_rows = db.query(models.BranchRate).all()
@@ -2410,6 +2876,7 @@ async def delete_service(service_id: int, user: models.User = Depends(require_ad
 # ============== ADMIN BRANCH MANAGEMENT ==============
 
 class BranchCreate(BaseModel):
+    number: int = 0
     address: str
     hours: str = "щодня: 9:00-20:00"
     lat: Optional[float] = None
@@ -2420,6 +2887,7 @@ class BranchCreate(BaseModel):
     cashier: Optional[str] = None
 
 class BranchUpdate(BaseModel):
+    number: Optional[int] = None
     address: Optional[str] = None
     hours: Optional[str] = None
     phone: Optional[str] = None
@@ -2430,7 +2898,7 @@ class BranchUpdate(BaseModel):
 @app.get("/api/admin/branches")
 async def get_admin_branches(user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     """Get all branches with full details"""
-    return db.query(models.Branch).all()
+    return db.query(models.Branch).order_by(models.Branch.order.asc()).all()
 
 @app.put("/api/admin/branches/{branch_id}")
 async def update_branch(branch_id: int, update: BranchUpdate, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -2439,6 +2907,8 @@ async def update_branch(branch_id: int, update: BranchUpdate, user: models.User 
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
     
+    if update.number is not None:
+        branch.number = update.number
     if update.address is not None:
         branch.address = update.address
     if update.hours is not None:
@@ -2914,9 +3384,214 @@ async def download_operator_rates(user: models.User = Depends(require_operator_o
     
     return StreamingResponse(
         output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
     )
+
+# ============== LIVE CHAT FEATURE ==============
+
+@app.post("/api/chat/session", response_model=ChatSession)
+async def init_chat_session(session_create: ChatSessionCreate, db: Session = Depends(get_db)):
+    """Initialize or fetch a chat session for a user"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_create.session_id).first()
+    if not session:
+        session = models.ChatSession(session_id=session_create.session_id)
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+    return session
+
+@app.get("/api/chat/messages", response_model=List[ChatMessage])
+async def get_chat_messages(session_id: str, db: Session = Depends(get_db)):
+    """User fetching their messages"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    messages = db.query(models.ChatMessage).filter(models.ChatMessage.session_id == session.id).order_by(models.ChatMessage.created_at.asc()).all()
+    
+    # Mark admin messages as read by user
+    unread_admin_msgs = [m for m in messages if m.sender == 'admin' and not m.is_read]
+    if unread_admin_msgs:
+        for m in unread_admin_msgs:
+            m.is_read = True
+        db.commit()
+
+    return messages
+
+@app.post("/api/chat/messages", response_model=ChatMessage)
+async def send_chat_message(session_id: str, msg: ChatMessageCreate, db: Session = Depends(get_db)):
+    """User sending a message"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    new_msg = models.ChatMessage(
+        session_id=session.id,
+        sender="user",
+        content=msg.content
+    )
+    db.add(new_msg)
+    
+    session.last_message_at = datetime.now(timezone.utc)
+    # Reopen session if it was previously closed by admin
+    if session.status == models.ChatSessionStatus.CLOSED:
+        session.status = models.ChatSessionStatus.ACTIVE
+        
+    db.commit()
+    db.refresh(new_msg)
+    
+    return new_msg
+
+@app.get("/api/admin/chat/sessions", response_model=List[ChatSession])
+async def admin_get_chat_sessions(user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin get all active chat sessions sorted by recent activity"""
+    sessions = db.query(models.ChatSession).filter(models.ChatSession.status == models.ChatSessionStatus.ACTIVE).order_by(models.ChatSession.last_message_at.desc()).all()
+    return sessions
+
+@app.get("/api/admin/chat/sessions/{session_id}/messages", response_model=List[ChatMessage])
+async def admin_get_session_messages(session_id: str, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin get messages for a session"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    messages = db.query(models.ChatMessage).filter(models.ChatMessage.session_id == session.id).order_by(models.ChatMessage.created_at.asc()).all()
+    return messages
+
+@app.post("/api/admin/chat/sessions/{session_id}/messages", response_model=ChatMessage)
+async def admin_send_chat_message(session_id: str, msg: ChatMessageCreate, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin sending a message"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    new_msg = models.ChatMessage(
+        session_id=session.id,
+        sender="admin",
+        content=msg.content
+    )
+    db.add(new_msg)
+    
+    session.last_message_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(new_msg)
+    
+    return new_msg
+
+@app.post("/api/admin/chat/sessions/{session_id}/read")
+async def admin_mark_messages_read(session_id: str, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin marks user messages as read"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    unread_user_msgs = db.query(models.ChatMessage).filter(
+        models.ChatMessage.session_id == session.id,
+        models.ChatMessage.sender == 'user',
+        models.ChatMessage.is_read == False
+    ).all()
+    
+    for m in unread_user_msgs:
+        m.is_read = True
+        
+    db.commit()
+    return {"success": True}
+    
+@app.put("/api/admin/chat/sessions/{session_id}/close")
+async def admin_close_chat_session(session_id: str, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin closes a chat session"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    session.status = models.ChatSessionStatus.CLOSED
+    db.commit()
+    return {"success": True}
+
+@app.get("/sitemap.xml", response_class=Response)
+async def get_sitemap(db: Session = Depends(get_db)):
+    """Generate dynamic XML sitemap"""
+    frontend_url = os.environ.get("FRONTEND_URL", "https://test.mirvalut.com").rstrip("/")
+    
+    pages = [
+        "",
+        "/rates",
+        "/services",
+        "/contacts",
+        "/faq"
+    ]
+    
+    urls = []
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Static pages
+    for page in pages:
+        urls.append(f"""
+  <url>
+    <loc>{frontend_url}{page}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>{1.0 if page == '' else 0.8}</priority>
+  </url>""")
+
+    # Dynamic services
+    services = db.query(models.ServiceItem).filter(models.ServiceItem.is_active == True).all()
+    for srv in services:
+        # Use link_url as slug if present, else id
+        slug = (srv.link_url or str(srv.id)).lstrip("/")
+        if not slug.startswith("services/"):
+            slug = f"services/{slug}"
+        urls.append(f"""
+  <url>
+    <loc>{frontend_url}/{slug}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>""")
+
+    # Dynamic articles
+    articles = db.query(models.ArticleItem).filter(models.ArticleItem.is_published == True).all()
+    for art in articles:
+        date_str = art.created_at.strftime("%Y-%m-%d") if art.created_at else today
+        urls.append(f"""
+  <url>
+    <loc>{frontend_url}/articles/{art.id}</loc>
+    <lastmod>{date_str}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>""")
+
+    sitemap_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{''.join(urls)}
+</urlset>"""
+
+    return Response(content=sitemap_xml, media_type="application/xml")
+
+
+# --- Frontend static file serving (production) ---
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+
+if os.path.isdir(FRONTEND_DIR):
+    # Serve frontend assets (JS, CSS, images)
+    frontend_assets = os.path.join(FRONTEND_DIR, "assets")
+    if os.path.isdir(frontend_assets):
+        app.mount("/assets", StaticFiles(directory=frontend_assets), name="frontend_assets")
+
+    # Serve frontend images
+    frontend_images = os.path.join(FRONTEND_DIR, "images")
+    if os.path.isdir(frontend_images):
+        app.mount("/images", StaticFiles(directory=frontend_images), name="frontend_images")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve frontend files or fall back to index.html for SPA routing"""
+        file_path = os.path.join(FRONTEND_DIR, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_path = os.path.join(FRONTEND_DIR, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+        return {"error": "Frontend not found"}
 
 
 if __name__ == "__main__":

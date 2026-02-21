@@ -20,7 +20,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 60000,
 });
 
 // Mock data for when backend is not available
@@ -237,6 +237,20 @@ export const adminService = {
   createUser: (data) => api.post('/admin/users', data),
   updateUser: (id, data) => api.put(`/admin/users/${id}`, data),
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
+
+  // Chat management
+  getChatSessions: () => api.get('/admin/chat/sessions'),
+  getChatMessages: (sessionId) => api.get(`/admin/chat/sessions/${sessionId}/messages`),
+  sendChatMessage: (sessionId, data) => api.post(`/admin/chat/sessions/${sessionId}/messages`, data),
+  markChatRead: (sessionId) => api.post(`/admin/chat/sessions/${sessionId}/read`),
+  closeChatSession: (sessionId) => api.put(`/admin/chat/sessions/${sessionId}/close`),
+};
+
+// Public Chat Service
+export const chatService = {
+  initSession: (data) => api.post('/chat/session', data),
+  getMessages: (sessionId) => api.get('/chat/messages', { params: { session_id: sessionId } }),
+  sendMessage: (sessionId, data) => api.post('/chat/messages', data, { params: { session_id: sessionId } }),
 };
 
 // Operator service
@@ -255,29 +269,7 @@ export const operatorService = {
     }
   },
   downloadRates: async () => {
-    // Generate Excel client-side - no server call needed
-    const ratesData = [
-      { 'Прапор': '🇺🇸', 'Код валюти': 'USD', 'Назва': 'Долар США', 'Купівля': 42.10, 'Продаж': 42.15 },
-      { 'Прапор': '🇪🇺', 'Код валюти': 'EUR', 'Назва': 'Євро', 'Купівля': 49.30, 'Продаж': 49.35 },
-      { 'Прапор': '🇵🇱', 'Код валюти': 'PLN', 'Назва': 'Злотий', 'Купівля': 11.50, 'Продаж': 11.65 },
-      { 'Прапор': '🇬🇧', 'Код валюти': 'GBP', 'Назва': 'Фунт', 'Купівля': 56.10, 'Продаж': 56.25 },
-      { 'Прапор': '🇨🇭', 'Код валюти': 'CHF', 'Назва': 'Франк', 'Купівля': 52.80, 'Продаж': 52.95 },
-      { 'Прапор': '🇨🇦', 'Код валюти': 'CAD', 'Назва': 'Канадський долар', 'Купівля': 31.20, 'Продаж': 31.35 },
-      { 'Прапор': '🇦🇺', 'Код валюти': 'AUD', 'Назва': 'Австралійський долар', 'Купівля': 30.40, 'Продаж': 30.55 },
-      { 'Прапор': '🇨🇿', 'Код валюти': 'CZK', 'Назва': 'Чеська крона', 'Купівля': 1.85, 'Продаж': 1.90 },
-      { 'Прапор': '🇹🇷', 'Код валюти': 'TRY', 'Назва': 'Турецька ліра', 'Купівля': 1.22, 'Продаж': 1.28 },
-      { 'Прапор': '🇯🇵', 'Код валюти': 'JPY', 'Назва': 'Японська єна', 'Купівля': 0.28, 'Продаж': 0.29 },
-    ];
-
-    const workbook = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(ratesData);
-    ws['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(workbook, ws, 'Курси');
-
-    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-    return { data: blob };
+    return await api.get('/admin/rates/template', { responseType: 'blob' });
   },
   updateReservation: (id, data) => api.put(`/operator/reservations/${id}`, data),
   confirmReservation: (id) => api.post(`/operator/reservations/${id}/confirm`),

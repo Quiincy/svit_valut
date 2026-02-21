@@ -5,6 +5,7 @@ import {
   Check, X, AlertCircle, Download, Bell, Copy
 } from 'lucide-react';
 import { operatorService } from '../services/api';
+import { useAudioNotification } from '../hooks/useAudioNotification';
 
 const STATUS_CONFIG = {
   pending: { label: 'Очікує', color: 'text-yellow-400 bg-yellow-400/10', icon: Clock },
@@ -36,10 +37,11 @@ export default function OperatorDashboard({ user, onLogout }) {
   const [actionLoading, setActionLoading] = useState(null);
   const [noteModal, setNoteModal] = useState(null);
   const [note, setNote] = useState('');
-  const [lastReservationCount, setLastReservationCount] = useState(0);
+  const [lastReservationTime, setLastReservationTime] = useState(null);
   const [newReservationAlert, setNewReservationAlert] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [copiedId, setCopiedId] = useState(null);
+  const playNotification = useAudioNotification();
 
   // Update time every minute (Kyiv time)
   useEffect(() => {
@@ -62,24 +64,23 @@ export default function OperatorDashboard({ user, onLogout }) {
       const items = reservationsRes.data.items || [];
 
       // Check for new reservations
-      if (items.length > lastReservationCount && lastReservationCount > 0) {
-        setNewReservationAlert(true);
-        // Play notification sound
-        try {
-          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleX');
-          audio.volume = 0.3;
-          audio.play().catch(() => { });
-        } catch { }
-        setTimeout(() => setNewReservationAlert(false), 5000);
+      if (items.length > 0) {
+        const currentLatestTime = new Date(items[0].created_at).getTime();
+        if (lastReservationTime && currentLatestTime > lastReservationTime) {
+          setNewReservationAlert(true);
+          // Play notification sound
+          playNotification();
+          setTimeout(() => setNewReservationAlert(false), 5000);
+        }
+        setLastReservationTime(currentLatestTime);
       }
-      setLastReservationCount(items.length);
       setReservations(items);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, lastReservationCount, dateFrom, dateTo]);
+  }, [statusFilter, lastReservationTime, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchData();
@@ -294,12 +295,17 @@ export default function OperatorDashboard({ user, onLogout }) {
                 <button
                   key={tab.value}
                   onClick={() => setStatusFilter(tab.value)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${statusFilter === tab.value
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all relative ${statusFilter === tab.value
                     ? 'bg-accent-yellow text-primary'
-                    : 'bg-primary-light text-text-secondary hover:text-white'
+                    : tab.value === 'pending' && dashboard?.pending_reservations > 0
+                      ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 animate-pulse'
+                      : 'bg-primary-light text-text-secondary hover:text-white'
                     }`}
                 >
                   {tab.label}
+                  {tab.value === 'pending' && dashboard?.pending_reservations > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full animate-ping"></span>
+                  )}
                 </button>
               ))}
             </div>
@@ -370,7 +376,9 @@ export default function OperatorDashboard({ user, onLogout }) {
               return (
                 <div
                   key={res.id}
-                  className={`bg-primary-light rounded-2xl p-5 border transition-all ${res.status === 'pending' ? 'border-yellow-500/30' : 'border-white/10'
+                  className={`rounded-2xl p-5 border transition-all ${res.status === 'pending'
+                    ? 'border-yellow-500/50 bg-accent-yellow/10 animate-pulse'
+                    : 'border-white/10 bg-primary-light'
                     }`}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center gap-4">

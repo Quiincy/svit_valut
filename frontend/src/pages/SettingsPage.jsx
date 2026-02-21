@@ -419,13 +419,15 @@ export default function SettingsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 rounded-full bg-accent-blue/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-accent-blue font-bold">{branch.id}</span>
+                      <span className="text-accent-blue font-bold">{branch.number}</span>
                     </div>
                     <div>
                       <h4 className="font-medium">{branch.address}</h4>
                       <p className="text-sm text-text-secondary">{branch.hours}</p>
                       <p className="text-sm text-accent-yellow">{branch.phone || 'Телефон не вказано'}</p>
-                      {branch.cashier && <p className="text-xs text-white/50 mt-1">Каса: {branch.cashier}</p>}
+                      <p className="text-xs text-text-secondary mt-1">
+                        Номер відділення: <span className="font-mono text-white">{branch.number}</span>
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -734,27 +736,29 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm text-text-secondary mb-2">Telegram чат</label>
-                <input
-                  type="text"
-                  value={editingBranch.telegram_chat || ''}
-                  onChange={(e) => setEditingBranch({ ...editingBranch, telegram_chat: e.target.value })}
-                  placeholder="https://t.me/..."
-                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-text-secondary mb-2">Номер відділення</label>
+                  <input
+                    type="number"
+                    value={editingBranch.number || editingBranch.id}
+                    onChange={(e) => setEditingBranch({ ...editingBranch, number: parseInt(e.target.value) })}
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-text-secondary mb-2">Telegram чат</label>
+                  <input
+                    type="text"
+                    value={editingBranch.telegram_chat || ''}
+                    onChange={(e) => setEditingBranch({ ...editingBranch, telegram_chat: e.target.value })}
+                    placeholder="https://t.me/..."
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm text-text-secondary mb-2">Каса (ім'я/код для Excel)</label>
-                <input
-                  type="text"
-                  value={editingBranch.cashier || ''}
-                  onChange={(e) => setEditingBranch({ ...editingBranch, cashier: e.target.value })}
-                  placeholder="Наприклад: Каса 1"
-                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
-                />
-              </div>
+
             </div>
 
             <div className="flex gap-3 mt-6">

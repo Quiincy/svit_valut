@@ -13,6 +13,7 @@ import CurrencyModal from './components/CurrencyModal';
 import SuccessModal from './components/SuccessModal';
 import MobileNav from './components/MobileNav';
 import LiveChat from './components/LiveChat';
+import ScrollToTopButton from './components/ScrollToTopButton';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import OperatorDashboard from './pages/OperatorDashboard';
@@ -802,6 +803,8 @@ function PublicLayout() {
           </button>
         );
       })()}
+
+      <ScrollToTopButton />
     </div>
   );
 }

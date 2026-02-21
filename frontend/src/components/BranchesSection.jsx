@@ -67,41 +67,108 @@ export default function BranchesSection({ branches = [], settings }) {
     setFindingNearest(false);
   };
 
-  const handleFindNearest = () => {
+  const handleFindNearest = async () => {
     setFindingNearest(true);
     setGeoError('');
 
-    const tryIpGeo = () => {
-      fetch('https://ipapi.co/json/')
-        .then(res => res.json())
-        .then(data => {
-          if (data.latitude && data.longitude) {
-            findNearestFromCoords(data.latitude, data.longitude, 'IP');
-          } else {
-            throw new Error('IP Geo failed');
-          }
-        })
-        .catch(err => {
-          console.error("IP Geo Error:", err);
-          setGeoError('Не вдалося визначити ваше місцезнаходження.');
-          setFindingNearest(false);
-        });
+    const detectLocationByIp = async () => {
+      // Use our backend endpoint to avoid CORS issues
+      try {
+        const res = await fetch('/api/my-location');
+        if (!res.ok) throw new Error(`Backend Geo failed: ${res.status}`);
+        const data = await res.json();
+        if (data.lat && data.lng) {
+          console.log(`Geolocation success via backend: ${data.source}`);
+          return { lat: data.lat, lng: data.lng };
+        }
+      } catch (err) {
+        console.warn("Backend IP location failed:", err);
+      }
+      throw new Error('IP geolocation failed');
     };
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          findNearestFromCoords(position.coords.latitude, position.coords.longitude, 'GPS');
-        },
-        (error) => {
-          console.warn("GPS Error:", error);
-          // Fallback to IP if GPS fails
-          tryIpGeo();
-        },
-        { timeout: 8000, enableHighAccuracy: true, maximumAge: 0 }
-      );
-    } else {
-      tryIpGeo();
+    const handleSuccess = (lat, lng, source) => {
+      findNearestFromCoords(lat, lng, source);
+      setFindingNearest(false);
+    };
+
+    const handleError = (msg) => {
+      setGeoError(msg);
+      setFindingNearest(false);
+    };
+
+    // explicit GPS request
+    if (!navigator.geolocation) {
+      // Fallback immediately if not supported
+      try {
+        const coords = await detectLocationByIp();
+        handleSuccess(coords.lat, coords.lng, 'IP');
+      } catch (ipError) {
+        handleError('Геолокація не підтримується і IP не визначено.');
+      }
+      return;
+    }
+
+    // Check for Secure Context (required for Geolocation on non-localhost)
+    if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      // Warning for HTTP
+      setGeoError('GPS працює лише через HTTPS або на localhost. Використовуємо IP.');
+      try {
+        const coords = await detectLocationByIp();
+        handleSuccess(coords.lat, coords.lng, 'IP');
+      } catch (e) { handleError('Не вдалося визначити локацію.'); }
+      return;
+    }
+
+    const getPosition = (options) => {
+      return new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+      });
+    };
+
+    try {
+      // 1. Try High Accuracy
+      const position = await getPosition({ timeout: 5000, enableHighAccuracy: true, maximumAge: 0 });
+      handleSuccess(position.coords.latitude, position.coords.longitude, 'GPS');
+    } catch (error) {
+      console.warn("High Accuracy GPS failed:", error.code, error.message);
+
+      // 2. Retry with Low Accuracy (often helps on Desktop/macOS)
+      try {
+        if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+          const position = await getPosition({ timeout: 10000, enableHighAccuracy: false, maximumAge: 0 });
+          handleSuccess(position.coords.latitude, position.coords.longitude, 'GPS');
+          return;
+        }
+        throw error; // Re-throw if PERMISSION_DENIED or other
+      } catch (retryError) {
+        console.warn("Low Accuracy GPS failed:", retryError.code, retryError.message);
+
+        let errorMsg = '';
+        switch (retryError.code) {
+          case 1: // PERMISSION_DENIED
+            errorMsg = 'Ви заборонили доступ до геолокації. Перевірте налаштування браузера та macOS (System Settings > Privacy > Location).';
+            break;
+          case 2: // POSITION_UNAVAILABLE
+            errorMsg = 'Інформація про місцезнаходження недоступна (спробуйте увімкнути Wi-Fi).';
+            break;
+          case 3: // TIMEOUT
+            errorMsg = 'Час очікування вичерпався.';
+            break;
+          default:
+            errorMsg = 'Помилка геолокації.';
+        }
+
+        setGeoError(`${errorMsg} Використовуємо наближену локацію (IP).`);
+
+        // 3. Fallback to IP
+        try {
+          const coords = await detectLocationByIp();
+          handleSuccess(coords.lat, coords.lng, 'IP');
+        } catch (ipError) {
+          handleError('Не вдалося визначити ваше місцезнаходження.');
+        }
+      }
     }
   };
 
