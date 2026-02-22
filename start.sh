@@ -28,14 +28,15 @@ echo "📦 Starting Backend (FastAPI)..."
 cd backend
 if [ ! -d "venv" ]; then
     echo "   Creating virtual environment..."
-    python3 -m venv venv
+    python3.12 -m venv venv
 fi
 source venv/bin/activate
 echo "   Installing dependencies..."
+export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
 pip install --upgrade pip -q 2>/dev/null
 pip install -r requirements.txt -q 2>/dev/null || pip install -r requirements.txt
 echo "   Starting uvicorn server..."
-python -m uvicorn main:app --host 0.0.0.0 --reload --port 8000 &
+python -m uvicorn app.main:app --host 0.0.0.0 --reload --port 8000 &
 BACKEND_PID=$!
 cd ..
 

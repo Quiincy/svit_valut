@@ -12,17 +12,21 @@ import random
 import secrets
 import io
 import os
+from app.models import models
+from app.core import database
 from sqlalchemy.orm import Session
-import models, database
+from app.schemas import *
 import shutil
 import uuid
 import urllib.request
 import urllib.parse
 import json
-from database import engine, get_db, SessionLocal
+from app.core.database import engine, get_db, SessionLocal
+from app.api.router import api_router
+from app.api.deps import require_admin, require_operator_or_admin, verify_credentials, security
 
 app = FastAPI(title="Світ Валют API", version="2.0.0")
-security = HTTPBasic()
+app.include_router(api_router, prefix="/api")
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -139,199 +143,7 @@ class ReservationStatus(str, enum.Enum):
     CANCELLED = "cancelled"
     EXPIRED = "expired"
 
-# Models (Pydantic for API)
-class ReservationRequest(BaseModel):
-    give_amount: float
-    give_currency: str
-    get_currency: str
-    phone: str
-    customer_name: Optional[str] = None  # New: customer name
-    branch_id: Optional[int] = None
 
-class ReservationResponse(BaseModel):
-    id: int
-    give_amount: float
-    give_currency: str
-    get_amount: float
-    get_currency: str
-    rate: float
-    phone: str
-    customer_name: Optional[str] = None  # New: customer name
-    status: ReservationStatus
-    branch_id: Optional[int]
-    branch_address: Optional[str]
-    created_at: str
-    expires_at: str
-    completed_at: Optional[str] = None
-    operator_note: Optional[str] = None
-
-class ReservationUpdate(BaseModel):
-    status: Optional[ReservationStatus] = None
-    operator_note: Optional[str] = None
-
-class Currency(BaseModel):
-    code: str
-    name: str
-    name_uk: str
-    flag: str
-    buy_rate: float
-    sell_rate: float
-    wholesale_buy_rate: float = 0.0
-    wholesale_sell_rate: float = 0.0
-    wholesale_threshold: int = 1000
-    is_popular: bool = False
-    is_active: bool = True  # New: ability to enable/disable currency
-    
-    # SEO Fields
-    buy_url: Optional[str] = None
-    sell_url: Optional[str] = None
-    seo_h1: Optional[str] = None
-    seo_h2: Optional[str] = None
-    seo_image: Optional[str] = None
-    seo_text: Optional[str] = None
-    
-    # Split SEO Fields
-    seo_buy_h1: Optional[str] = None
-    seo_buy_h2: Optional[str] = None
-    seo_buy_title: Optional[str] = None
-    seo_buy_desc: Optional[str] = None
-    seo_buy_text: Optional[str] = None
-    seo_buy_image: Optional[str] = None
-
-    seo_sell_h1: Optional[str] = None
-    seo_sell_h2: Optional[str] = None
-    seo_sell_title: Optional[str] = None
-    seo_sell_desc: Optional[str] = None
-    seo_sell_text: Optional[str] = None
-    seo_sell_image: Optional[str] = None
-
-class Order(BaseModel):
-    id: int
-    address: str
-    type: str
-    amount: float
-    currency: str
-    flag: str
-    rate: float
-    created_at: str
-
-class Branch(BaseModel):
-    id: int
-    number: int = 0
-    address: str
-    hours: str
-    lat: float
-    lng: float
-    is_open: bool = True
-    phone: Optional[str] = None
-    telegram_chat: Optional[str] = None
-    cashier: Optional[str] = None
-
-class User(BaseModel):
-    id: int
-    username: str
-    role: UserRole
-    branch_id: Optional[int] = None
-    name: str
-
-class RatesUploadResponse(BaseModel):
-    success: bool
-    message: str
-    updated_currencies: int
-    errors: List[str] = []
-
-class ChatMessageBase(BaseModel):
-    sender: str
-    content: str
-
-class ChatMessageCreate(ChatMessageBase):
-    pass
-
-class ChatMessage(ChatMessageBase):
-    id: int
-    session_id: int
-    created_at: datetime
-    is_read: bool
-    
-    class Config:
-        from_attributes = True
-
-class ChatSessionStatusEnum(str, enum.Enum):
-    ACTIVE = "active"
-    CLOSED = "closed"
-
-class ChatSessionBase(BaseModel):
-    session_id: str
-    
-class ChatSessionCreate(ChatSessionBase):
-    pass
-
-class ChatSession(ChatSessionBase):
-    id: int
-    created_at: datetime
-    last_message_at: datetime
-    status: ChatSessionStatusEnum
-    messages: List[ChatMessage] = []
-
-    class Config:
-        from_attributes = True
-
-class DashboardStats(BaseModel):
-    total_reservations: int
-    pending_reservations: int
-    confirmed_reservations: int
-    completed_today: int
-    total_volume_uah: float
-    total_volume_uah_month: float
-
-# Constants
-CURRENCY_FLAGS = {
-    "USD": "🇺🇸", "EUR": "🇪🇺", "PLN": "🇵🇱", "GBP": "🇬🇧", "CHF": "🇨🇭",
-    "EGP": "🇪🇬", "JPY": "🇯🇵", "INR": "🇮🇳", "AUD": "🇦🇺", "CAD": "🇨🇦",
-    "CZK": "🇨🇿", "TRY": "🇹🇷", "CNY": "🇨🇳", "KRW": "🇰🇷", "SEK": "🇸🇪",
-    "NOK": "🇳🇴", "DKK": "🇩🇰", "HUF": "🇭🇺", "RON": "🇷🇴", "BGN": "🇧🇬",
-    "UAH": "🇺🇦", "ILS": "🇮🇱", "AED": "🇦🇪", "SAR": "🇸🇦", "THB": "🇹🇭",
-    "HKD": "🇭🇰", "SGD": "🇸🇬", "MXN": "🇲🇽", "NZD": "🇳🇿", "GEL": "🇬🇪",
-    "AZN": "🇦🇿", "KZT": "🇰🇿", "MDL": "🇲🇩", "MLD": "🇲🇩", "RSD": "🇷🇸",
-}
-
-CURRENCY_NAMES = {
-    "USD": ("US Dollar", "Долар"), "EUR": ("Euro", "Євро"),
-    "PLN": ("Polish Zloty", "Польський злотий"), "GBP": ("British Pound", "Фунт стерлінгів"),
-    "CHF": ("Swiss Franc", "Швейцарський франк"), "EGP": ("Egyptian Pound", "Єгипетський фунт"),
-    "JPY": ("Japanese Yen", "Єна"), "INR": ("Indian Rupee", "Індійська рупія"),
-    "AUD": ("Australian Dollar", "Австралійський долар"), "CAD": ("Canadian Dollar", "Канадський долар"),
-    "CZK": ("Czech Koruna", "Чеська крона"), "TRY": ("Turkish Lira", "Турецька ліра"),
-    "CNY": ("Chinese Yuan", "Китайський юань"), "KRW": ("Korean Won", "Корейська вона"),
-    "SEK": ("Swedish Krona", "Шведська крона"), "NOK": ("Norwegian Krone", "Норвезька крона"),
-    "DKK": ("Danish Krone", "Данська крона"), "HUF": ("Hungarian Forint", "Угорський форинт"),
-    "RON": ("Romanian Leu", "Румунський лей"), "BGN": ("Bulgarian Lev", "Болгарський лев"),
-}
-
-POPULAR_CURRENCIES = {"USD", "EUR", "GBP", "PLN", "CHF"}
-
-class BranchRate(BaseModel):
-    branch_id: int
-    branch_address: str
-    currency_code: str
-    buy_rate: float
-    sell_rate: float
-    wholesale_buy_rate: float = 0.0
-    wholesale_sell_rate: float = 0.0
-
-class CrossRate(BaseModel):
-    pair: str  # e.g., "EUR/USD"
-    base_currency: str  # EUR
-    quote_currency: str  # USD
-    buy_rate: float
-    sell_rate: float
-
-class RatesUploadResponseV2(BaseModel):
-    success: bool
-    message: str
-    base_rates_updated: int
-    branch_rates_updated: int
-    errors: List[str] = []
 
 # Strict list of 34 currencies for Excel template/ordering
 ORDERED_CURRENCIES = [
@@ -514,43 +326,6 @@ def startup_db_client():
         db.close()
 
 reservations_db: List[ReservationResponse] = []
-
-# Auth functions
-def verify_credentials(credentials: HTTPBasicCredentials = Depends(security), db: Session = Depends(get_db)) -> models.User:
-    username = credentials.username
-    password = credentials.password
-    
-    user = db.query(models.User).filter(models.User.username == username).first()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    
-    if not secrets.compare_digest(password.encode(), user.password_hash.encode()):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    
-    return user
-
-def require_admin(user: models.User = Depends(verify_credentials)) -> models.User:
-    if user.role != models.UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user
-
-def require_operator_or_admin(user: models.User = Depends(verify_credentials)) -> models.User:
-    if user.role not in [models.UserRole.ADMIN, models.UserRole.OPERATOR]:
-        raise HTTPException(status_code=403, detail="Operator or admin access required")
-    return user
-
-def get_branch_address(branch_id: int) -> Optional[str]:
-    branch = next((b for b in branches_data if b.id == branch_id), None)
-    return branch.address if branch else None
 
 # Routes
 @app.get("/api/my-location")
@@ -882,11 +657,6 @@ async def get_orders_count():
         "buy": len([o for o in orders_data if o.type == "buy"]),
         "sell": len([o for o in orders_data if o.type == "sell"])
     }
-
-@app.get("/api/branches", response_model=list[Branch])
-async def get_branches(db: Session = Depends(get_db)):
-    """Get all branches"""
-    return db.query(models.Branch).order_by(models.Branch.order.asc()).all()
 
 @app.get("/api/branches/{branch_id}", response_model=Branch)
 async def get_branch(branch_id: int, db: Session = Depends(get_db)):
@@ -1447,8 +1217,8 @@ async def upload_rates(
                             try:
                                 val_str = str(val).replace(',', '.').replace(' ', '').strip()
                                 val_float = float(val_str)
-                                if index < 5: # Only debug first few rows
-                                     print(f"DEBUG: Row {index} Col {col_idx} ({defs['type']}): '{val}' -> {val_float}")
+                                if idx < 5: # Only debug first few rows
+                                     print(f"DEBUG: Row {idx} Col {col_idx} ({defs['type']}): '{val}' -> {val_float}")
                                 
                                 if val_float <= 0: continue
                                 
@@ -1459,13 +1229,13 @@ async def upload_rates(
                                     branch_updates[b_id] = {}
                                 branch_updates[b_id][r_type] = val_float
                             except Exception as e:
-                                if index < 5:
+                                if idx < 5:
                                     print(f"DEBUG: Failed to parse '{val}': {e}")
                                 pass
                         
                         # Apply updates
-                        if index < 5:
-                            print(f"DEBUG: Branch Updates Row {index}: {branch_updates}")
+                        if idx < 5:
+                            print(f"DEBUG: Branch Updates Row {idx}: {branch_updates}")
                         
                         for b_id, rates in branch_updates.items():
                             # Continue even if local rates are empty, IF global fallback exists
@@ -1505,7 +1275,7 @@ async def upload_rates(
                     elif branch_col_map:
                         # Old key-based map fallback
                          for col_idx, branch_id in branch_col_map.items():
-                             if col_idx + 1 >= len(df.columns): continue
+                             if col_idx + 1 >= len(df_base.columns): continue # Changed df to df_base
                              
                              try:
                                  val_buy = row.iloc[col_idx]
@@ -1569,7 +1339,7 @@ async def upload_rates(
             # This supports the single-sheet hybrid format
             branch_sheet = base_sheet
             
-        if branch_sheet:
+        if branch_sheet and branch_sheet != base_sheet: # Only process if it's a separate sheet
             df_branch = pd.read_excel(xlsx, sheet_name=branch_sheet)
             
             # Deduplicate columns (handle '$' and '$ ' becoming same after strip)
@@ -1885,7 +1655,6 @@ async def upload_rates(
             db.commit()
             
             # Update global cache
-            global currencies_data
             for cd in currencies_data:
                 if cd.code not in processed_codes:
                     cd.is_active = False
@@ -2056,62 +1825,6 @@ async def download_rates_template(
     )
 
 
-
-@app.get("/api/rates/cross")
-async def get_cross_rates(db: Session = Depends(get_db)):
-    """Get all cross-rates (calculates common pairs dynamically)"""
-    # Common pairs to show
-    common_pairs = ["EUR/USD", "GBP/USD", "USD/PLN", "EUR/PLN"]
-    results = {}
-    
-    for pair in common_pairs:
-        parts = pair.split('/')
-        base_r = db.query(models.BranchRate).filter(models.BranchRate.branch_id == 1, models.BranchRate.currency_code == parts[0]).first()
-        quote_r = db.query(models.BranchRate).filter(models.BranchRate.branch_id == 1, models.BranchRate.currency_code == parts[1]).first()
-        
-        if base_r and quote_r:
-            try:
-                # Avoid division by zero
-                if quote_r.sell_rate == 0 or quote_r.buy_rate == 0:
-                     continue
-                     
-                results[pair] = {
-                    "base": parts[0],
-                    "quote": parts[1],
-                    "buy": round(base_r.buy_rate / quote_r.sell_rate, 4),
-                    "sell": round(base_r.sell_rate / quote_r.buy_rate, 4),
-                    "calculated": True
-                }
-            except ZeroDivisionError:
-                continue
-    
-    return {
-        "updated_at": rates_updated_at.isoformat(),
-        "cross_rates": results
-    }
-
-@app.get("/api/rates/cross/{pair}")
-async def get_cross_rate(pair: str, db: Session = Depends(get_db)):
-    """Get specific cross-rate (e.g., EUR/USD)"""
-    pair = pair.upper()
-    parts = pair.split('/')
-    if len(parts) != 2:
-        raise HTTPException(status_code=400, detail="Invalid pair format. Use BASE/QUOTE")
-    
-    base_r = db.query(models.BranchRate).filter(models.BranchRate.branch_id == 1, models.BranchRate.currency_code == parts[0]).first()
-    quote_r = db.query(models.BranchRate).filter(models.BranchRate.branch_id == 1, models.BranchRate.currency_code == parts[1]).first()
-    
-    if not base_r or not quote_r:
-        raise HTTPException(status_code=404, detail="Currency not found")
-        
-    return {
-        "pair": pair,
-        "base": parts[0],
-        "quote": parts[1],
-        "buy": round(base_r.buy_rate / quote_r.sell_rate, 4),
-        "sell": round(base_r.sell_rate / quote_r.buy_rate, 4),
-        "calculated": True
-    }
 
 @app.get("/api/calculate/cross")
 async def calculate_cross_exchange(
@@ -2713,40 +2426,6 @@ async def cancel_reservation(
 
 # ============== PUBLIC SETTINGS ENDPOINTS ==============
 
-@app.get("/api/settings")
-async def get_public_settings(db: Session = Depends(get_db)):
-    """Get public site settings"""
-    settings = db.query(models.SiteSettings).first()
-    if not settings:
-        # Create default if absolutely missing
-        settings = models.SiteSettings()
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-    return settings
-
-@app.get("/api/faq", response_model=List[FAQItem])
-async def get_faq(db: Session = Depends(get_db)):
-    """Get FAQ items"""
-    return db.query(models.FAQItem).order_by(models.FAQItem.order).all()
-
-@app.get("/api/services", response_model=List[ServiceItem])
-async def get_services(db: Session = Depends(get_db)):
-    """Get services"""
-    return db.query(models.ServiceItem).filter(models.ServiceItem.is_active == True).order_by(models.ServiceItem.order).all()
-
-@app.get("/api/articles", response_model=List[ArticleItem])
-async def get_articles(db: Session = Depends(get_db)):
-    """Get published articles"""
-    return db.query(models.ArticleItem).filter(models.ArticleItem.is_published == True).order_by(models.ArticleItem.created_at.desc()).all()
-
-@app.get("/api/articles/{article_id}", response_model=ArticleItem)
-async def get_article(article_id: int, db: Session = Depends(get_db)):
-    """Get single article"""
-    article = db.query(models.ArticleItem).filter(models.ArticleItem.id == article_id, models.ArticleItem.is_published == True).first()
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
-    return article
 
 
 # ============== ADMIN SETTINGS ENDPOINTS ==============
@@ -3389,58 +3068,7 @@ async def download_operator_rates(user: models.User = Depends(require_operator_o
 
 # ============== LIVE CHAT FEATURE ==============
 
-@app.post("/api/chat/session", response_model=ChatSession)
-async def init_chat_session(session_create: ChatSessionCreate, db: Session = Depends(get_db)):
-    """Initialize or fetch a chat session for a user"""
-    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_create.session_id).first()
-    if not session:
-        session = models.ChatSession(session_id=session_create.session_id)
-        db.add(session)
-        db.commit()
-        db.refresh(session)
-    return session
 
-@app.get("/api/chat/messages", response_model=List[ChatMessage])
-async def get_chat_messages(session_id: str, db: Session = Depends(get_db)):
-    """User fetching their messages"""
-    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    messages = db.query(models.ChatMessage).filter(models.ChatMessage.session_id == session.id).order_by(models.ChatMessage.created_at.asc()).all()
-    
-    # Mark admin messages as read by user
-    unread_admin_msgs = [m for m in messages if m.sender == 'admin' and not m.is_read]
-    if unread_admin_msgs:
-        for m in unread_admin_msgs:
-            m.is_read = True
-        db.commit()
-
-    return messages
-
-@app.post("/api/chat/messages", response_model=ChatMessage)
-async def send_chat_message(session_id: str, msg: ChatMessageCreate, db: Session = Depends(get_db)):
-    """User sending a message"""
-    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    new_msg = models.ChatMessage(
-        session_id=session.id,
-        sender="user",
-        content=msg.content
-    )
-    db.add(new_msg)
-    
-    session.last_message_at = datetime.now(timezone.utc)
-    # Reopen session if it was previously closed by admin
-    if session.status == models.ChatSessionStatus.CLOSED:
-        session.status = models.ChatSessionStatus.ACTIVE
-        
-    db.commit()
-    db.refresh(new_msg)
-    
-    return new_msg
 
 @app.get("/api/admin/chat/sessions", response_model=List[ChatSession])
 async def admin_get_chat_sessions(user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
