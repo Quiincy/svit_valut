@@ -27,15 +27,15 @@ class SiteSettingsBase(BaseModel):
     phone_secondary: Optional[str] = None
     email: str = "info@svitvalut.ua"
     working_hours: str = "щодня: 8:00-20:00"
-    telegram_url: str = "https://t.me/svitvalut"
-    viber_url: str = "viber://chat?number=+380960488884"
-    whatsapp_url: str = "https://wa.me/380960488884"
+    telegram_url: Optional[str] = "https://t.me/svitvalut"
+    viber_url: Optional[str] = "viber://chat?number=+380960488884"
+    whatsapp_url: Optional[str] = "https://wa.me/380960488884"
     instagram_url: Optional[str] = None
     facebook_url: Optional[str] = None
     address: str = "м. Київ"
     min_wholesale_amount: int = 1000
     reservation_time_minutes: int = 60
-    google_maps_embed: str = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d162757.7284!2d30.3907!3d50.4017!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x40d4cf4ee15a4505%3A0x764931d2170146fe!2z0JrQuNGX0LI!5e0!3m2!1suk!2sua!4v1702000000000!5m2!1suk!2sua"
+    google_maps_embed: Optional[str] = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d162757.7284!2d30.3907!3d50.4017!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x40d4cf4ee15a4505%3A0x764931d2170146fe!2z0JrQuNGX0LI!5e0!3m2!1suk!2sua!4v1702000000000!5m2!1suk!2sua"
 
 class SiteSettings(SiteSettingsBase):
     pass

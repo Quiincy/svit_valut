@@ -12,7 +12,7 @@ router = APIRouter()
 # Global state for cache (refactor this later if needed)
 rates_updated_at = datetime.now()
 
-@router.get("/", response_model=Dict[str, dict])
+@router.get("")
 async def get_base_rates(db: Session = Depends(get_db)):
     """Get all base rates (public). Always fetches from DB to stay current."""
     currencies = db.query(models.Currency).filter(models.Currency.is_active == True).order_by(models.Currency.order).all()
@@ -91,7 +91,7 @@ async def get_cross_rate(pair: str, db: Session = Depends(get_db)):
     except ZeroDivisionError:
         raise HTTPException(status_code=500, detail="Calculation error due to zero rates")
 
-@router.get("/{branch_id}", response_model=Dict[str, dict])
+@router.get("/{branch_id}")
 async def get_branch_rates(branch_id: int, db: Session = Depends(get_db)):
     """Get base rates + branch specific overrides"""
     try:
