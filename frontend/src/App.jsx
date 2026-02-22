@@ -148,22 +148,8 @@ function PublicLayout() {
   // Handle SEO URL routing (URL -> State)
   useEffect(() => {
     if (!loading && Object.keys(currencyInfoMap).length > 0) {
-      // 1. Handle Root Path - Reset to Default (Sell USD)
+      // 1. Root Path - Do not force reset anymore to allow manual currency selection
       if (pathname === '/') {
-        if (giveCurrency.code !== 'USD' || getCurrency.code !== 'UAH') {
-          // Find USD currency object to ensure we have full data
-          const usd = currencies.find(c => c.code === 'USD');
-          const uah = currencies.find(c => c.code === 'UAH') || { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
-
-          if (usd) {
-            setGiveCurrency(usd);
-            setGetCurrency(uah);
-            setSellCurrency(usd);
-            setBuyCurrency(usd);
-            // Trigger preset action to reset inputs in HeroSection
-            setPresetAction({ type: 'sell', currency: usd, timestamp: Date.now() });
-          }
-        }
         return;
       }
 
