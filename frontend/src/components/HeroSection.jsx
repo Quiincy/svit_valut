@@ -710,28 +710,52 @@ export default function HeroSection({
                   <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${branchBookingOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                {branchBookingOpen && (
-                  <div className="absolute z-50 w-full mt-2 bg-[#1A1F2E] border border-white/10 rounded-xl shadow-2xl max-h-[250px] overflow-y-auto ring-1 ring-white/5">
-                    {branches.map((branch) => (
-                      <button
-                        key={branch.id}
-                        onClick={() => {
-                          setSelectedBranch(branch);
-                          setBranchBookingOpen(false);
-                          setError('');
-                        }}
-                        className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3 ${selectedBranch?.id === branch.id ? 'bg-accent-yellow/10 text-accent-yellow' : 'text-white'
-                          }`}
-                      >
-                        <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-text-secondary" />
-                        <div>
-                          <div className="text-sm font-medium">{branch.name || branch.address}</div>
-                          {branch.name && <div className="text-xs text-text-secondary">{branch.address}</div>}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {branchBookingOpen && (() => {
+                  const { available } = getAvailableBranches();
+                  const bestBranchId = available.length > 0 ? available[0].id : null;
+                  const selectedCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
+
+                  return (
+                    <div className="absolute z-50 w-full mt-2 bg-[#1A1F2E] border border-white/10 rounded-xl shadow-2xl max-h-[250px] overflow-y-auto ring-1 ring-white/5">
+                      {branches.map((branch) => {
+                        const rate = getBranchRate(branch.id);
+                        const isBest = branch.id === bestBranchId;
+                        const rateValue = rate ? (isSellMode ? rate.buy_rate : rate.sell_rate) : 0;
+
+                        return (
+                          <button
+                            key={branch.id}
+                            onClick={() => {
+                              setSelectedBranch(branch);
+                              setBranchBookingOpen(false);
+                              setError('');
+                            }}
+                            className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3 ${selectedBranch?.id === branch.id ? 'bg-accent-yellow/10 text-accent-yellow' : 'text-white'
+                              }`}
+                          >
+                            <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-text-secondary" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium truncate">{branch.name || branch.address}</span>
+                                {isBest && (
+                                  <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+                                    ★ Найкращий
+                                  </span>
+                                )}
+                              </div>
+                              {branch.name && <div className="text-xs text-text-secondary truncate">{branch.address}</div>}
+                            </div>
+                            {rateValue > 0 && (
+                              <span className={`text-xs font-mono flex-shrink-0 ${isBest ? 'text-green-400' : 'text-text-secondary'}`}>
+                                {rateValue.toFixed(2)}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
 
               {error && (

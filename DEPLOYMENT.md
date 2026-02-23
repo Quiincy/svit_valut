@@ -1,54 +1,131 @@
-# Розгортання (Деплой) проекту Світ Валют
+# Деплой Світ Валют на VPS (ukraine.com.ua)
 
-Цей проект підготовлено до розгортання в різних середовищах. Нижче наведено базові інструкції для двох найпопулярніших варіантів.
+> ⚠️ На ukraine.com.ua потрібен **VPS**, не shared-хостинг.
+> Shared-хостинг підтримує тільки PHP, а проект використовує Python (FastAPI).
+> VPS плани: https://www.ukraine.com.ua/vps/
 
-## Варіант 1: Власний сервер / VPS (Рекомендовано)
-Цей метод використовує `docker-compose`, що дозволяє запустити відразу і бекенд, і фронтенд однією командою. Підходить для серверів від DigitalOcean, Hetzner, AWS EC2 тощо.
+## Крок 1: Замовити VPS
 
-1. **Клонуйте репозиторій** на свій сервер.
-2. **Встановіть Docker та Docker Compose** на сервері (якщо вони ще не встановлені).
-3. Відкрийте файл `frontend/.env.production` і змініть посилання на IP вашого сервера або ваш домен, якщо він підключений.
-4. Знаходячись у кореневій папці проекту, виконайте команду:
-   ```bash
-   docker-compose up -d --build
-   ```
-5. Дочекайтеся завершення збірки.
-6. Ваш застосунок буде доступним на **порті 80** для фронтенду та **8000** для бекенду.
-*(Примітка: в робочому середовищі рекомендується налаштувати Nginx Proxy Manager або Traefik для отримання безкоштовного SSL сертифікату від Let's Encrypt).*
+- **Мінімальні вимоги:** 1 CPU, 1 GB RAM, 20 GB SSD
+- **ОС:** Ubuntu 22.04 або 24.04
+- Після створення отримаєте **IP адресу** та **root пароль**
+
+## Крок 2: Підключитися до VPS
+
+```bash
+ssh root@YOUR_SERVER_IP
+```
+
+## Крок 3: Встановити Docker
+
+```bash
+# Оновити систему
+apt update && apt upgrade -y
+
+# Встановити Docker
+curl -fsSL https://get.docker.com | sh
+
+# Встановити Docker Compose
+apt install -y docker-compose-plugin
+
+# Перевірити
+docker --version
+docker compose version
+```
+
+## Крок 4: Завантажити проект
+
+**Варіант A — через Git:**
+```bash
+apt install -y git
+cd /var/www
+git clone https://github.com/YOUR_USERNAME/svit_valut.git
+cd svit_valut
+```
+
+**Варіант B — через SCP (з вашого Mac):**
+```bash
+# На вашому Mac:
+scp -r /Users/quincy/Desktop/svit_valut root@YOUR_SERVER_IP:/var/www/svit_valut
+```
+
+## Крок 5: Налаштувати змінні
+
+```bash
+cd /var/www/svit_valut
+cp .env.example .env
+nano .env
+```
+
+Заповнити:
+```
+DATABASE_URL=sqlite:///./svit_valut.db
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=ваш_надійний_пароль
+FRONTEND_URL=https://ваш-домен.com
+TZ=Europe/Kyiv
+```
+
+## Крок 6: Запустити
+
+```bash
+docker compose up -d --build
+```
+
+Перевірити:
+```bash
+# Статус контейнерів
+docker compose ps
+
+# Логи
+docker compose logs -f
+
+# Тест API
+curl http://localhost:8000/api/health
+```
+
+## Крок 7: Налаштувати домен
+
+1. В DNS панелі ukraine.com.ua створити **A-запис**:
+   - `@` → `YOUR_SERVER_IP`
+   - `www` → `YOUR_SERVER_IP`
+
+2. Почекати 5-15 хвилин на поширення DNS.
+
+## Крок 8: SSL сертифікат (HTTPS)
+
+```bash
+# Встановити Certbot
+apt install -y certbot
+
+# Зупинити frontend контейнер тимчасово
+docker compose stop frontend
+
+# Отримати сертифікат
+certbot certonly --standalone -d ваш-домен.com -d www.ваш-домен.com
+
+# Запустити назад
+docker compose up -d
+```
+
+Після отримання SSL, оновити `frontend/nginx.conf` для HTTPS і перебілдити.
 
 ---
 
-## Варіант 2: Render.com (Безкоштовний хмарний хостинг)
-Проект містить файл `render.yaml`, який дозволяє автоматичному сервісу [Render](https://render.com) розгорнути 2 сервіси та базу даних автоматично.
+## Корисні команди
 
-1. Створіть акаунт на **Render.com** (можна увійти через GitHub).
-2. Запуште ваш оновлений код на власний репозиторій у GitHub (Public або Private).
-3. На Render натисніть кнопку **"New" -> "Blueprint"**.
-4. Підключіть ваш репозиторій.
-5. Render автоматично прочитає файл `render.yaml` і створить:
-   - Безкоштовну базу даних PostgreSQL (`svit-valut-db`)
-   - Бекенд (`svit-valut-api`)
-   - Фронтенд (`svit-valut-web`)
-6. Під час розгортання фронтенд автоматично отримає посилання на онлайн-бекенд.
-7. Після завершення ви отримаєте готове посилання (`svit-valut-web.onrender.com`).
+```bash
+# Перезапустити
+docker compose restart
 
----
+# Оновити код і перебілдити
+cd /var/www/svit_valut
+git pull
+docker compose up -d --build
 
-## Варіант 3: Ручне розгортання (Monolithic)
-Якщо ви бажаєте розгорнути лише один процес FastAPI, який в тому числі роздаватиме статичний фронтенд:
+# Подивитися логи бекенду
+docker compose logs backend -f --tail=50
 
-1. Скомпілюйте фронтенд:
-   ```bash
-   cd frontend
-   npm run build
-   ```
-2. Скопіюйте створену папку `dist` з фронтенду та покладіть її до папки бекенду з назвою `frontend`:
-   ```bash
-   cp -r frontend/dist/assets backend/frontend/assets
-   # І так далі згідно з налаштуваннями StaticFiles в main.py
-   ```
-3. Запустіть бекенд через Gunicorn або Uvicorn з прив'язкою до Nginx:
-   ```bash
-   uvicorn main:app --host 127.0.0.1 --port 8000
-   ```
-4. Налаштуйте Nginx на перенаправлення трафіку до `localhost:8000`.
+# Бекап бази даних
+docker compose exec backend cp /app/svit_valut.db /app/data/backup_$(date +%F).db
+```

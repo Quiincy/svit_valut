@@ -864,6 +864,7 @@ async def upload_rates(
         base_updated = 0
         branch_updated = 0
         processed_codes = set()
+        explicitly_updated_branches = set()  # Track (branch_id, currency_code) pairs updated from Excel
         
         # 1. Process BASE RATES
         base_sheet = None
@@ -911,35 +912,52 @@ async def upload_rates(
                      number_val = str(row0[i]).strip()
                      
                      if addr_val and addr_val != 'nan':
-                         # New branch block start
-                         branch = db.query(models.Branch).filter(models.Branch.address == addr_val).first()
-                         if not branch:
-                             branch = db.query(models.Branch).filter(models.Branch.address.ilike(f"%{addr_val}%")).first()
-                         
-                         if branch:
-                             current_branch = branch
-                             # Update number and order logic
-                             new_number = None
-                             if number_val and number_val != 'nan':
-                                 import re
-                                 match = re.search(r'(\d+)', number_val)
-                                 if match:
-                                     new_number = int(match.group(1))
-                             
-                             needs_update = False
-                             if new_number is not None and new_number != branch.number:
-                                 branch.number = new_number
-                                 needs_update = True
-                                 
-                             # The order matches the sequence of encounters in the row, 1-indexed (could track separately)
-                             # Or use logic to set order based on the 'i' column index directly. 
-                             # Since each branch starts at 'i', 'i' naturally sorts them left-to-right.
-                             if branch.order != i:
-                                 branch.order = i
-                                 needs_update = True
-                                 
-                             if needs_update:
-                                 db.add(branch)
+                          # New branch block start
+                          branch = db.query(models.Branch).filter(models.Branch.address == addr_val).first()
+                          if not branch:
+                              branch = db.query(models.Branch).filter(models.Branch.address.ilike(f"%{addr_val}%")).first()
+                          
+                          if not branch:
+                              # Auto-create new branch from Excel
+                              import re
+                              new_number = None
+                              if number_val and number_val != 'nan':
+                                  match = re.search(r'(\d+)', number_val)
+                                  if match:
+                                      new_number = int(match.group(1))
+                              
+                              branch = models.Branch(
+                                  address=addr_val,
+                                  name=addr_val,
+                                  number=new_number or (db.query(models.Branch).count() + 1),
+                                  order=i,
+                                  is_active=True
+                              )
+                              db.add(branch)
+                              db.flush()  # Get the ID
+                              print(f"AUTO-CREATE: New branch '{addr_val}' (ID={branch.id})")
+
+                          if branch:
+                              current_branch = branch
+                              # Update number and order logic
+                              new_number = None
+                              if number_val and number_val != 'nan':
+                                  import re
+                                  match = re.search(r'(\d+)', number_val)
+                                  if match:
+                                      new_number = int(match.group(1))
+                              
+                              needs_update = False
+                              if new_number is not None and new_number != branch.number:
+                                  branch.number = new_number
+                                  needs_update = True
+                                  
+                              if branch.order != i:
+                                  branch.order = i
+                                  needs_update = True
+                                  
+                              if needs_update:
+                                  db.add(branch)
                      
                      # Map THIS column based on header in Row 2
                      if current_branch:
@@ -1240,6 +1258,7 @@ async def upload_rates(
                                 if w_buy > 0: br_rate.wholesale_buy_rate = w_buy
                                 if w_sell > 0: br_rate.wholesale_sell_rate = w_sell
                             
+                            explicitly_updated_branches.add((b_id, code))
                             branch_updated += 1
 
                     elif branch_col_map:
@@ -1287,9 +1306,10 @@ async def upload_rates(
                                           wholesale_sell_rate=b_wh_sell
                                       )
                                       db.add(br_rate)
+                                 explicitly_updated_branches.add((branch_id, code))
                                  branch_updated += 1
                              except:
-                                 pass
+                                  pass
             
                 except Exception:
                     pass
@@ -1599,6 +1619,7 @@ async def upload_rates(
                                             buy_rate=buy,
                                             sell_rate=sell
                                         ))
+                                    explicitly_updated_branches.add((bid, code))
                                     branch_updated += 1
                                 except: pass
                     except Exception as e:
@@ -1622,6 +1643,44 @@ async def upload_rates(
                 ~models.BranchRate.currency_code.in_(processed_codes)
             ).update({models.BranchRate.is_active: False}, synchronize_session=False)
             
+            db.commit()
+            
+            # Sync base rates to BranchRate table for branches NOT explicitly updated
+            # This ensures all branches reflect the new base rates from the Excel
+            all_branches = db.query(models.Branch).all()
+            for code in processed_codes:
+                base_curr = db.query(models.Currency).filter(models.Currency.code == code).first()
+                if not base_curr:
+                    continue
+                for branch in all_branches:
+                    # Skip branches that were explicitly set from Excel columns
+                    if (branch.id, code) in explicitly_updated_branches:
+                        continue
+                    
+                    br = db.query(models.BranchRate).filter(
+                        models.BranchRate.branch_id == branch.id,
+                        models.BranchRate.currency_code == code
+                    ).first()
+                    if br:
+                        # Only update if NOT explicitly disabled for this branch
+                        if br.is_active:
+                            br.buy_rate = base_curr.buy_rate
+                            br.sell_rate = base_curr.sell_rate
+                            br.wholesale_buy_rate = base_curr.wholesale_buy_rate
+                            br.wholesale_sell_rate = base_curr.wholesale_sell_rate
+                    else:
+                        # Create BranchRate entry
+                        br = models.BranchRate(
+                            branch_id=branch.id,
+                            currency_code=code,
+                            buy_rate=base_curr.buy_rate,
+                            sell_rate=base_curr.sell_rate,
+                            wholesale_buy_rate=base_curr.wholesale_buy_rate,
+                            wholesale_sell_rate=base_curr.wholesale_sell_rate,
+                            is_active=True
+                        )
+                        db.add(br)
+                    branch_updated += 1
             db.commit()
             
             # Update global cache
