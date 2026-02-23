@@ -78,7 +78,7 @@ export default function BranchesSection({ branches = [], settings }) {
         if (!res.ok) throw new Error(`Backend Geo failed: ${res.status}`);
         const data = await res.json();
         if (data.lat && data.lng) {
-          console.log(`Geolocation success via backend: ${data.source}`);
+
           return { lat: data.lat, lng: data.lng };
         }
       } catch (err) {
@@ -271,7 +271,7 @@ export default function BranchesSection({ branches = [], settings }) {
             <button
               onClick={handleFindNearest}
               disabled={findingNearest}
-              className="w-full py-3 bg-accent-blue rounded-xl text-white font-medium flex items-center justify-center gap-2 hover:bg-accent-blue/90 transition-colors disabled:opacity-50"
+              className="w-full py-3 bg-accent-yellow rounded-xl text-primary font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-accent-yellow/20 disabled:opacity-50"
             >
               {findingNearest ? (
                 <>
@@ -342,7 +342,7 @@ export default function BranchesSection({ branches = [], settings }) {
                   className={`bg-primary rounded-xl border-2 transition-all ${isNearest
                     ? 'border-accent-yellow shadow-[0_0_25px_rgba(250,204,21,0.4)] animate-pulse ring-2 ring-accent-yellow/30'
                     : isExpanded
-                      ? 'border-accent-blue shadow-lg'
+                      ? 'border-accent-yellow shadow-lg'
                       : 'border-white/10 hover:border-white/20'
                     }`}
                 >
@@ -350,7 +350,7 @@ export default function BranchesSection({ branches = [], settings }) {
                     onClick={() => setExpandedBranch(isExpanded ? null : branch.id)}
                     className="w-full p-4 flex items-center gap-4 text-left"
                   >
-                    <div className={`w-12 h-12 rounded-full ${isNearest ? 'bg-accent-yellow text-primary' : 'bg-accent-blue/20 text-accent-blue'} flex items-center justify-center flex-shrink-0 font-bold text-lg`}>
+                    <div className={`w-12 h-12 rounded-full ${isNearest ? 'bg-accent-yellow text-primary' : 'bg-accent-yellow/20 text-accent-yellow'} flex items-center justify-center flex-shrink-0 font-bold text-lg`}>
                       {branch.originalIdx + 1}
                     </div>
                     <div className="flex-1">
@@ -400,7 +400,7 @@ export default function BranchesSection({ branches = [], settings }) {
                         </button>
                         <button
                           onClick={() => handleChat(branch)}
-                          className="flex items-center justify-center gap-2 py-2.5 bg-accent-blue/10 text-accent-blue rounded-lg text-sm hover:bg-accent-blue/20 transition-colors"
+                          className="flex items-center justify-center gap-2 py-2.5 bg-accent-yellow/10 text-accent-yellow rounded-lg text-sm hover:bg-accent-yellow/20 transition-colors"
                         >
                           <MessageSquare className="w-4 h-4" />
                           Чат

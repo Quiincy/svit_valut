@@ -46,7 +46,7 @@ export default function MobileNav({ isOpen, onClose, settings, currencies = [], 
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/5">
           <div className="flex items-center gap-2">
-            <div onClick={() => { onClose(); navigate('/'); }} className="cursor-pointer">
+            <div onClick={() => { onClose(); onPresetExchange('reset'); }} className="cursor-pointer">
               <img src="/logo.png" alt="Svit Valut" className="h-8 w-auto object-contain" />
             </div>
           </div>
@@ -162,7 +162,7 @@ export default function MobileNav({ isOpen, onClose, settings, currencies = [], 
               className="w-full flex items-center justify-between px-4 py-3 text-white font-medium hover:bg-white/5 rounded-xl transition-colors"
             >
               <div className="flex items-center gap-3">
-                <Briefcase className="w-5 h-5 text-accent-blue" />
+                <Briefcase className="w-5 h-5 text-accent-yellow" />
                 <span>Послуги</span>
               </div>
               <ChevronDown className={`w-4 h-4 transition-transform ${activeTab === 'services' ? 'rotate-180' : ''}`} />
@@ -186,7 +186,7 @@ export default function MobileNav({ isOpen, onClose, settings, currencies = [], 
                 <a
                   href="/services"
                   onClick={(e) => { e.preventDefault(); handleLinkClick('/services'); }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-accent-blue hover:bg-white/5 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-accent-yellow hover:bg-white/5 transition-colors text-sm font-medium"
                 >
                   Всі послуги →
                 </a>
@@ -214,9 +214,9 @@ export default function MobileNav({ isOpen, onClose, settings, currencies = [], 
 
         {/* Footer Info */}
         <div className="p-6 border-t border-white/5">
-          <div className="p-4 bg-accent-blue/10 rounded-xl border border-accent-blue/20">
+          <div className="p-4 bg-accent-yellow/10 rounded-xl border border-accent-yellow/20">
             <div className="text-sm text-text-secondary mb-1">Гаряча лінія</div>
-            <a href="tel:0960488884" className="text-lg font-bold text-accent-blue">
+            <a href="tel:0960488884" className="text-lg font-bold text-accent-yellow">
               (096) 048-88-84
             </a>
             <div className="text-xs text-text-secondary mt-1">щодня: 8:00-20:00</div>

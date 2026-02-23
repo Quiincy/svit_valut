@@ -3,7 +3,7 @@ import {
   Upload, Download, LogOut, RefreshCw, CheckCircle,
   XCircle, Clock, DollarSign, TrendingUp, FileSpreadsheet,
   AlertCircle, ChevronDown, Search, Building2, ArrowRightLeft,
-  MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X, Globe, Save, MessageCircle, MessageSquare
+  MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X, Globe, Save, MessageCircle, MessageSquare, Trash2
 } from 'lucide-react';
 import BranchRateCard from '../components/admin/BranchRateCard';
 import SeoEditRow from '../components/admin/SeoEditRow';
@@ -69,7 +69,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
   // Reservation edit state
   const [editingReservation, setEditingReservation] = useState(null);
-  const [resForm, setResForm] = useState({ give_amount: '', get_amount: '', rate: '', branch_id: '' });
+  const [resForm, setResForm] = useState({ give_amount: '', get_amount: '', rate: '', branch_id: '', customer_name: '', phone: '' });
   const [resSaving, setResSaving] = useState(false);
 
   // Rate management state
@@ -78,6 +78,15 @@ export default function AdminDashboard({ user, onLogout }) {
 
   // SEO
   const [expandedSeoIds, setExpandedSeoIds] = useState([]); // List of currency codes being edited
+
+  // Cross-rates state
+  const [crossRatePairs, setCrossRatePairs] = useState([]);
+  const [crossRateModal, setCrossRateModal] = useState(false);
+  const [editingCrossRate, setEditingCrossRate] = useState(null);
+  const [crossRateForm, setCrossRateForm] = useState({ base_currency: '', quote_currency: '', buy_rate: '', sell_rate: '' });
+
+  // Branch currency search
+  const [branchCurrencySearch, setBranchCurrencySearch] = useState('');
 
   // Chat state
   const [chatSessions, setChatSessions] = useState([]);
@@ -116,8 +125,12 @@ export default function AdminDashboard({ user, onLogout }) {
       setReservations(items);
 
       try {
-        const allRatesRes = await adminService.getAllRates();
+        const [allRatesRes, crossRatesRes] = await Promise.all([
+          adminService.getAllRates(),
+          adminService.getAdminCrossRates()
+        ]);
         setAllRates(allRatesRes.data);
+        setCrossRatePairs(crossRatesRes.data || []);
       } catch (e) {
         // All rates endpoint not available
       }
@@ -258,30 +271,47 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
-  const handleDownloadTemplate = async () => {
-    try {
-      const response = await adminService.downloadTemplate();
+  const handleDownloadTemplate = () => {
+    const token = localStorage.getItem('authToken');
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/admin/rates/template', true);
+    xhr.setRequestHeader('Authorization', `Basic ${token}`);
+    xhr.responseType = 'arraybuffer';
 
-      // Axios with responseType: 'blob' returns a Blob in data
-      const blob = response.data;
+    xhr.onload = function () {
+      if (xhr.status === 200) {
+        const blob = new Blob([xhr.response], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
 
-      // Create object URL directly from the blob
-      const fileURL = URL.createObjectURL(blob);
+        // Safari-compatible download
+        if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+          window.navigator.msSaveOrOpenBlob(blob, 'rates_template.xlsx');
+        } else {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'rates_template.xlsx';
+          // Required for Firefox
+          document.body.appendChild(a);
+          setTimeout(() => {
+            a.click();
+            setTimeout(() => {
+              document.body.removeChild(a);
+              window.URL.revokeObjectURL(url);
+            }, 250);
+          }, 66);
+        }
+      } else {
+        alert('Помилка завантаження шаблону: HTTP ' + xhr.status);
+      }
+    };
 
-      const link = document.createElement('a');
-      link.href = fileURL;
-      link.setAttribute('download', 'rates_template.xlsx');
-      document.body.appendChild(link);
-      link.click();
+    xhr.onerror = function () {
+      alert('Помилка мережі при завантаженні шаблону');
+    };
 
-      // Cleanup
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(fileURL), 100);
-
-    } catch (error) {
-      console.error('Download error:', error);
-      alert('Помилка завантаження шаблону: ' + (error.response?.status || error.message));
-    }
+    xhr.send();
   };
 
 
@@ -303,6 +333,10 @@ export default function AdminDashboard({ user, onLogout }) {
       get_amount: res.get_amount,
       rate: res.rate,
       branch_id: res.branch_id || '',
+      customer_name: res.customer_name || '',
+      phone: res.phone || '',
+      status: res.status || 'pending_admin',
+      operator_note: res.operator_note || '',
     });
   };
 
@@ -314,6 +348,10 @@ export default function AdminDashboard({ user, onLogout }) {
         get_amount: parseFloat(resForm.get_amount),
         rate: parseFloat(resForm.rate),
         branch_id: resForm.branch_id || null,
+        customer_name: resForm.customer_name || null,
+        phone: resForm.phone || null,
+        status: resForm.status || null,
+        operator_note: resForm.operator_note || null,
       });
       setEditingReservation(null);
       fetchData();
@@ -322,6 +360,27 @@ export default function AdminDashboard({ user, onLogout }) {
       alert(error.response?.data?.detail || 'Помилка збереження');
     } finally {
       setResSaving(false);
+    }
+  };
+
+  const handleRestoreReservation = async (resId) => {
+    try {
+      await adminService.updateReservation(resId, { status: 'pending' });
+      fetchData();
+    } catch (error) {
+      console.error('Error restoring reservation:', error);
+      alert(error.response?.data?.detail || 'Помилка відновлення');
+    }
+  };
+
+  const handleDeleteReservation = async (resId) => {
+    if (!confirm('Видалити цю заявку? Вона зникне з списку.')) return;
+    try {
+      await adminService.updateReservation(resId, { status: 'deleted' });
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting reservation:', error);
+      alert(error.response?.data?.detail || 'Помилка видалення');
     }
   };
 
@@ -653,8 +712,8 @@ export default function AdminDashboard({ user, onLogout }) {
                   </button>
                 </div>
 
-                <div className="p-4 bg-accent-blue/10 rounded-xl">
-                  <h4 className="font-medium text-sm mb-3 text-accent-blue">📋 Формат Excel файлу (Матриця 34 валюти)</h4>
+                <div className="p-4 bg-accent-yellow/10 rounded-xl">
+                  <h4 className="font-medium text-sm mb-3 text-accent-yellow">📋 Формат Excel файлу (Матриця 34 валюти)</h4>
                   <div className="text-xs text-text-secondary overflow-x-auto">
                     <p className="mb-2 italic">Файл повинен містити основний аркуш (наприклад "Відділення"), де в рядках - всі 34 валюти, а в стовпцях - дані по кожному відділенню.</p>
                     <table className="w-full border-collapse border border-white/20 mb-4 text-[10px] text-center bg-primary/40">
@@ -663,8 +722,8 @@ export default function AdminDashboard({ user, onLogout }) {
                           <th className="border border-white/10 p-2">Код</th>
                           <th className="border border-white/10 p-2">Прапор</th>
                           <th className="border border-white/10 p-2">Валюта</th>
-                          <th className="border-x-2 border-white/30 p-2 bg-accent-blue/5" colSpan="4">1 вул. Старовокзальна, 23</th>
-                          <th className="border-x-2 border-white/30 p-2 bg-accent-blue/5" colSpan="4">2 вул. Під Дубом, 2А</th>
+                          <th className="border-x-2 border-white/30 p-2 bg-accent-yellow/5" colSpan="4">1 вул. Старовокзальна, 23</th>
+                          <th className="border-x-2 border-white/30 p-2 bg-accent-yellow/5" colSpan="4">2 вул. Під Дубом, 2А</th>
                           <th className="border border-white/10 p-2">...</th>
                         </tr>
                         <tr className="bg-white/5 text-[9px]">
@@ -820,13 +879,6 @@ export default function AdminDashboard({ user, onLogout }) {
                               </td>
                               <td className="py-3 pl-4">
                                 <div className="flex items-center justify-center gap-2">
-                                  {(currency.seo_buy_image || currency.seo_sell_image) && (
-                                    <img
-                                      src={currency.seo_buy_image || currency.seo_sell_image}
-                                      alt="SEO"
-                                      className="w-8 h-8 rounded-md object-cover border border-white/10"
-                                    />
-                                  )}
                                   <button
                                     onClick={() => handleSeoEdit(currency)}
                                     className={`p-1.5 rounded-lg transition-colors ${expandedSeoIds.includes(currency.code) ? 'bg-accent-yellow/20 text-accent-yellow' : 'text-text-secondary hover:text-white hover:bg-white/5'}`}
@@ -858,42 +910,70 @@ export default function AdminDashboard({ user, onLogout }) {
 
             {ratesSubTab === 'branches' && (
               <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
-                <h3 className="text-lg font-bold mb-4">Курси по відділеннях</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold">Курси по відділеннях</h3>
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+                    <input
+                      type="text"
+                      value={branchCurrencySearch}
+                      onChange={(e) => setBranchCurrencySearch(e.target.value.toUpperCase())}
+                      placeholder="Фільтр валюти... (USD, EUR)"
+                      className="pl-9 pr-4 py-2 bg-primary border border-white/10 rounded-xl text-sm focus:outline-none focus:border-accent-yellow w-52"
+                    />
+                    {branchCurrencySearch && (
+                      <button
+                        onClick={() => setBranchCurrencySearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
 
                 {allRates?.branch_rates && Object.keys(allRates.branch_rates).length > 0 ? (
                   <div className="space-y-6">
-                    {allRates.branches?.map((branch) => (
-                      <div key={branch.id} className="p-4 bg-primary rounded-xl border border-white/5">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-accent-blue" />
-                            <span className="font-medium">{branch.address}</span>
-                            <span className="text-xs text-text-secondary">(№ {branch.number || branch.id})</span>
+                    {allRates.branches?.map((branch) => {
+                      const filteredCurrencies = branchCurrencySearch
+                        ? currencies.filter(c =>
+                          c.code.includes(branchCurrencySearch) ||
+                          (c.name_uk || '').toUpperCase().includes(branchCurrencySearch)
+                        )
+                        : currencies;
+                      return (
+                        <div key={branch.id} className="p-4 bg-primary rounded-xl border border-white/5">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-accent-yellow" />
+                              <span className="font-medium">{branch.address}</span>
+                              <span className="text-xs text-text-secondary">(№ {branch.number || branch.id})</span>
+                            </div>
+                            <button
+                              onClick={() => openAddRateModal(branch.id)}
+                              className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-green-400 transition-colors"
+                              title="Додати валюту"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
                           </div>
-                          <button
-                            onClick={() => openAddRateModal(branch.id)}
-                            className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-green-400 transition-colors"
-                            title="Додати валюту"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
 
-                        {/* Iterate ALL currencies to show merged view */}
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                          {currencies.map((currency) => (
-                            <BranchRateCard
-                              key={currency.code}
-                              branchId={branch.id}
-                              currency={currency}
-                              branchData={allRates.branch_rates?.[branch.id]?.[currency.code]}
-                              onUpdate={handleUpdateRate}
-                              onToggle={handleToggleRate}
-                            />
-                          ))}
+                          {/* Iterate filtered currencies */}
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                            {filteredCurrencies.map((currency) => (
+                              <BranchRateCard
+                                key={currency.code}
+                                branchId={branch.id}
+                                currency={currency}
+                                branchData={allRates.branch_rates?.[branch.id]?.[currency.code]}
+                                onUpdate={handleUpdateRate}
+                                onToggle={handleToggleRate}
+                              />
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-text-secondary">
@@ -904,6 +984,181 @@ export default function AdminDashboard({ user, onLogout }) {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Cross-Rates Section inside rates tab */}
+        {activeTab === 'rates' && (
+          <div className="bg-primary-light rounded-2xl p-6 border border-white/10 mt-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold">Крос-курси (валютні пари)</h3>
+              <button
+                onClick={() => {
+                  setEditingCrossRate(null);
+                  setCrossRateForm({ base_currency: '', quote_currency: '', buy_rate: '', sell_rate: '' });
+                  setCrossRateModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-accent-yellow text-primary font-bold rounded-xl hover:opacity-90 transition-all text-sm"
+              >
+                <Plus className="w-4 h-4" /> Додати пару
+              </button>
+            </div>
+
+            {crossRatePairs.length === 0 ? (
+              <div className="text-center py-8 text-text-secondary">
+                <p>Крос-курсів немає. Додайте першу пару.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-left text-sm text-text-secondary border-b border-white/10">
+                      <th className="pb-3">Пара</th>
+                      <th className="pb-3 text-right">Купівля</th>
+                      <th className="pb-3 text-right">Продаж</th>
+                      <th className="pb-3 text-right">Дії</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {crossRatePairs.map((cr) => (
+                      <tr key={cr.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <td className="py-3 font-semibold">{cr.base_currency}/{cr.quote_currency}</td>
+                        <td className="py-3 text-right text-green-400 font-mono">{cr.buy_rate?.toFixed(4)}</td>
+                        <td className="py-3 text-right text-red-400 font-mono">{cr.sell_rate?.toFixed(4)}</td>
+                        <td className="py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingCrossRate(cr);
+                                setCrossRateForm({
+                                  base_currency: cr.base_currency,
+                                  quote_currency: cr.quote_currency,
+                                  buy_rate: cr.buy_rate,
+                                  sell_rate: cr.sell_rate
+                                });
+                                setCrossRateModal(true);
+                              }}
+                              className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                              title="Редагувати"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!confirm('Видалити цю пару?')) return;
+                                try {
+                                  await adminService.deleteCrossRate(cr.id);
+                                  setCrossRatePairs(prev => prev.filter(p => p.id !== cr.id));
+                                } catch (e) {
+                                  alert('Помилка видалення');
+                                }
+                              }}
+                              className="p-2 text-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                              title="Видалити"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Cross-Rate Add/Edit Modal */}
+        {crossRateModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-primary-light rounded-2xl p-6 w-full max-w-sm border border-white/10">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold">{editingCrossRate ? 'Редагувати пару' : 'Додати крос-курс'}</h3>
+                <button onClick={() => setCrossRateModal(false)}><X className="w-5 h-5 text-text-secondary" /></button>
+              </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">Базова</label>
+                    <input
+                      type="text"
+                      placeholder="EUR"
+                      value={crossRateForm.base_currency}
+                      onChange={(e) => setCrossRateForm({ ...crossRateForm, base_currency: e.target.value.toUpperCase() })}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow uppercase"
+                      maxLength={3}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">Котирувальна</label>
+                    <input
+                      type="text"
+                      placeholder="USD"
+                      value={crossRateForm.quote_currency}
+                      onChange={(e) => setCrossRateForm({ ...crossRateForm, quote_currency: e.target.value.toUpperCase() })}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow uppercase"
+                      maxLength={3}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">Купівля</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={crossRateForm.buy_rate}
+                      onChange={(e) => setCrossRateForm({ ...crossRateForm, buy_rate: e.target.value })}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">Продаж</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={crossRateForm.sell_rate}
+                      onChange={(e) => setCrossRateForm({ ...crossRateForm, sell_rate: e.target.value })}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => setCrossRateModal(false)}
+                    className="flex-1 py-3 bg-white/5 rounded-xl text-text-secondary hover:text-white hover:bg-white/10 transition-all"
+                  >
+                    Скасувати
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const payload = {
+                          base_currency: crossRateForm.base_currency,
+                          quote_currency: crossRateForm.quote_currency,
+                          buy_rate: parseFloat(crossRateForm.buy_rate) || 0,
+                          sell_rate: parseFloat(crossRateForm.sell_rate) || 0
+                        };
+                        if (editingCrossRate) {
+                          const res = await adminService.updateCrossRate(editingCrossRate.id, payload);
+                          setCrossRatePairs(prev => prev.map(p => p.id === editingCrossRate.id ? res.data : p));
+                        } else {
+                          const res = await adminService.createCrossRate(payload);
+                          setCrossRatePairs(prev => [...prev, res.data]);
+                        }
+                        setCrossRateModal(false);
+                      } catch (e) {
+                        alert('Помилка збереження: ' + (e.response?.data?.detail || e.message));
+                      }
+                    }}
+                    className="flex-1 py-3 bg-accent-yellow text-primary font-bold rounded-xl hover:opacity-90 transition-all"
+                  >
+                    {editingCrossRate ? 'Зберегти' : 'Додати'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1016,6 +1271,11 @@ export default function AdminDashboard({ user, onLogout }) {
                                 {res.phone}
                               </a>
                             </div>
+                            {res.operator_note && (
+                              <div className="mt-1 text-xs text-accent-yellow/80 italic truncate max-w-[200px]" title={res.operator_note}>
+                                📝 {res.operator_note}
+                              </div>
+                            )}
                           </td>
                           <td className="py-4 pr-4">
                             <div className="text-sm font-medium">
@@ -1040,23 +1300,35 @@ export default function AdminDashboard({ user, onLogout }) {
                           </td>
                           <td className="py-4">
                             <div className="flex gap-2">
+                              {/* Edit button always visible */}
+                              <button
+                                onClick={() => openResModal(res)}
+                                className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                                title="Редагувати"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+
+                              {/* Assign to operator – for pending_admin */}
                               {res.status === 'pending_admin' && (
-                                <>
-                                  <button
-                                    onClick={() => openResModal(res)}
-                                    className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                                    title="Редагувати"
-                                  >
-                                    <Pencil className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleAssign(res.id)}
-                                    className="p-2 text-text-secondary hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
-                                    title="Надіслати оператору"
-                                  >
-                                    <Send className="w-4 h-4" />
-                                  </button>
-                                </>
+                                <button
+                                  onClick={() => handleAssign(res.id)}
+                                  className="p-2 text-text-secondary hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                                  title="Надіслати оператору"
+                                >
+                                  <Send className="w-4 h-4" />
+                                </button>
+                              )}
+
+                              {/* Restore button – for cancelled / expired */}
+                              {(res.status === 'cancelled' || res.status === 'expired') && (
+                                <button
+                                  onClick={() => handleRestoreReservation(res.id)}
+                                  className="p-2 text-text-secondary hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                                  title="Відновити"
+                                >
+                                  <RefreshCw className="w-4 h-4" />
+                                </button>
                               )}
                             </div>
                           </td>
@@ -1073,7 +1345,7 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* Add/Edit Rate Modal */}
         {rateModal.open && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-primary-light rounded-2xl p-6 w-full max-w-sm border border-white/10">
+            <div className="bg-primary-light rounded-2xl p-6 w-full max-w-sm border border-white/10 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold">Додати/Редагувати курс</h3>
                 <button onClick={() => setRateModal({ ...rateModal, open: false })}><X className="w-5 h-5 text-text-secondary" /></button>
@@ -1274,14 +1546,31 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* Reservation Edit Modal */}
         {editingReservation && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-primary-light rounded-2xl p-6 w-full max-w-md border border-white/10">
+            <div className="bg-primary-light rounded-2xl p-6 w-full max-w-md border border-white/10 max-h-[90vh] overflow-y-auto">
               <h3 className="text-lg font-bold mb-4">Редагувати бронювання #{editingReservation.id}</h3>
 
               <div className="space-y-4">
-                <div className="p-3 bg-primary rounded-xl">
-                  <div className="text-sm text-text-secondary">Клієнт</div>
-                  <div className="font-medium">{editingReservation.customer_name || '—'}</div>
-                  <div className="text-sm text-text-secondary">{editingReservation.phone}</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">Ім'я клієнта</label>
+                    <input
+                      type="text"
+                      value={resForm.customer_name}
+                      onChange={(e) => setResForm({ ...resForm, customer_name: e.target.value })}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                      placeholder="Іван"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-1">Телефон</label>
+                    <input
+                      type="text"
+                      value={resForm.phone}
+                      onChange={(e) => setResForm({ ...resForm, phone: e.target.value })}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                      placeholder="+380..."
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1333,9 +1622,54 @@ export default function AdminDashboard({ user, onLogout }) {
                     ))}
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">Статус</label>
+                  <select
+                    value={resForm.status || editingReservation?.status || ''}
+                    onChange={(e) => setResForm({ ...resForm, status: e.target.value })}
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                  >
+                    <option value="pending_admin">🟡 Очікує адміна</option>
+                    <option value="pending">🟠 Очікує оператора</option>
+                    <option value="confirmed">🔵 Підтверджено</option>
+                    <option value="completed">🟢 Завершено</option>
+                    <option value="cancelled">🔴 Скасовано</option>
+                    <option value="expired">⚫ Прострочено</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-text-secondary mb-1">Нотатка оператора</label>
+                  <textarea
+                    value={resForm.operator_note || ''}
+                    onChange={(e) => setResForm({ ...resForm, operator_note: e.target.value })}
+                    placeholder="Нотатка до бронювання..."
+                    rows={2}
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow resize-none"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-3 mt-6">
+                {/* Restore Button - only for cancelled or expired */}
+                {(editingReservation.status === 'cancelled' || editingReservation.status === 'expired') && (
+                  <button
+                    onClick={() => { handleRestoreReservation(editingReservation.id); setEditingReservation(null); }}
+                    className="flex-1 py-3 bg-green-500/20 text-green-400 rounded-xl hover:bg-green-500/30 transition-all"
+                  >
+                    Відновити
+                  </button>
+                )}
+                {/* Delete Button */}
+                <button
+                  onClick={() => { handleDeleteReservation(editingReservation.id); setEditingReservation(null); }}
+                  className="py-3 px-4 bg-red-500/20 text-red-400 rounded-xl hover:bg-red-500/30 transition-all"
+                >
+                  Видалити
+                </button>
+              </div>
+              <div className="flex gap-3 mt-2">
                 <button
                   onClick={() => setEditingReservation(null)}
                   className="flex-1 py-3 bg-white/5 rounded-xl text-text-secondary hover:text-white hover:bg-white/10 transition-all"

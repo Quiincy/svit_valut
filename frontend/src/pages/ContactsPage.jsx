@@ -48,13 +48,13 @@ export default function ContactsPage() {
                     {/* Chat */}
                     <button
                         onClick={onOpenChat}
-                        className="bg-primary-light border border-white/10 rounded-2xl p-6 hover:border-accent-blue/30 transition-all group text-center"
+                        className="bg-primary-light border border-white/10 rounded-2xl p-6 hover:border-accent-yellow/30 transition-all group text-center"
                     >
-                        <div className="w-14 h-14 bg-accent-blue/10 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:bg-accent-blue/20 transition-colors">
-                            <MessageSquare className="w-7 h-7 text-accent-blue" />
+                        <div className="w-14 h-14 bg-accent-yellow/10 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:bg-accent-yellow/20 transition-colors">
+                            <MessageSquare className="w-7 h-7 text-accent-yellow" />
                         </div>
                         <h3 className="text-white font-bold text-lg mb-2">Онлайн-чат</h3>
-                        <p className="text-accent-blue font-bold text-lg">Написати в чат</p>
+                        <p className="text-accent-yellow font-bold text-lg">Написати в чат</p>
                         <p className="text-text-secondary text-sm mt-1">Відповідаємо за кілька хвилин</p>
                     </button>
                 </div>

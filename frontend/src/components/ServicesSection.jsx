@@ -31,16 +31,18 @@ export default function ServicesSection({ services }) {
               )}
               <div className="p-4 lg:p-6">
                 <h3 className="font-semibold text-lg mb-2">{service.title}</h3>
-                <p className="text-sm text-text-secondary mb-4">{service.description}</p>
+                <p className="text-sm text-text-secondary mb-4 line-clamp-3">
+                  {service.short_description || (service.description ? service.description.replace(/<[^>]*>?/gm, '') : '')}
+                </p>
                 {service.link_url ? (
                   <Link
                     to={service.link_url}
-                    className="px-4 py-2 border border-accent-blue text-accent-blue rounded-lg text-sm font-medium hover:bg-accent-blue/10 transition-colors inline-block"
+                    className="px-4 py-2 border border-accent-yellow text-accent-yellow rounded-lg text-sm font-medium hover:bg-accent-yellow/10 transition-colors inline-block"
                   >
                     Детальніше
                   </Link>
                 ) : (
-                  <button className="px-4 py-2 border border-accent-blue text-accent-blue rounded-lg text-sm font-medium hover:bg-accent-blue/10 transition-colors">
+                  <button className="px-4 py-2 border border-accent-yellow text-accent-yellow rounded-lg text-sm font-medium hover:bg-accent-yellow/10 transition-colors">
                     Детальніше
                   </button>
                 )}
@@ -49,12 +51,14 @@ export default function ServicesSection({ services }) {
           ))}
         </div>
 
-        <Link
-          to="/services"
-          className="block w-full mt-6 py-4 bg-accent-blue rounded-xl text-white font-medium hover:bg-accent-blue/90 transition-colors text-center"
-        >
-          Відкрити всі →
-        </Link>
+        <div className="mt-8 flex justify-center">
+          <Link
+            to="/services"
+            className="w-full md:w-auto px-12 py-4 bg-accent-yellow rounded-xl text-primary font-bold hover:opacity-90 transition-all text-center shadow-lg shadow-accent-yellow/20"
+          >
+            Відкрити всі →
+          </Link>
+        </div>
       </div>
     </section>
   );

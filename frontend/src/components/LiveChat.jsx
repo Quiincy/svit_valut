@@ -22,12 +22,12 @@ export default function LiveChat({ isOpen, onClose }) {
   const chatId = getChatId();
   const pollIntervalRef = useRef(null);
 
-  // Chat availability — 7:30–20:30 Kyiv time
+  // Chat availability — 08:00–20:00 Kyiv time
   const isChatAvailable = () => {
     const now = new Date();
     const kyivTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
     const totalMinutes = kyivTime.getHours() * 60 + kyivTime.getMinutes();
-    return totalMinutes >= 450 && totalMinutes <= 1230;
+    return totalMinutes >= 480 && totalMinutes <= 1200;
   };
   const chatOnline = isChatAvailable();
 
@@ -38,6 +38,9 @@ export default function LiveChat({ isOpen, onClose }) {
       setNameSubmitted(true);
     }
 
+    // Only fetch and poll if the chat is actually open
+    if (!isOpen) return;
+
     // Initialize session on backend
     chatService.initSession({ session_id: chatId }).catch(console.error);
 
@@ -47,7 +50,7 @@ export default function LiveChat({ isOpen, onClose }) {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [chatId]);
+  }, [chatId, isOpen]);
 
   const fetchMessages = async () => {
     try {
@@ -138,7 +141,7 @@ export default function LiveChat({ isOpen, onClose }) {
           <div>
             <div className="font-bold text-primary">Світ Валют</div>
             <div className={`text-xs ${chatOnline ? 'text-primary/70' : 'text-red-600/70'}`}>
-              {chatOnline ? 'Онлайн підтримка' : 'Не в мережі (7:30–20:30)'}
+              {chatOnline ? 'Онлайн підтримка' : 'Не в мережі (08:00–20:00)'}
             </div>
           </div>
         </div>
@@ -232,7 +235,7 @@ export default function LiveChat({ isOpen, onClose }) {
               </div>
             ) : (
               <div className="text-center py-2">
-                <p className="text-sm text-gray-400">Чат працює щодня з 7:30 до 20:30</p>
+                <p className="text-sm text-gray-400">Чат працює щодня з 08:00 до 20:00</p>
                 <p className="text-xs text-gray-500 mt-1">Залиште повідомлення і ми відповімо вранці</p>
                 <div className="flex gap-2 mt-2">
                   <input

@@ -40,13 +40,7 @@ export default function Footer({ settings }) {
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         {/* Main Footer Content */}
         <div className="py-8 lg:py-12">
-          {/* Article Preview - Mobile */}
-          <div className="lg:hidden mb-8 p-4 bg-primary rounded-xl border border-white/10">
-            <p className="text-sm text-text-secondary mb-3 line-clamp-4">
-              Інтерес жителів нашої країни до іноземної валюти дуже високий, тому обмін різних видів грошей у Києві є доволі затребуваною послугою. Коли цифри на табло в обмінниках починають зростати, багато людей хвилюються, адже навіть незначні заощадження можуть різко знецінитися...
-            </p>
-            <a href="#" className="text-accent-blue text-sm font-medium">ЧИТАТИ ДАЛІ</a>
-          </div>
+
 
           {/* Quick Links - Mobile */}
           <div className="space-y-4 lg:hidden">
@@ -148,7 +142,7 @@ export default function Footer({ settings }) {
 
         {/* CTA Buttons - Mobile */}
         <div className="lg:hidden space-y-3 pb-6">
-          <a href="#" className="block w-full py-4 bg-gradient-gold rounded-xl text-primary font-bold text-center hover:opacity-90 transition-opacity">
+          <a href="#" className="block w-full py-4 bg-accent-yellow rounded-xl text-primary font-bold text-center hover:opacity-90 transition-opacity">
             Забронювати валюту
           </a>
           {settings?.telegram_url && (

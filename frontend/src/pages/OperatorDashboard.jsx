@@ -180,8 +180,8 @@ export default function OperatorDashboard({ user, onLogout }) {
       <header className="bg-primary-light border-b border-white/10 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-accent-blue rounded-lg flex items-center justify-center">
-              <MapPin className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-accent-yellow rounded-lg flex items-center justify-center">
+              <MapPin className="w-5 h-5 text-primary" />
             </div>
             <div>
               <h1 className="font-bold text-lg">Панель оператора</h1>
@@ -205,7 +205,7 @@ export default function OperatorDashboard({ user, onLogout }) {
             {/* Download Rates Button */}
             <button
               onClick={handleDownloadRates}
-              className="flex items-center gap-2 px-4 py-2 bg-accent-blue/10 text-accent-blue rounded-lg hover:bg-accent-blue/20 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-accent-yellow/10 text-accent-yellow rounded-lg hover:bg-accent-yellow/20 transition-colors"
               title="Завантажити курси"
             >
               <Download className="w-4 h-4" />
@@ -214,7 +214,7 @@ export default function OperatorDashboard({ user, onLogout }) {
 
             <div className="text-right">
               <div className="font-medium text-sm">{user.name}</div>
-              <div className="text-xs text-accent-blue">Оператор</div>
+              <div className="text-xs text-accent-yellow">Оператор</div>
             </div>
             <button
               onClick={onLogout}
@@ -229,7 +229,7 @@ export default function OperatorDashboard({ user, onLogout }) {
       <div className="p-6">
         {/* Stats Cards */}
         {dashboard && (
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             <div className="bg-primary-light rounded-2xl p-5 border border-white/10">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
@@ -258,26 +258,6 @@ export default function OperatorDashboard({ user, onLogout }) {
                 <span className="text-sm text-text-secondary">Сьогодні</span>
               </div>
               <div className="text-3xl font-bold text-green-400">{dashboard.completed_today}</div>
-            </div>
-
-            <div className="bg-primary-light rounded-2xl p-5 border border-white/10">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-purple-400" />
-                </div>
-                <span className="text-sm text-text-secondary">Обсяг за сьогодні (UAH)</span>
-              </div>
-              <div className="text-2xl font-bold">{dashboard.total_volume_uah.toLocaleString()}₴</div>
-            </div>
-
-            <div className="bg-primary-light rounded-2xl p-5 border border-white/10">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-purple-400" />
-                </div>
-                <span className="text-sm text-text-secondary">Обсяг за місяць (UAH)</span>
-              </div>
-              <div className="text-2xl font-bold">{dashboard.total_volume_uah_month?.toLocaleString()}₴</div>
             </div>
           </div>
         )}
@@ -339,14 +319,14 @@ export default function OperatorDashboard({ user, onLogout }) {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-blue text-white [color-scheme:dark]"
+                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
                 />
                 <span className="text-text-secondary">—</span>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-blue text-white [color-scheme:dark]"
+                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
                 />
               </div>
               <button
@@ -389,22 +369,9 @@ export default function OperatorDashboard({ user, onLogout }) {
                         <div className="text-xs text-text-secondary mb-1">Бронювання</div>
                         <div className="font-mono font-bold">#{res.id}</div>
                         <div className="text-sm font-medium mt-1">{res.customer_name || '—'}</div>
-                        <div className="flex items-center gap-1 mt-1 text-sm">
-                          <Phone className="w-3 h-3 text-accent-blue" />
-                          <a href={`tel:${res.phone}`} className="text-accent-blue hover:underline">
-                            {res.phone}
-                          </a>
-                          <button
-                            onClick={() => handleCopyPhone(res.phone, res.id)}
-                            className="ml-2 p-1 hover:bg-white/10 rounded-md transition-colors"
-                            title="Копіювати номер"
-                          >
-                            {copiedId === res.id ? (
-                              <Check className="w-3 h-3 text-green-400" />
-                            ) : (
-                              <Copy className="w-3 h-3 text-text-secondary" />
-                            )}
-                          </button>
+                        <div className="flex items-center gap-1 mt-1 text-sm text-text-secondary">
+                          <Phone className="w-3 h-3" />
+                          <span>••••••••••</span>
                         </div>
                       </div>
 

@@ -36,29 +36,18 @@ async def get_base_rates(db: Session = Depends(get_db)):
 
 @router.get("/cross")
 async def get_cross_rates(db: Session = Depends(get_db)):
-    """Get all cross-rates (calculates common pairs dynamically)"""
-    common_pairs = ["EUR/USD", "GBP/USD", "USD/PLN", "EUR/PLN"]
+    """Get all active cross-rate pairs from manually configured data"""
+    pairs = db.query(models.CrossRate).filter(models.CrossRate.is_active == True).order_by(models.CrossRate.order.asc()).all()
     results = {}
-    
-    for pair in common_pairs:
-        parts = pair.split('/')
-        base_r = db.query(models.BranchRate).filter(models.BranchRate.branch_id == 1, models.BranchRate.currency_code == parts[0]).first()
-        quote_r = db.query(models.BranchRate).filter(models.BranchRate.branch_id == 1, models.BranchRate.currency_code == parts[1]).first()
-        
-        if base_r and quote_r:
-            try:
-                if quote_r.sell_rate == 0 or quote_r.buy_rate == 0:
-                     continue
-                results[pair] = {
-                    "base": parts[0],
-                    "quote": parts[1],
-                    "buy": round(base_r.buy_rate / quote_r.sell_rate, 4),
-                    "sell": round(base_r.sell_rate / quote_r.buy_rate, 4),
-                    "calculated": True
-                }
-            except ZeroDivisionError:
-                continue
-    
+    for p in pairs:
+        pair_name = f"{p.base_currency}/{p.quote_currency}"
+        results[pair_name] = {
+            "base": p.base_currency,
+            "quote": p.quote_currency,
+            "buy": round(p.buy_rate, 4),
+            "sell": round(p.sell_rate, 4),
+            "calculated": False
+        }
     return {
         "updated_at": rates_updated_at.isoformat(),
         "cross_rates": results
@@ -99,27 +88,31 @@ async def get_branch_rates(branch_id: int, db: Session = Depends(get_db)):
         currencies = db.query(models.Currency).filter(models.Currency.is_active == True).order_by(models.Currency.order).all()
         base_map = {c.code: c for c in currencies}
         
-        # Fetch branch rates
+        # Fetch ALL branch rates (both active and inactive) so we know if a currency was explicitly disabled here
         branch_rates = db.query(models.BranchRate).filter(
-            models.BranchRate.branch_id == branch_id,
-            models.BranchRate.is_active == True
+            models.BranchRate.branch_id == branch_id
         ).all()
         br_map = {r.currency_code: r for r in branch_rates}
         
         result = {}
-        # We must return ONLY currencies that are active globally AND have a branch rate
-        # If fallback configuration needed, we'll return globally active ones and override.
         for code, base_c in base_map.items():
             br = br_map.get(code)
-            # If a branch rate exists and is valid, use it. Else use base rate if fallback is allowed.
-            # Real requirement: "return branch rate if exists, else base rate"
-            actual_buy = br.buy_rate if br and br.buy_rate > 0 else base_c.buy_rate
-            actual_sell = br.sell_rate if br and br.sell_rate > 0 else base_c.sell_rate
-            actual_w_buy = br.wholesale_buy_rate if br and br.wholesale_buy_rate > 0 else base_c.wholesale_buy_rate
-            actual_w_sell = br.wholesale_sell_rate if br and br.wholesale_sell_rate > 0 else base_c.wholesale_sell_rate
             
-            # Use branch wholesale threshold if defined, else fallback to global
-            actual_threshold = br.wholesale_threshold if br and br.wholesale_threshold and br.wholesale_threshold != 1000 else base_c.wholesale_threshold
+            is_active = br.is_active if br else base_c.is_active
+            
+            # If explicitly disabled for this branch, return 0s
+            if not is_active:
+                actual_buy = 0.0
+                actual_sell = 0.0
+                actual_w_buy = 0.0
+                actual_w_sell = 0.0
+                actual_threshold = base_c.wholesale_threshold
+            else:
+                actual_buy = br.buy_rate if br and br.buy_rate > 0 else base_c.buy_rate
+                actual_sell = br.sell_rate if br and br.sell_rate > 0 else base_c.sell_rate
+                actual_w_buy = br.wholesale_buy_rate if br and br.wholesale_buy_rate > 0 else base_c.wholesale_buy_rate
+                actual_w_sell = br.wholesale_sell_rate if br and br.wholesale_sell_rate > 0 else base_c.wholesale_sell_rate
+                actual_threshold = br.wholesale_threshold if br and br.wholesale_threshold and br.wholesale_threshold != 1000 else base_c.wholesale_threshold
 
             result[code] = {
                 "code": code,
@@ -131,7 +124,8 @@ async def get_branch_rates(branch_id: int, db: Session = Depends(get_db)):
                 "wholesale_buy_rate": round(actual_w_buy, 4),
                 "wholesale_sell_rate": round(actual_w_sell, 4),
                 "wholesale_threshold": actual_threshold,
-                "is_popular": base_c.is_popular
+                "is_popular": base_c.is_popular,
+                "is_active": is_active
             }
                 
         return {

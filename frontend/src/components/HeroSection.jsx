@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, RefreshCw, Loader2, X, MapPin, User, Phone, Check, ArrowRight, Clock } from 'lucide-react';
+import { ChevronDown, RefreshCw, Loader2, X, MapPin, User, Phone, Check, ArrowRight, Clock, AlertCircle } from 'lucide-react';
+import SeoTextBlock from './SeoTextBlock';
 
 export default function HeroSection({
   giveAmount,
@@ -23,6 +24,7 @@ export default function HeroSection({
   branchCurrencyMap = {},
   currencyInfoMap = {},
   onOpenChat,
+  activeCurrencyInfo
 }) {
   const location = useLocation();
   const [bookingStep, setBookingStep] = useState(null); // null, 'branch', 'name', 'phone'
@@ -31,6 +33,7 @@ export default function HeroSection({
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [branchBookingOpen, setBranchBookingOpen] = useState(false);
 
   const [sellInputValue, setSellInputValue] = useState('');
   const [buyInputValue, setBuyInputValue] = useState('');
@@ -94,8 +97,10 @@ export default function HeroSection({
         unavailable.push(b);
         return;
       }
-      const hasCurrency = currs.some(c => c.code === selectedCode);
-      if (hasCurrency) {
+      const currency = currs.find(c => c.code === selectedCode);
+      const isAvailable = currency && (currency.buy_rate > 0 || currency.sell_rate > 0);
+
+      if (isAvailable) {
         available.push(b);
       } else {
         unavailable.push(b);
@@ -152,14 +157,10 @@ export default function HeroSection({
       return;
     }
     setError('');
-    // Skip Branch selection if we already have an Active Branch from the calculator
-    if (activeBranch) {
-      setSelectedBranch(activeBranch);
-      setBookingStep('name');
-    } else {
-      setSelectedBranch(branches[0]);
-      setBookingStep('branch');
-    }
+
+    // Pre-select branch: activeBranch or first available
+    setSelectedBranch(activeBranch || branches[0] || null);
+    setBookingStep('name');
   };
 
   const handleSelectBranch = (branch) => {
@@ -167,7 +168,6 @@ export default function HeroSection({
     if (onBranchChange) {
       onBranchChange(branch);
     }
-    setBookingStep('name');
   };
 
   const handleNameSubmit = () => {
@@ -175,7 +175,21 @@ export default function HeroSection({
       setError("Введіть ваше ім'я");
       return;
     }
+    if (!selectedBranch) {
+      setError('Оберіть відділення');
+      return;
+    }
     setError('');
+
+    // Check if currency is available at the selected branch
+    const { available } = getAvailableBranches();
+    const isAvailableHere = available.some(b => b.id === selectedBranch.id);
+
+    if (!isAvailableHere) {
+      setBookingStep('unavailable_currency');
+      return;
+    }
+
     setBookingStep('phone');
   };
 
@@ -213,6 +227,7 @@ export default function HeroSection({
   const closeModal = () => {
     setBookingStep(null);
     setError('');
+    setBranchBookingOpen(false);
   };
 
   // Helper to calculate effective rate based on amount and threshold
@@ -311,7 +326,7 @@ export default function HeroSection({
   const displayBuyRate = getEffectiveRate(activeCurrency, isSellMode ? currentSellInput : 0, 'buy');
   const displaySellRate = getEffectiveRate(activeCurrency, !isSellMode ? currentBuyInput : 0, 'sell');
 
-  // Chat availability helper — only available 7:30–20:30 Kyiv time
+  // Chat availability helper — only available 08:00–20:00 Kyiv time
   const isChatAvailable = () => {
     const now = new Date();
     // Get Kyiv time (UTC+2 / UTC+3 depending on DST)
@@ -319,21 +334,17 @@ export default function HeroSection({
     const hours = kyivTime.getHours();
     const minutes = kyivTime.getMinutes();
     const totalMinutes = hours * 60 + minutes;
-    return totalMinutes >= 450 && totalMinutes <= 1230; // 7:30 = 450, 20:30 = 1230
+    return totalMinutes >= 480 && totalMinutes <= 1200; // 08:00 = 480, 20:00 = 1200
   };
 
   const chatOnline = isChatAvailable();
 
-  // Get current currency info based on selected currency
-  const currentCurrencyCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
-  const currencyInfo = currencyInfoMap[currentCurrencyCode] || null;
-  // Only show SEO content if we are NOT on the homepage (root path)
-  // AND we have actual SEO info to show
-  const hasCurrencyInfo = location.pathname !== '/' && currencyInfo && (
-    (currencyInfo.seo_h1 || currencyInfo.seo_h2 || currencyInfo.seo_text) ||
-    (isSellMode && (currencyInfo.seo_sell_h1 || currencyInfo.seo_sell_h2 || currencyInfo.seo_sell_text)) ||
-    (!isSellMode && (currencyInfo.seo_buy_h1 || currencyInfo.seo_buy_h2 || currencyInfo.seo_buy_text))
-  );
+  const hasCurrencyInfo = !!activeCurrencyInfo;
+
+  // Resolve texts precisely for heading and images
+  const activeH1 = activeCurrencyInfo ? (isSellMode ? activeCurrencyInfo.seo_sell_h1 : activeCurrencyInfo.seo_buy_h1) || activeCurrencyInfo.seo_h1 : null;
+  const activeH2 = activeCurrencyInfo ? (isSellMode ? activeCurrencyInfo.seo_sell_h2 : activeCurrencyInfo.seo_buy_h2) || activeCurrencyInfo.seo_h2 : null;
+  const activeImage = activeCurrencyInfo ? (isSellMode ? activeCurrencyInfo.seo_sell_image : activeCurrencyInfo.seo_buy_image) || activeCurrencyInfo.seo_image : null;
 
   return (
     <section className="pt-20 lg:pt-24">
@@ -345,106 +356,74 @@ export default function HeroSection({
         {/* <div className="absolute inset-0 bg-gradient-to-r from-primary via-primary/80 to-transparent"></div> */}
         <div className="relative z-10 max-w-7xl mx-auto px-8 py-16">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
-            {/* Left Content — Dynamic Currency Info or Default */}
+            {/* Left Content — Always homepage content on desktop */}
             <div className="flex flex-col gap-8 min-h-[400px]">
-              {hasCurrencyInfo ? (
-                <>
-                  {/* Dynamic SEO H1 */}
-                  <h1 className="text-5xl xl:text-7xl font-bold leading-tight">
-                    <span className="text-accent-yellow">
-                      {(isSellMode ? currencyInfo.seo_sell_h1 : currencyInfo.seo_buy_h1) || currencyInfo.seo_h1}
-                    </span>
-                    {((isSellMode ? currencyInfo.seo_sell_h2 : currencyInfo.seo_buy_h2) || currencyInfo.seo_h2) && (
-                      <>
-                        <br />
-                        <span className="text-white font-light text-4xl xl:text-6xl">
-                          {(isSellMode ? currencyInfo.seo_sell_h2 : currencyInfo.seo_buy_h2) || currencyInfo.seo_h2}
-                        </span>
-                      </>
-                    )}
-                  </h1>
-
-                  {/* SEO Image */}
-                  {((isSellMode ? currencyInfo.seo_sell_image : currencyInfo.seo_buy_image) || currencyInfo.seo_image) && (
-                    <div className="rounded-2xl overflow-hidden border border-white/10 max-w-md">
-                      <img
-                        src={(isSellMode ? currencyInfo.seo_sell_image : currencyInfo.seo_buy_image) || currencyInfo.seo_image}
-                        alt={(isSellMode ? currencyInfo.seo_sell_h1 : currencyInfo.seo_buy_h1) || currencyInfo.seo_h1}
-                        className="w-full h-48 object-cover"
-                      />
-                    </div>
-                  )}
-
-                  {/* SEO Text */}
-                  {((isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text) && (
-                    <div
-                      className="seo-page-content max-w-lg"
-                      dangerouslySetInnerHTML={{ __html: (isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text }}
-                    />
-                  )}
-                </>
-              ) : (
-                <>
-                  {/* Default Title */}
-                  <h1 className="text-5xl xl:text-7xl font-bold leading-tight">
-                    <span className="text-accent-yellow">Обмін валют</span>
-                    <br />
-                    <span className="text-white font-light text-4xl xl:text-6xl">без ризиків та переплат</span>
-                  </h1>
-
-                  {/* Banner / Badge */}
-                  <div className="flex items-center gap-4 bg-white/5 rounded-full pl-2 pr-8 py-2 w-fit backdrop-blur-md border border-white/10">
-                    <div className="w-10 h-10 rounded-full border border-accent-blue text-accent-blue flex items-center justify-center bg-accent-blue/10">
-                      <ArrowRight className="w-5 h-5" />
-                    </div>
-                    <span className="text-lg text-gray-300 font-light tracking-wide">Швидко. Безпечно. За вигідним курсом.</span>
-                  </div>
-                </>
+              {/* Hidden semantic h1 for currency SEO pages */}
+              {hasCurrencyInfo && (
+                <h1
+                  aria-hidden="false"
+                  style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
+                >
+                  {activeH1}
+                </h1>
               )}
 
-              {/* Contact Block — only on default homepage */}
-              {!hasCurrencyInfo && (
-                <div className="mt-8">
-                  <p className="text-gray-400 mb-2 text-xl font-light">
-                    Маєте питання?
-                  </p>
-                  <p className="text-gray-300 mb-8 text-xl font-light">
-                    Напишіть нам — відповімо за кілька хвилин.
-                  </p>
+              {/* Default Title — always visible on desktop */}
+              <h1 className="text-5xl xl:text-7xl font-bold leading-tight" aria-hidden={hasCurrencyInfo}>
+                <span className="text-accent-yellow">Обмін валют</span>
+                <br />
+                <span className="text-white font-light text-4xl xl:text-6xl">без ризиків та переплат</span>
+              </h1>
 
-                  <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">Напишіть нам:</p>
-                  <div className="flex items-center gap-6">
-                    {/* Avatar & Status */}
-                    <div className="flex items-center gap-4">
-                      <div className="relative">
-                        <img
-                          src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
-                          alt="Irina"
-                          className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
-                        />
-                        <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                      </div>
-                      <div>
-                        <div className="font-bold text-white text-lg">Ірина</div>
-                        <div className={`text-sm font-medium ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
-                          {chatOnline ? 'в мережі' : 'не в мережі'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Chat Button */}
-                    <button
-                      onClick={onOpenChat}
-                      className="px-10 py-4 bg-accent-yellow rounded-full text-primary font-bold text-lg hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:-translate-y-0.5"
-                    >
-                      Відкрити чат
-                    </button>
-                  </div>
-                  {!chatOnline && (
-                    <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 7:30 до 20:30</p>
-                  )}
+              {/* Banner / Badge */}
+              <div className="flex items-center gap-4 bg-white/5 rounded-full pl-2 pr-8 py-2 w-fit backdrop-blur-md border border-white/10">
+                <div className="w-10 h-10 rounded-full border border-accent-yellow text-accent-yellow flex items-center justify-center bg-accent-yellow/10">
+                  <ArrowRight className="w-5 h-5" />
                 </div>
-              )}
+                <span className="text-lg text-gray-300 font-light tracking-wide">Швидко. Безпечно. За вигідним курсом.</span>
+              </div>
+
+              {/* Contact / Chat block — always visible on desktop */}
+              <div className="mt-8">
+                <p className="text-gray-400 mb-2 text-xl font-light">
+                  Маєте питання?
+                </p>
+                <p className="text-gray-300 mb-8 text-xl font-light">
+                  Напишіть нам — відповімо за кілька хвилин.
+                </p>
+
+                <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">Напишіть нам:</p>
+                <div className="flex items-center gap-6">
+                  {/* Avatar & Status */}
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <img
+                        src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
+                        alt="Irina"
+                        className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
+                      />
+                      <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-white text-lg">Ірина</div>
+                      <div className={`text-sm font-medium ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
+                        {chatOnline ? 'в мережі' : 'не в мережі'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Chat Button */}
+                  <button
+                    onClick={onOpenChat}
+                    className="px-10 py-4 bg-accent-yellow rounded-full text-primary font-bold text-lg hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:-translate-y-0.5"
+                  >
+                    Відкрити чат
+                  </button>
+                </div>
+                {!chatOnline && (
+                  <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 08:00 до 20:00</p>
+                )}
+              </div>
             </div>
 
             {/* Right - Exchange Card */}
@@ -563,48 +542,16 @@ export default function HeroSection({
                 <span className="text-white font-light text-2xl">без ризиків та переплат</span>
               </h1>
               <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
-                <div className="w-8 h-8 bg-accent-blue/20 rounded-full flex items-center justify-center">
-                  <ArrowRight className="w-4 h-4 text-accent-blue transform -rotate-45" />
+                <div className="w-8 h-8 bg-accent-yellow/20 rounded-full flex items-center justify-center">
+                  <ArrowRight className="w-4 h-4 text-accent-yellow transform -rotate-45" />
                 </div>
                 <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
               </div>
             </div>
           )}
 
-          {/* Mobile Currency Info + Chat (below form) */}
-          <div className="mt-6 px-2">
-            {hasCurrencyInfo && (
-              <div className="mb-6">
-                <h2 className="text-3xl font-bold leading-tight">
-                  <span className="text-accent-yellow">
-                    {(isSellMode ? currencyInfo.seo_sell_h1 : currencyInfo.seo_buy_h1) || currencyInfo.seo_h1}
-                  </span>
-                  <br />
-                  {((isSellMode ? currencyInfo.seo_sell_h2 : currencyInfo.seo_buy_h2) || currencyInfo.seo_h2) && (
-                    <span className="text-white font-light text-2xl">
-                      {(isSellMode ? currencyInfo.seo_sell_h2 : currencyInfo.seo_buy_h2) || currencyInfo.seo_h2}
-                    </span>
-                  )}
-                </h2>
-                {((isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text) && (
-                  <div
-                    className="seo-page-content text-sm mt-3"
-                    dangerouslySetInnerHTML={{ __html: (isSellMode ? currencyInfo.seo_sell_text : currencyInfo.seo_buy_text) || currencyInfo.seo_text }}
-                  />
-                )}
-                {((isSellMode ? currencyInfo.seo_sell_image : currencyInfo.seo_buy_image) || currencyInfo.seo_image) && (
-                  <div className="rounded-xl overflow-hidden border border-white/10 mt-4">
-                    <img
-                      src={(isSellMode ? currencyInfo.seo_sell_image : currencyInfo.seo_buy_image) || currencyInfo.seo_image}
-                      alt={(isSellMode ? currencyInfo.seo_sell_h1 : currencyInfo.seo_buy_h1) || currencyInfo.seo_h1}
-                      className="w-full h-40 object-cover"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Questions / Chat Section (mobile) — only on default homepage */}
+          {/* Mobile Questions / Chat Section  — only on default homepage */}
+          <div className="mt-6 px-2 lg:hidden">
             {!hasCurrencyInfo && (
               <div className="mb-4">
                 <p className="text-gray-400 text-sm mb-2">
@@ -635,114 +582,106 @@ export default function HeroSection({
                   </div>
                   <button
                     onClick={onOpenChat}
-                    className="px-6 py-2.5 bg-gradient-to-r from-accent-yellow to-yellow-600 rounded-full text-primary font-bold text-sm hover:shadow-lg transition-all"
+                    className="px-6 py-2.5 bg-accent-yellow rounded-full text-primary font-bold text-sm hover:shadow-lg transition-all"
                   >
                     Відкрити чат
                   </button>
                 </div>
                 {!chatOnline && (
-                  <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 7:30 до 20:30</p>
+                  <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 08:00 до 20:00</p>
                 )}
               </div>
             )}
           </div>
-
-
         </div>
       </div>
 
-      {/* Step 1: Branch Selection Modal */}
-      {bookingStep === 'branch' && (() => {
-        const { available: availBranches, unavailable: unavailBranches } = getAvailableBranches();
-        const selectedCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
-        const selectedFlag = isSellMode ? sellCurrency?.flag : buyCurrency?.flag;
-        return (
-          <BookingModal onClose={closeModal} step={1} totalSteps={3}>
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-accent-blue/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <MapPin className="w-8 h-8 text-accent-blue" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Оберіть відділення</h3>
-              <p className="text-text-secondary text-sm">Куди вам зручніше приїхати?</p>
-            </div>
+      {/* Step: Unavailable Currency Notice */}
+      {
+        bookingStep === 'unavailable_currency' && (() => {
+          const { available: availBranches } = getAvailableBranches();
+          const selectedCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
+          const selectedFlag = isSellMode ? sellCurrency?.flag : buyCurrency?.flag;
 
-            {/* Info banner when currency not available at all branches */}
-            {unavailBranches.length > 0 && availBranches.length > 0 && (
-              <div className="mb-4 p-3 bg-accent-yellow/10 border border-accent-yellow/30 rounded-xl flex items-start gap-2">
-                <span className="text-lg flex-shrink-0 mt-0.5">{selectedFlag}</span>
-                <p className="text-sm text-accent-yellow">
-                  <span className="font-bold">{selectedCode}</span> доступна у {availBranches.length} з {branches.length} відділень
+          return (
+            <BookingModal onClose={closeModal} step={1} totalSteps={2}>
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertCircle className="w-8 h-8 text-red-500" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Вибачте, тимчасово не приймаємо валюту {selectedFlag} на цьому відділенні</h3>
+                <p className="text-text-secondary text-sm mb-4">
+                  Оберіть інше відділення, де вона доступна
                 </p>
               </div>
-            )}
 
-            {availBranches.length > 0 ? (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                {availBranches.map((branch, index) => {
-                  const rate = getBranchRate(branch.id);
-                  const isBest = index === 0;
-                  return (
-                    <button
-                      key={branch.id}
-                      onClick={() => handleSelectBranch(branch)}
-                      className={`w-full p-4 rounded-2xl border transition-all text-left group ${isBest ? 'bg-accent-yellow/5 border-accent-yellow/40 shadow-lg shadow-accent-yellow/5' : 'bg-white/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.06]'}`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <MapPin className={`w-4 h-4 ${isBest ? 'text-accent-yellow' : 'text-accent-blue'}`} />
-                          <span className="font-bold text-white text-sm">{branch.name || branch.address}</span>
-                        </div>
-                        {isBest && (
-                          <span className="text-[10px] bg-accent-yellow/20 text-accent-yellow px-2.5 py-1 rounded-full font-bold tracking-wide">
-                            ★ Найкращий курс
-                          </span>
-                        )}
-                      </div>
-                      <div className="pl-6 space-y-1">
-                        {branch.name && <p className="text-xs text-text-secondary">{branch.address}</p>}
-                        <div className="flex items-center gap-1 text-xs text-text-secondary">
-                          <Clock className="w-3 h-3" />
-                          <span>{branch.hours || branch.working_hours}</span>
-                        </div>
-                        {rate && (
-                          <div className="flex items-center gap-4 mt-1.5">
-                            <div className="text-xs">
-                              <span className="text-text-secondary">Купівля: </span>
-                              <span className="text-white font-semibold">{rate.buy_rate?.toFixed(2)}</span>
-                            </div>
-                            <div className="text-xs">
-                              <span className="text-text-secondary">Продаж: </span>
-                              <span className="text-white font-semibold">{rate.sell_rate?.toFixed(2)}</span>
-                            </div>
+              {availBranches.length > 0 ? (
+                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                  {availBranches.map((branch, index) => {
+                    const rate = getBranchRate(branch.id);
+                    const isBest = index === 0;
+                    return (
+                      <button
+                        key={branch.id}
+                        onClick={() => { handleSelectBranch(branch); setBookingStep('name'); }}
+                        className={`w-full p-4 rounded-2xl border transition-all text-left group ${isBest ? 'bg-accent-yellow/5 border-accent-yellow/40 shadow-lg shadow-accent-yellow/5' : 'bg-white/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.06]'}`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <MapPin className={`w-4 h-4 ${isBest ? 'text-accent-yellow' : 'text-white/50'}`} />
+                            <span className="font-bold text-white text-sm">{branch.name || branch.address}</span>
                           </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="text-4xl mb-3">{selectedFlag}</div>
-                <p className="text-text-secondary font-medium mb-2">На жаль, <span className="text-white">{selectedCode}</span> наразі недоступна</p>
-                <p className="text-text-secondary text-sm">Жодне відділення не працює з цією валютою. Зверніться до нас через чат для уточнення.</p>
-              </div>
-            )
-            }
-          </BookingModal >
-        );
-      })()}
+                          {isBest && (
+                            <span className="text-[10px] bg-accent-yellow/20 text-accent-yellow px-2.5 py-1 rounded-full font-bold tracking-wide">
+                              ★ Найкращий курс
+                            </span>
+                          )}
+                        </div>
+                        <div className="pl-6 space-y-1">
+                          {branch.name && <p className="text-xs text-text-secondary">{branch.address}</p>}
+                          <div className="flex items-center gap-1 text-xs text-text-secondary">
+                            <Clock className="w-3 h-3" />
+                            <span>{branch.hours || branch.working_hours}</span>
+                          </div>
+                          {rate && (
+                            <div className="flex items-center gap-4 mt-1.5">
+                              <div className="text-xs">
+                                <span className="text-text-secondary">Купівля: </span>
+                                <span className="text-white font-semibold">{rate.buy_rate?.toFixed(2)}</span>
+                              </div>
+                              <div className="text-xs">
+                                <span className="text-text-secondary">Продаж: </span>
+                                <span className="text-white font-semibold">{rate.sell_rate?.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-3">{selectedFlag}</div>
+                  <p className="text-text-secondary font-medium mb-2">На жаль, <span className="text-white">{selectedCode}</span> наразі недоступна у жодному відділенні</p>
+                  <p className="text-text-secondary text-sm">Зверніться до нас через чат для уточнення.</p>
+                </div>
+              )}
+            </BookingModal>
+          );
+        })()
+      }
 
-      {/* Step 2: Name Modal */}
+      {/* Step 1: Name + Branch Selection Modal */}
       {
         bookingStep === 'name' && (
-          <BookingModal onClose={closeModal} step={2} totalSteps={3}>
+          <BookingModal onClose={closeModal} step={1} totalSteps={2}>
             <div className="text-center mb-6">
               <div className="w-16 h-16 bg-accent-yellow/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <User className="w-8 h-8 text-accent-yellow" />
               </div>
-              <h3 className="text-xl font-bold mb-2">Як вас звати?</h3>
-              <p className="text-text-secondary text-sm">Щоб оператор міг до вас звернутися</p>
+              <h3 className="text-xl font-bold mb-2">Бронювання</h3>
+              <p className="text-text-secondary text-sm">Вкажіть ваше ім'я та оберіть відділення</p>
             </div>
 
             <div className="space-y-4">
@@ -754,6 +693,46 @@ export default function HeroSection({
                 autoFocus
                 className="w-full px-4 py-4 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center text-lg"
               />
+
+              {/* Branch Selection Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setBranchBookingOpen(!branchBookingOpen)}
+                  className={`w-full px-4 py-4 bg-primary rounded-xl border text-left flex items-center justify-between transition-colors ${branchBookingOpen ? 'border-accent-yellow' : 'border-white/10'
+                    }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-accent-yellow" />
+                    <span className={selectedBranch ? 'text-white' : 'text-text-secondary'}>
+                      {selectedBranch ? (selectedBranch.name || selectedBranch.address) : 'Оберіть відділення'}
+                    </span>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${branchBookingOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {branchBookingOpen && (
+                  <div className="absolute z-50 w-full mt-2 bg-[#1A1F2E] border border-white/10 rounded-xl shadow-2xl max-h-[250px] overflow-y-auto ring-1 ring-white/5">
+                    {branches.map((branch) => (
+                      <button
+                        key={branch.id}
+                        onClick={() => {
+                          setSelectedBranch(branch);
+                          setBranchBookingOpen(false);
+                          setError('');
+                        }}
+                        className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3 ${selectedBranch?.id === branch.id ? 'bg-accent-yellow/10 text-accent-yellow' : 'text-white'
+                          }`}
+                      >
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-text-secondary" />
+                        <div>
+                          <div className="text-sm font-medium">{branch.name || branch.address}</div>
+                          {branch.name && <div className="text-xs text-text-secondary">{branch.address}</div>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {error && (
                 <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
@@ -773,10 +752,10 @@ export default function HeroSection({
         )
       }
 
-      {/* Step 3: Phone Modal */}
+      {/* Step 2: Phone Modal */}
       {
         bookingStep === 'phone' && (
-          <BookingModal onClose={closeModal} step={3} totalSteps={3}>
+          <BookingModal onClose={closeModal} step={2} totalSteps={2}>
             <div className="text-center mb-6">
               <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Phone className="w-8 h-8 text-green-400" />
@@ -821,7 +800,7 @@ export default function HeroSection({
               <button
                 onClick={handlePhoneSubmit}
                 disabled={loading}
-                className="w-full py-4 bg-gradient-gold rounded-xl text-primary font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-4 bg-accent-yellow rounded-xl text-primary font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -1001,49 +980,7 @@ function ExchangeCard({
 
 
 
-      {/* Branch Selector */}
-      <div className="mb-4 relative px-1">
-        <label className="text-xs text-text-secondary mb-1 block pl-2">Відділення:</label>
-        <button
-          onClick={() => setBranchDropdownOpen(!branchDropdownOpen)}
-          className="w-full bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between hover:bg-white/10 transition-colors text-left group"
-        >
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-8 h-8 rounded-full bg-accent-blue/20 flex items-center justify-center flex-shrink-0">
-              <MapPin className="w-4 h-4 text-accent-blue group-hover:text-accent-yellow transition-colors" />
-            </div>
-            <div className="flex flex-col overflow-hidden">
-              <span className="truncate text-sm font-bold text-white leading-tight">
-                {activeBranch ? (activeBranch.name || activeBranch.address) : 'Оберіть відділення'}
-              </span>
-              {activeBranch && <span className="text-[10px] text-text-secondary truncate">{activeBranch.address}</span>}
-            </div>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${branchDropdownOpen ? 'rotate-180' : ''}`} />
-        </button>
 
-        {branchDropdownOpen && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-[#1A1F2E] border border-white/10 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto ring-1 ring-white/5">
-            {branches.map(branch => {
-              // Calculate if best? We can reuse the best logic or just list them.
-              // For now just list them.
-              return (
-                <div
-                  key={branch.id}
-                  onClick={() => {
-                    onBranchChange(branch);
-                    setBranchDropdownOpen(false);
-                  }}
-                  className={`p-3 hover:bg-white/5 cursor-pointer border-b border-white/5 last:border-0 transition-colors ${activeBranch?.id === branch.id ? 'bg-accent-yellow/10' : ''}`}
-                >
-                  <div className="font-bold text-sm text-white mb-0.5">{branch.name || branch.address}</div>
-                  <div className="text-xs text-text-secondary">{branch.address}</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
       <div className="flex flex-col gap-2 px-4 mb-4 bg-white/5 py-3 rounded-xl border border-white/10">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">

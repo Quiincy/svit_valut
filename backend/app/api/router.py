@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.endpoints import public, branches, rates, chat
+from app.api.endpoints import public, branches, rates, chat, seo
 
 api_router = APIRouter()
 
@@ -14,3 +14,6 @@ api_router.include_router(rates.router, prefix="/rates", tags=["Rates"])
 
 # Chat Endpoints
 api_router.include_router(chat.router, prefix="/chat", tags=["Chat"])
+
+# SEO Endpoints
+api_router.include_router(seo.router, prefix="/seo", tags=["SEO"])

@@ -19,9 +19,9 @@ export default function RatesPage() {
         </div>
 
         {/* Info banner */}
-        <div className="p-4 bg-accent-blue/10 rounded-xl border border-accent-blue/20 mb-6">
+        <div className="p-4 bg-accent-yellow/10 rounded-xl border border-accent-yellow/20 mb-6">
           <p className="text-sm">
-            <span className="font-medium text-accent-blue">Оптовий курс</span> діє при обміні від {settings?.min_wholesale_amount || 1000} $ або еквівалент в іншій валюті
+            <span className="font-medium text-accent-yellow">Оптовий курс</span> діє при обміні від {settings?.min_wholesale_amount || 1000} $ або еквівалент в іншій валюті
           </p>
         </div>
 

@@ -20,6 +20,28 @@ class ChatSessionStatusEnum(str, enum.Enum):
     ACTIVE = "active"
     CLOSED = "closed"
 
+# ============== SEO METADATA ==============
+class SeoMetadataBase(BaseModel):
+    url_path: str
+    h1: Optional[str] = None
+    h2: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    text: Optional[str] = None
+    image_url: Optional[str] = None
+
+class SeoMetadataCreate(SeoMetadataBase):
+    pass
+
+class SeoMetadataUpdate(SeoMetadataBase):
+    pass
+
+class SeoMetadata(SeoMetadataBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
 # ============== SITE SETTINGS ==============
 class SiteSettingsBase(BaseModel):
     company_name: str = "Світ Валют"
@@ -36,12 +58,14 @@ class SiteSettingsBase(BaseModel):
     min_wholesale_amount: int = 1000
     reservation_time_minutes: int = 60
     google_maps_embed: Optional[str] = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d162757.7284!2d30.3907!3d50.4017!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x40d4cf4ee15a4505%3A0x764931d2170146fe!2z0JrQuNGX0LI!5e0!3m2!1suk!2sua!4v1702000000000!5m2!1suk!2sua"
+    homepage_seo_text: Optional[str] = None
 
 class SiteSettings(SiteSettingsBase):
-    pass
+    class Config:
+        from_attributes = True
 
 class FAQItemBase(BaseModel):
-    id: int
+    id: Optional[int] = None
     question: str
     answer: str
     link_text: Optional[str] = None
@@ -53,8 +77,9 @@ class FAQItem(FAQItemBase):
         from_attributes = True
 
 class ServiceItemBase(BaseModel):
-    id: int
+    id: Optional[int] = None
     title: str
+    short_description: str = ""
     description: str
     image_url: str
     link_url: Optional[str] = None
@@ -66,13 +91,13 @@ class ServiceItem(ServiceItemBase):
         from_attributes = True
 
 class ArticleItemBase(BaseModel):
-    id: int
+    id: Optional[int] = None
     title: str
     excerpt: str
     content: str
     image_url: Optional[str] = None
     is_published: bool = True
-    created_at: str
+    created_at: Optional[str] = None
 
 class ArticleItem(ArticleItemBase):
     class Config:

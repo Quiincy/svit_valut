@@ -14,6 +14,8 @@ import SuccessModal from './components/SuccessModal';
 import MobileNav from './components/MobileNav';
 import LiveChat from './components/LiveChat';
 import ScrollToTopButton from './components/ScrollToTopButton';
+import SeoTextBlock from './components/SeoTextBlock';
+import OfflineContactModal from './components/OfflineContactModal';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import OperatorDashboard from './pages/OperatorDashboard';
@@ -21,10 +23,11 @@ import RatesPage from './pages/RatesPage';
 import ServicePage from './pages/ServicePage';
 import ContactsPage from './pages/ContactsPage';
 import FAQPage from './pages/FAQPage';
+import NotFoundPage from './pages/NotFoundPage';
 import AllServicesPage from './pages/AllServicesPage';
 import {
   currencyService, branchService, settingsService, faqService, servicesService,
-  reservationService, authService, restoreAuth, clearAuthCredentials
+  reservationService, authService, restoreAuth, clearAuthCredentials, seoService
 } from './services/api';
 
 // Public Layout: Handles State, Data Fetching, Header, Footer
@@ -42,10 +45,12 @@ function PublicLayout() {
   const [branchCurrencyMap, setBranchCurrencyMap] = useState({});
   const [currencyInfoMap, setCurrencyInfoMap] = useState({});
   const [headerCurrencies, setHeaderCurrencies] = useState([]);
+  const [seoList, setSeoList] = useState([]);
   const [ratesUpdated, setRatesUpdated] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [offlineModalOpen, setOfflineModalOpen] = useState(false);
 
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [currencyModalType, setCurrencyModalType] = useState('give');
@@ -173,6 +178,28 @@ function PublicLayout() {
   useEffect(() => {
     if (loading || !currencies.length) return;
 
+    // 1. UPDATE METADATA (Title & Description) globally based on URL
+    const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+    const activeSeo = seoList.find(s => s.url_path === cleanPathname || s.url_path === cleanPathname + '/');
+
+    if (activeSeo) {
+      const metaTitle = activeSeo.title || activeSeo.h1 || 'Світ Валют';
+      document.title = metaTitle.includes('Світ Валют') ? metaTitle : `${metaTitle} | Світ Валют`;
+
+      const metaDescText = activeSeo.description || activeSeo.text || '';
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc && metaDescText) {
+        const plainText = metaDescText.replace(/<[^>]*>?/gm, '').substring(0, 160);
+        metaDesc.setAttribute('content', plainText);
+      }
+    } else {
+      document.title = 'Світ Валют | Обмін валют в Києві';
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) {
+        metaDesc.setAttribute('content', 'Обмін валют в Києві. Найкращі курси, безпечно та швидко.');
+      }
+    }
+
     let targetCode = null;
     let mode = null;
 
@@ -184,32 +211,26 @@ function PublicLayout() {
       targetCode = giveCurrency.code;
     }
 
+    // Check if the current route is unknown (404)
+    const isKnownSeoPath = Object.values(currencyInfoMap).some(inf =>
+      inf.buy_url === pathname.replace(/^\//, '') ||
+      inf.sell_url === pathname.replace(/^\//, '')
+    );
+    const isKnownPage = pathname === '/' || pathname.startsWith('/services') || pathname.startsWith('/rates') || pathname.startsWith('/contacts') || pathname.startsWith('/faq') || pathname.startsWith('/admin') || pathname.startsWith('/panel') || pathname.startsWith('/operator') || pathname.startsWith('/login');
+
+    if (!isKnownPage && !isKnownSeoPath) {
+      // It's a 404 path, let React Router handle it without syncing/redirecting
+      return;
+    }
+
     if (targetCode && mode && currencyInfoMap[targetCode]) {
       const info = currencyInfoMap[targetCode];
 
-      // 1. UPDATE METADATA (Title & Description)
-      const isBuy = mode === 'buy';
-      const isSell = mode === 'sell';
-
-      // Priority: Specific Buy/Sell Config -> Generic Config -> Default Fallback
-      const metaTitle = (isBuy ? info.seo_buy_title : isSell ? info.seo_sell_title : null) || info.seo_h1 || `${info.name} - Світ Валют`;
-      const metaDescText = (isBuy ? info.seo_buy_desc : isSell ? info.seo_sell_desc : null) || info.seo_text || '';
-
-      document.title = metaTitle.includes('Світ Валют') ? metaTitle : `${metaTitle} | Світ Валют`;
-
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc && metaDescText) {
-        const plainText = metaDescText.replace(/<[^>]*>?/gm, '').substring(0, 160);
-        metaDesc.setAttribute('content', plainText);
-      }
       // 2. Update URL if needed
       const targetUrl = mode === 'buy' ? info.buy_url : info.sell_url;
 
-      // Prevent automatic redirect from homepage to the default currency SEO URL (Sell USD)
+      // Prevent automatic redirect from homepage to the default currency SEO URL (Sell USD) ON MOUNT ONLY
       const isOnDedicatedPage = pathname.startsWith('/contacts') || pathname.startsWith('/faq') || pathname.startsWith('/services') || pathname.startsWith('/rates');
-
-      // Check if we are in Default State (Sell USD)
-      const isDefaultState = mode === 'sell' && targetCode === 'USD';
 
       // Check if path just changed (navigation event)
       const pathChanged = pathname !== prevPathRef.current;
@@ -217,26 +238,22 @@ function PublicLayout() {
 
       if (isOnDedicatedPage) {
         // Don't redirect when on dedicated pages
-      } else if (pathname === '/' && (isDefaultState || pathChanged)) {
-        // STAY on homepage for default state OR if we just navigated there (allow state to catch up)
-      } else if (targetUrl && pathname !== targetUrl) {
-        // Only redirect if path is STABLE and incorrect
-        if (!pathChanged) {
-          navigate(targetUrl, { replace: true });
+      } else if (targetUrl && pathname !== targetUrl && pathname !== '/' + targetUrl) {
+        // Redirect to the correct SEO URL for the current form state
+        // This includes if they explicitly change the form away from default on the homepage
+        // However, we want to prevent a redirect on load of '/' or when returning to '/' via logo if it defaults to USD
+        const isDefaultUSDOnRoot = pathname === '/' && mode === 'sell' && targetCode === 'USD';
+        if (!isDefaultUSDOnRoot) {
+          const expectedPath = targetUrl.startsWith('/') ? targetUrl : '/' + targetUrl;
+          navigate(expectedPath, { replace: true });
         }
       }
     } else {
-      document.title = 'Світ Валют | Обмін валют в Києві';
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) {
-        metaDesc.setAttribute('content', 'Обмін валют в Києві. Найкращі курси, безпечно та швидко.');
-      }
-
       if (pathname !== '/' && !pathname.startsWith('/services') && !pathname.startsWith('/rates') && !pathname.startsWith('/contacts') && !pathname.startsWith('/faq')) {
         navigate('/', { replace: true });
       }
     }
-  }, [giveCurrency, getCurrency, loading, currencyInfoMap, pathname, navigate, currencies]);
+  }, [giveCurrency, getCurrency, loading, currencyInfoMap, pathname, navigate, currencies, seoList]);
 
   useEffect(() => {
     calculateExchange();
@@ -245,7 +262,7 @@ function PublicLayout() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [currenciesRes, branchesRes, settingsRes, faqRes, servicesRes, crossRatesRes, ratesRes, currInfoRes] = await Promise.all([
+      const [currenciesRes, branchesRes, settingsRes, faqRes, servicesRes, crossRatesRes, ratesRes, currInfoRes, seoRes] = await Promise.all([
         currencyService.getAll(),
         branchService.getAll(),
         settingsService.get(),
@@ -254,9 +271,11 @@ function PublicLayout() {
         currencyService.getCrossRates(),
         currencyService.getRates(),
         currencyService.getAllCurrencyInfo().catch(() => ({ data: {} })),
+        seoService.getPublicAll().catch(() => ({ data: [] })),
       ]);
 
       setCurrencyInfoMap(currInfoRes.data || {});
+      setSeoList(seoRes.data || []);
 
       const allCurrs = currenciesRes.data;
       const currencyMeta = {};
@@ -332,9 +351,12 @@ function PublicLayout() {
 
               const merged = { ...meta, ...c };
 
-              // Fallback to base rates if branch rates are missing/zero
-              if (!merged.buy_rate && baseRateObj.buy) merged.buy_rate = baseRateObj.buy;
-              if (!merged.sell_rate && baseRateObj.sell) merged.sell_rate = baseRateObj.sell;
+              // Fallback to base rates if branch rates are missing/zero, BUT ONLY if active.
+              // If it's explicitly disabled (is_active === false), keep the 0 rates so it shows as unavailable.
+              if (merged.is_active !== false) {
+                if (!merged.buy_rate && baseRateObj.buy) merged.buy_rate = baseRateObj.buy;
+                if (!merged.sell_rate && baseRateObj.sell) merged.sell_rate = baseRateObj.sell;
+              }
 
               // Fallback for wholesale if branch is missing/zero
               if (!merged.wholesale_buy_rate) merged.wholesale_buy_rate = meta.wholesale_buy_rate;
@@ -580,14 +602,15 @@ function PublicLayout() {
       const mergedCurrencies = headerCurrencies.map(base => {
         const branchRate = branchRatesList?.find(br => br.code === base.code);
         if (branchRate) {
+          const isActive = branchRate.is_active !== false;
           // Fallback to base rates if branch rates are zero
           // Also fallback for wholesale if branch rate has them as 0
           return {
             ...branchRate,
-            buy_rate: (branchRate.buy_rate > 0) ? branchRate.buy_rate : (base.buy_rate || 0),
-            sell_rate: (branchRate.sell_rate > 0) ? branchRate.sell_rate : (base.sell_rate || 0),
-            wholesale_buy_rate: (branchRate.wholesale_buy_rate > 0) ? branchRate.wholesale_buy_rate : (base.wholesale_buy_rate || 0),
-            wholesale_sell_rate: (branchRate.wholesale_sell_rate > 0) ? branchRate.wholesale_sell_rate : (base.wholesale_sell_rate || 0),
+            buy_rate: (isActive && branchRate.buy_rate === 0) ? (base.buy_rate || 0) : branchRate.buy_rate,
+            sell_rate: (isActive && branchRate.sell_rate === 0) ? (base.sell_rate || 0) : branchRate.sell_rate,
+            wholesale_buy_rate: (isActive && branchRate.wholesale_buy_rate === 0) ? (base.wholesale_buy_rate || 0) : branchRate.wholesale_buy_rate,
+            wholesale_sell_rate: (isActive && branchRate.wholesale_sell_rate === 0) ? (base.wholesale_sell_rate || 0) : branchRate.wholesale_sell_rate,
             wholesale_threshold: (branchRate.wholesale_threshold > 0) ? branchRate.wholesale_threshold : (base.wholesale_threshold || 1000)
           };
         }
@@ -641,10 +664,23 @@ function PublicLayout() {
   };
 
   const handlePresetExchange = (type, currencyCode) => {
+    const uah = currencies.find(c => c.code === 'UAH') || { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
+
+    if (type === 'reset') {
+      const defaultFx = currencies.find(c => c.code === 'USD') || currencies[0];
+      setGiveCurrency(defaultFx);
+      setGetCurrency(uah);
+      setSellCurrency(defaultFx);
+      setBuyCurrency(defaultFx);
+      setGiveAmount(100);
+      setPresetAction(null);
+      navigate('/');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     const targetCurrency = currencies.find(c => c.code === currencyCode);
     if (!targetCurrency) return;
-
-    const uah = currencies.find(c => c.code === 'UAH') || { code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦', buy_rate: 1, sell_rate: 1 };
 
     if (type === 'buy') {
       setGiveCurrency(uah);
@@ -673,6 +709,22 @@ function PublicLayout() {
     }
   };
 
+  // Chat toggle logic based on Kyiv working hours
+  const handleOpenChatAction = () => {
+    const now = new Date();
+    const kyivTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
+    const totalMinutes = kyivTime.getHours() * 60 + kyivTime.getMinutes();
+
+    // Working hours: 08:00 to 20:00 (480 to 1200 minutes)
+    const isOnline = totalMinutes >= 480 && totalMinutes <= 1200;
+
+    if (isOnline) {
+      setChatOpen(true);
+    } else {
+      setOfflineModalOpen(true);
+    }
+  };
+
   // Context to pass to children (HomePage, RatesPage, etc.)
   const contextValue = {
     currencies,
@@ -683,6 +735,7 @@ function PublicLayout() {
     crossRates,
     branchCurrencyMap,
     currencyInfoMap,
+    seoList,
     ratesUpdated,
     giveAmount, setGiveAmount,
     giveCurrency, setGiveCurrency,
@@ -696,34 +749,14 @@ function PublicLayout() {
     sellCurrency, setSellCurrency,
     buyCurrency, setBuyCurrency,
     presetAction,
-    onOpenChat: () => {
-      const now = new Date();
-      const kyivTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
-      const totalMinutes = kyivTime.getHours() * 60 + kyivTime.getMinutes();
-      const isOnline = totalMinutes >= 450 && totalMinutes <= 1230;
-      if (isOnline) {
-        setChatOpen(true);
-      } else {
-        alert('Напишіть в робочий час! \nЧат працює щодня з 7:30 до 20:30');
-      }
-    }
+    onOpenChat: handleOpenChatAction
   };
 
   return (
     <div className="min-h-screen bg-transparent">
       <Header
         onMenuToggle={() => setMobileMenuOpen(true)}
-        onOpenChat={() => {
-          const now = new Date();
-          const kyivTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
-          const totalMinutes = kyivTime.getHours() * 60 + kyivTime.getMinutes();
-          const isOnline = totalMinutes >= 450 && totalMinutes <= 1230;
-          if (isOnline) {
-            setChatOpen(true);
-          } else {
-            alert('Напишіть в робочий час! \nЧат працює щодня з 7:30 до 20:30');
-          }
-        }}
+        onOpenChat={handleOpenChatAction}
         settings={settings}
         currencies={headerCurrencies}
         currencyInfoMap={currencyInfoMap}
@@ -745,6 +778,22 @@ function PublicLayout() {
         <Outlet context={contextValue} />
       </main>
 
+
+
+      {/* Global Homepage SEO section — before footer */}
+      {pathname === '/' && settings?.homepage_seo_text && (
+        <section className="py-12 px-4 lg:px-8">
+          <div className="max-w-4xl mx-auto">
+            <SeoTextBlock
+              html={settings.homepage_seo_text}
+              className="text-sm"
+              maxLines={5}
+              prose
+            />
+          </div>
+        </section>
+      )}
+
       <Footer settings={settings} />
 
       <CurrencyModal
@@ -765,20 +814,20 @@ function PublicLayout() {
         onClose={() => setChatOpen(false)}
       />
 
-      {!chatOpen && (() => {
+      <OfflineContactModal
+        isOpen={offlineModalOpen}
+        onClose={() => setOfflineModalOpen(false)}
+        settings={settings}
+      />
+
+      {!chatOpen && !offlineModalOpen && (() => {
         const now = new Date();
         const kyivTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
         const totalMinutes = kyivTime.getHours() * 60 + kyivTime.getMinutes();
-        const fabOnline = totalMinutes >= 450 && totalMinutes <= 1230;
+        const fabOnline = totalMinutes >= 480 && totalMinutes <= 1200;
         return (
           <button
-            onClick={() => {
-              if (fabOnline) {
-                setChatOpen(true);
-              } else {
-                alert('Напишіть в робочий час! \nЧат працює щодня з 7:30 до 20:30');
-              }
-            }}
+            onClick={handleOpenChatAction}
             className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
           >
             <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -796,6 +845,8 @@ function PublicLayout() {
 }
 
 function HomePage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const {
     giveAmount, setGiveAmount,
     giveCurrency, setGiveCurrency,
@@ -817,9 +868,45 @@ function HomePage() {
     currencies,
     crossRates,
     ratesUpdated,
+    seoList,
     services,
     faqItems
   } = useOutletContext();
+
+  // Detect current currency SEO info ONLY from URL
+  const pathname = decodeURIComponent(location.pathname);
+  const slug = pathname.replace(/^\//, '');
+  const urlIsSellMode = pathname.includes('/продати-') || pathname.startsWith('/sell-');
+  const pathCurrency = Object.values(currencyInfoMap || {}).find(info =>
+    (info.buy_url && (pathname === info.buy_url || pathname === '/' + info.buy_url)) ||
+    (info.sell_url && (pathname === info.sell_url || pathname === '/' + info.sell_url))
+  ) || null;
+
+  // If a slug is present but it's not a recognized currency URL, render the 404 page.
+  if (slug && !pathCurrency) {
+    return <NotFoundPage />;
+  }
+
+  // Detect form-based currency info
+  const formIsSellMode = giveCurrency?.code !== 'UAH';
+
+  // Final active determine of sell mode
+  const isSellMode = slug ? urlIsSellMode : formIsSellMode;
+
+  // STRICT URL-BASED SEO:
+  // If we are on a known URL, show its SEO. Otherwise, nothing.
+  const activeCurrencyInfo = slug ? pathCurrency : null;
+
+  const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const activeSeo = seoList.find(s => s.url_path === cleanPathname || s.url_path === cleanPathname + '/');
+
+  const activeH1 = activeSeo?.h1 || null;
+  const activeH2 = activeSeo?.h2 || null;
+  const activeImage = activeSeo?.image_url || null;
+  const currencySeoText = activeSeo?.text || null;
+
+  // Global homepage SEO text (ONLY on root path)
+  const homepageSeoText = !slug ? settings?.homepage_seo_text : null;
 
   return (
     <>
@@ -844,13 +931,67 @@ function HomePage() {
         branchCurrencyMap={branchCurrencyMap}
         currencyInfoMap={currencyInfoMap}
         onOpenChat={onOpenChat}
+        currencySeoText={currencySeoText}
+        activeCurrencyInfo={activeCurrencyInfo}
       />
       <FeaturesSection settings={settings} />
       <ChatSection settings={settings} />
       <BranchesSection branches={branches} settings={settings} />
+
+      {/* Currency SEO section — desktop & mobile — after map block */}
+      {(activeCurrencyInfo || currencySeoText) && (
+        <section className="py-16 px-4 lg:px-8 relative">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col lg:flex-row p-6 lg:p-10 gap-8 lg:gap-12 items-start">
+
+              {/* Left Column: Text Content */}
+              <div className="flex-1 space-y-6">
+                {activeH1 && (
+                  <h2 className="text-3xl lg:text-4xl font-bold leading-tight">
+                    <span className="text-accent-yellow">{activeH1}</span>
+                    {activeH2 && (
+                      <>
+                        <br />
+                        <span className="text-white font-light text-2xl lg:text-3xl">
+                          {activeH2}
+                        </span>
+                      </>
+                    )}
+                  </h2>
+                )}
+
+                {currencySeoText && (
+                  <SeoTextBlock
+                    html={currencySeoText}
+                    className="text-base"
+                    maxLines={8}
+                    prose
+                  />
+                )}
+              </div>
+
+              {/* Right Column: Image */}
+              {activeImage && (
+                <div className="w-full lg:w-1/3 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative">
+                  <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent z-10"></div>
+                  <img
+                    src={activeImage}
+                    alt={activeH1 || 'Валюта'}
+                    className="w-full aspect-[4/3] object-cover relative z-0"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+
+
       <RatesSection currencies={currencies} crossRates={crossRates} updatedAt={ratesUpdated} />
       <ServicesSection services={services} />
       <FAQSection faqItems={faqItems} />
+
     </>
   );
 }
@@ -910,7 +1051,8 @@ function App() {
           <Route path="contacts" element={<ContactsPage />} />
           <Route path="faq" element={<FAQPage />} />
           <Route path="articles/:id" element={<FAQPage />} />
-          <Route path="*" element={<HomePage />} />
+          <Route path=":slug" element={<HomePage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
 
         <Route path="/login" element={user ? <Navigate to="/panel" replace /> : <LoginPage onLogin={handleLogin} />} />

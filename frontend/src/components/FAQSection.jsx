@@ -25,7 +25,7 @@ export default function FAQSection({ faqItems }) {
             <div
               key={faq.id}
               className={`bg-primary-light rounded-xl border transition-all ${expandedIndex === index
-                ? 'border-accent-blue'
+                ? 'border-accent-yellow'
                 : 'border-white/10'
                 }`}
             >
@@ -33,12 +33,12 @@ export default function FAQSection({ faqItems }) {
                 onClick={() => setExpandedIndex(expandedIndex === index ? null : index)}
                 className="w-full p-4 lg:p-5 flex items-center gap-4 text-left"
               >
-                <div className="w-10 h-10 rounded-full bg-accent-blue/20 flex items-center justify-center flex-shrink-0">
-                  <HelpCircle className="w-5 h-5 text-accent-blue" />
+                <div className="w-10 h-10 rounded-full bg-accent-yellow/20 flex items-center justify-center flex-shrink-0">
+                  <HelpCircle className="w-5 h-5 text-accent-yellow" />
                 </div>
                 <span className="flex-1 font-medium">{faq.question}</span>
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${expandedIndex === index
-                  ? 'bg-accent-blue text-white rotate-180'
+                  ? 'bg-accent-yellow text-primary rotate-180'
                   : 'bg-white/5 text-text-secondary'
                   }`}>
                   <ChevronDown className="w-5 h-5" />

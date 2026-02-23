@@ -83,7 +83,7 @@ export default function LoginPage({ onLogin }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-gradient-gold rounded-xl text-primary font-bold text-base uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed mt-6"
+              className="w-full py-4 bg-accent-yellow rounded-xl text-primary font-bold text-base uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed mt-6"
             >
               {loading ? 'Вхід...' : 'Увійти'}
             </button>

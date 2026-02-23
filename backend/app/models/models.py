@@ -15,6 +15,7 @@ class ReservationStatus(str, enum.Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
+    DELETED = "deleted"  # Soft delete
 
 class SiteSettings(Base):
     __tablename__ = "site_settings"
@@ -35,6 +36,7 @@ class SiteSettings(Base):
     google_maps_embed = Column(String, nullable=True)
     meta_title = Column(String, default="Світ Валют - Обмін валют за вигідним курсом")
     meta_description = Column(String, default="Найкращий обмін валют у вашому місті")
+    homepage_seo_text = Column(Text, nullable=True)
 
 class FAQItem(Base):
     __tablename__ = "faq_items"
@@ -49,6 +51,7 @@ class ServiceItem(Base):
     __tablename__ = "service_items"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
+    short_description = Column(Text, default="")
     description = Column(Text, nullable=False)
     image_url = Column(String, nullable=False)
     link_url = Column(String, nullable=True)
@@ -188,3 +191,24 @@ class ChatMessage(Base):
     is_read = Column(Boolean, default=False)
     
     session = relationship("ChatSession", back_populates="messages")
+
+class SeoMetadata(Base):
+    __tablename__ = "seo_metadata"
+    id = Column(Integer, primary_key=True, index=True)
+    url_path = Column(String, unique=True, index=True, nullable=False) # e.g. '/', '/buy-usd'
+    h1 = Column(String, nullable=True)
+    h2 = Column(String, nullable=True)
+    title = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+    text = Column(Text, nullable=True)
+    image_url = Column(String, nullable=True)
+
+class CrossRate(Base):
+    __tablename__ = "cross_rates"
+    id = Column(Integer, primary_key=True, index=True)
+    base_currency = Column(String, nullable=False)   # e.g. "EUR"
+    quote_currency = Column(String, nullable=False)   # e.g. "USD"
+    buy_rate = Column(Float, default=0.0)
+    sell_rate = Column(Float, default=0.0)
+    is_active = Column(Boolean, default=True)
+    order = Column(Integer, default=0)

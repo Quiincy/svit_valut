@@ -20,7 +20,7 @@ export default function ChatSection({ settings }) {
                         href={telegramUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-3 w-full sm:w-auto px-8 lg:px-12 py-5 bg-gradient-gold rounded-2xl text-primary font-bold text-lg hover:shadow-[0_0_20px_rgba(245,213,71,0.3)] transition-all active:scale-95 group"
+                        className="flex items-center justify-center gap-3 w-full sm:w-auto px-8 lg:px-12 py-5 bg-accent-yellow rounded-2xl text-primary font-bold text-lg hover:shadow-[0_0_20px_rgba(245,213,71,0.3)] transition-all active:scale-95 group"
                     >
                         <TelegramIcon className="w-6 h-6" />
                         <span className="leading-none">Telegram</span>

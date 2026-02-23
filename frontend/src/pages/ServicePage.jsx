@@ -15,7 +15,7 @@ export default function ServicePage() {
     return (
       <div className="flex flex-col items-center justify-center p-4 py-20">
         <h1 className="text-2xl font-bold mb-4">Послугу не знайдено</h1>
-        <Link to="/" className="text-accent-blue hover:underline">← Повернутися на головну</Link>
+        <Link to="/" className="text-accent-yellow hover:underline">← Повернутися на головну</Link>
       </div>
     );
   }
@@ -38,23 +38,7 @@ export default function ServicePage() {
           dangerouslySetInnerHTML={{ __html: service.description }}
         />
 
-        {/* Placeholder content - can be dynamic if backend supports content body */}
-        <div className="prose prose-invert max-w-none">
-          <h2 className="text-xl font-bold mb-4">Як це працює?</h2>
-          <p className="text-text-secondary mb-4">
-            Ми приймаємо валюту будь-якого стану та року випуску. Наші фахівці оцінять ваші банкноти
-            та запропонують найкращий курс обміну.
-          </p>
 
-          <h2 className="text-xl font-bold mb-4 mt-8">Переваги обміну у нас</h2>
-          <ul className="list-disc list-inside text-text-secondary space-y-2 mb-8">
-            <li>Приймаємо банкноти будь-якого стану</li>
-            <li>Миттєва оцінка та обмін</li>
-            <li>Конкурентні курси</li>
-            <li>Безпечні умови обміну</li>
-            <li>5 відділень у Києві</li>
-          </ul>
-        </div>
 
         {/* CTA */}
         <div className="mt-12 p-6 bg-primary-light rounded-2xl border border-white/10">

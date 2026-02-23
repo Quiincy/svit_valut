@@ -100,12 +100,14 @@ export default function RatesSection({ currencies, crossRates = {}, updatedAt })
         </div>
 
         {/* View All Button */}
-        <Link
-          to="/rates"
-          className="block w-full mt-8 py-4 bg-accent-blue rounded-xl text-white font-medium hover:bg-accent-blue/90 transition-colors text-center shadow-lg shadow-accent-blue/20"
-        >
-          Дивитися всі курси →
-        </Link>
+        <div className="flex justify-center mt-8">
+          <Link
+            to="/rates"
+            className="inline-flex items-center gap-2 px-8 py-3 bg-accent-yellow rounded-xl text-primary font-bold hover:opacity-90 transition-all shadow-lg shadow-accent-yellow/20"
+          >
+            Дивитися всі курси →
+          </Link>
+        </div>
       </div>
     </section>
   );

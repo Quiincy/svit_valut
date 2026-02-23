@@ -123,7 +123,7 @@ export const authService = {
       return response;
     } catch (error) {
       // If backend is unavailable, try mock login
-      console.log('Backend unavailable, trying mock login...');
+
       const mockResult = mockLogin(username, password);
       return mockResult;
     }
@@ -151,6 +151,15 @@ export const authService = {
       throw error;
     }
   },
+};
+
+export const seoService = {
+  getAll: () => api.get('/admin/seo'),
+  getPublicAll: () => api.get('/seo'),
+  getOne: (path) => api.get(`/seo/${path}`),
+  create: (data) => api.post('/admin/seo', data),
+  update: (id, data) => api.put(`/admin/seo/${id}`, data),
+  delete: (id) => api.delete(`/admin/seo/${id}`),
 };
 
 export const adminService = {
@@ -244,6 +253,12 @@ export const adminService = {
   sendChatMessage: (sessionId, data) => api.post(`/admin/chat/sessions/${sessionId}/messages`, data),
   markChatRead: (sessionId) => api.post(`/admin/chat/sessions/${sessionId}/read`),
   closeChatSession: (sessionId) => api.put(`/admin/chat/sessions/${sessionId}/close`),
+
+  // Cross-rate pair management
+  getAdminCrossRates: () => api.get('/admin/cross-rates'),
+  createCrossRate: (data) => api.post('/admin/cross-rates', data),
+  updateCrossRate: (id, data) => api.put(`/admin/cross-rates/${id}`, data),
+  deleteCrossRate: (id) => api.delete(`/admin/cross-rates/${id}`),
 };
 
 // Public Chat Service

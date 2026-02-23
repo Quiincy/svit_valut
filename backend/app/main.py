@@ -26,10 +26,13 @@ from app.api.router import api_router
 from app.api.deps import require_admin, require_operator_or_admin, verify_credentials, security
 
 app = FastAPI(title="Світ Валют API", version="2.0.0")
-app.include_router(api_router, prefix="/api")
 
-# Create tables
-models.Base.metadata.create_all(bind=engine)
+# Create tables before router registration
+from app.core.database import engine as _engine
+models.Base.metadata.create_all(bind=_engine)
+
+# Register API router AFTER tables are created
+app.include_router(api_router, prefix="/api")
 
 # CORS
 app.add_middleware(
@@ -55,7 +58,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Global settings storage
 # These are now mostly for API documentation (Pydantic models)
 class SiteSettings(SiteSettingsBase):
-    pass
+    class Config:
+        from_attributes = True
 
 class FAQItem(FAQItemBase):
     class Config:
@@ -93,12 +97,13 @@ class UserRole(str, enum.Enum):
     OPERATOR = "operator"
 
 class ReservationStatus(str, enum.Enum):
-    PENDING_ADMIN = "pending_admin"
+    PENDING_ADMIN = "pending_admin"  # New: awaiting admin review
     PENDING = "pending"
     CONFIRMED = "confirmed"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
+    DELETED = "deleted"  # Soft delete
 
 
 
@@ -343,13 +348,21 @@ async def get_currencies(branch_id: int = 1, db: Session = Depends(get_db)):
         # Check override
         ov = overrides.get(base.code)
         
-        # If disabled for this branch specifically, skip it
-        if ov and not ov.is_active:
-            continue
-            
-        buy = ov.buy_rate if (ov and ov.is_active) else base.buy_rate
-        sell = ov.sell_rate if (ov and ov.is_active) else base.sell_rate
+        is_active = ov.is_active if ov is not None else True
         
+        if not is_active:
+            buy = 0.0
+            sell = 0.0
+            w_buy = 0.0
+            w_sell = 0.0
+            w_threshold = base.wholesale_threshold
+        else:
+            buy = ov.buy_rate if (ov and ov.buy_rate > 0) else base.buy_rate
+            sell = ov.sell_rate if (ov and ov.sell_rate > 0) else base.sell_rate
+            w_buy = ov.wholesale_buy_rate if (ov and ov.wholesale_buy_rate > 0) else base.wholesale_buy_rate
+            w_sell = ov.wholesale_sell_rate if (ov and ov.wholesale_sell_rate > 0) else base.wholesale_sell_rate
+            w_threshold = ov.wholesale_threshold if (ov and ov.wholesale_threshold and ov.wholesale_threshold != 1000) else base.wholesale_threshold
+
         result.append(Currency(
             code=base.code,
             name=base.name,
@@ -357,11 +370,11 @@ async def get_currencies(branch_id: int = 1, db: Session = Depends(get_db)):
             flag=base.flag,
             buy_rate=buy,
             sell_rate=sell,
-            wholesale_buy_rate=ov.wholesale_buy_rate if (ov and ov.is_active) else base.wholesale_buy_rate,
-            wholesale_sell_rate=ov.wholesale_sell_rate if (ov and ov.is_active) else base.wholesale_sell_rate,
-            wholesale_threshold=base.wholesale_threshold,
+            wholesale_buy_rate=w_buy,
+            wholesale_sell_rate=w_sell,
+            wholesale_threshold=w_threshold,
             is_popular=base.is_popular,
-            is_active=True,
+            is_active=is_active,
             buy_url=base.buy_url,
             sell_url=base.sell_url,
             seo_h1=base.seo_h1,
@@ -2005,6 +2018,9 @@ async def get_all_reservations(
     
     if status:
         query = query.filter(models.Reservation.status == status)
+    else:
+        # Exclude soft-deleted reservations from the default view
+        query = query.filter(models.Reservation.status != 'deleted')
     if branch_id:
         query = query.filter(models.Reservation.branch_id == branch_id)
     
@@ -2061,6 +2077,10 @@ class ReservationEdit(BaseModel):
     get_amount: Optional[float] = None
     rate: Optional[float] = None
     branch_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    phone: Optional[str] = None
+    status: Optional[str] = None
+    operator_note: Optional[str] = None
 
 
 @app.put("/api/admin/reservations/{reservation_id}")
@@ -2086,6 +2106,17 @@ async def update_reservation(
         if not branch:
             raise HTTPException(status_code=400, detail="Branch not found")
         res.branch_id = data.branch_id
+    if data.customer_name is not None:
+        res.customer_name = data.customer_name
+    if data.phone is not None:
+        res.phone = data.phone
+    if data.status is not None:
+        try:
+            res.status = ReservationStatus(data.status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}")
+    if data.operator_note is not None:
+        res.operator_note = data.operator_note
     
     db.commit()
     db.refresh(res)
@@ -2122,7 +2153,8 @@ async def assign_reservation_to_operator(
         raise HTTPException(status_code=404, detail="Reservation not found")
     
     if res.status != models.ReservationStatus.PENDING_ADMIN:
-        raise HTTPException(status_code=400, detail="Reservation is not in pending_admin status")
+        # Admin can still assign from any status if needed
+        pass
     
     if not res.branch_id:
         raise HTTPException(status_code=400, detail="Reservation must have a branch assigned")
@@ -2323,7 +2355,7 @@ async def confirm_reservation(
         if reservation.branch_id != user.branch_id:
             raise HTTPException(status_code=403, detail="Access denied")
     
-    if reservation.status != models.ReservationStatus.PENDING:
+    if user.role != models.UserRole.ADMIN and reservation.status != models.ReservationStatus.PENDING:
         raise HTTPException(status_code=400, detail="Can only confirm pending reservations")
     
     reservation.status = models.ReservationStatus.CONFIRMED
@@ -2347,7 +2379,7 @@ async def complete_reservation(
         if reservation.branch_id != user.branch_id:
             raise HTTPException(status_code=403, detail="Access denied")
     
-    if reservation.status not in [models.ReservationStatus.PENDING, models.ReservationStatus.CONFIRMED]:
+    if user.role != models.UserRole.ADMIN and reservation.status not in [models.ReservationStatus.PENDING, models.ReservationStatus.CONFIRMED]:
         raise HTTPException(status_code=400, detail="Cannot complete this reservation")
     
     reservation.status = models.ReservationStatus.COMPLETED
@@ -2372,13 +2404,97 @@ async def cancel_reservation(
         if reservation.branch_id != user.branch_id:
             raise HTTPException(status_code=403, detail="Access denied")
     
-    if reservation.status == models.ReservationStatus.COMPLETED:
+    if user.role != models.UserRole.ADMIN and reservation.status == models.ReservationStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Cannot cancel completed reservation")
     
     reservation.status = models.ReservationStatus.CANCELLED
     db.commit()
     db.refresh(reservation)
     return reservation
+
+
+# ============== ADMIN CROSS-RATES ENDPOINTS ==============
+
+class CrossRateCreate(BaseModel):
+    base_currency: str
+    quote_currency: str
+    buy_rate: float = 0.0
+    sell_rate: float = 0.0
+    is_active: bool = True
+    order: int = 0
+
+class CrossRateUpdate(BaseModel):
+    base_currency: Optional[str] = None
+    quote_currency: Optional[str] = None
+    buy_rate: Optional[float] = None
+    sell_rate: Optional[float] = None
+    is_active: Optional[bool] = None
+    order: Optional[int] = None
+
+@app.get("/api/admin/cross-rates")
+async def get_admin_cross_rates(user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Get all cross-rate pairs (Admin)"""
+    rates = db.query(models.CrossRate).order_by(models.CrossRate.order.asc()).all()
+    return [
+        {
+            "id": r.id,
+            "base_currency": r.base_currency,
+            "quote_currency": r.quote_currency,
+            "buy_rate": r.buy_rate,
+            "sell_rate": r.sell_rate,
+            "is_active": r.is_active,
+            "order": r.order
+        }
+        for r in rates
+    ]
+
+@app.post("/api/admin/cross-rates")
+async def create_cross_rate(data: CrossRateCreate, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Create a new cross-rate pair"""
+    cr = models.CrossRate(
+        base_currency=data.base_currency.upper(),
+        quote_currency=data.quote_currency.upper(),
+        buy_rate=data.buy_rate,
+        sell_rate=data.sell_rate,
+        is_active=data.is_active,
+        order=data.order
+    )
+    db.add(cr)
+    db.commit()
+    db.refresh(cr)
+    return {"id": cr.id, "base_currency": cr.base_currency, "quote_currency": cr.quote_currency, "buy_rate": cr.buy_rate, "sell_rate": cr.sell_rate, "is_active": cr.is_active, "order": cr.order}
+
+@app.put("/api/admin/cross-rates/{rate_id}")
+async def update_cross_rate(rate_id: int, data: CrossRateUpdate, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Update a cross-rate pair"""
+    cr = db.query(models.CrossRate).filter(models.CrossRate.id == rate_id).first()
+    if not cr:
+        raise HTTPException(status_code=404, detail="Cross-rate not found")
+    if data.base_currency is not None:
+        cr.base_currency = data.base_currency.upper()
+    if data.quote_currency is not None:
+        cr.quote_currency = data.quote_currency.upper()
+    if data.buy_rate is not None:
+        cr.buy_rate = data.buy_rate
+    if data.sell_rate is not None:
+        cr.sell_rate = data.sell_rate
+    if data.is_active is not None:
+        cr.is_active = data.is_active
+    if data.order is not None:
+        cr.order = data.order
+    db.commit()
+    db.refresh(cr)
+    return {"id": cr.id, "base_currency": cr.base_currency, "quote_currency": cr.quote_currency, "buy_rate": cr.buy_rate, "sell_rate": cr.sell_rate, "is_active": cr.is_active, "order": cr.order}
+
+@app.delete("/api/admin/cross-rates/{rate_id}")
+async def delete_cross_rate(rate_id: int, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Delete a cross-rate pair"""
+    cr = db.query(models.CrossRate).filter(models.CrossRate.id == rate_id).first()
+    if not cr:
+        raise HTTPException(status_code=404, detail="Cross-rate not found")
+    db.delete(cr)
+    db.commit()
+    return {"success": True}
 
 
 # ============== PUBLIC SETTINGS ENDPOINTS ==============
@@ -2469,6 +2585,7 @@ async def create_service(item: ServiceItem, user: models.User = Depends(require_
     """Create service"""
     db_item = models.ServiceItem(
         title=item.title,
+        short_description=item.short_description,
         description=item.description,
         image_url=item.image_url,
         link_url=item.link_url,
@@ -2488,6 +2605,7 @@ async def update_service(service_id: int, item: ServiceItem, user: models.User =
         raise HTTPException(status_code=404, detail="Service not found")
     
     db_item.title = item.title
+    db_item.short_description = item.short_description
     db_item.description = item.description
     db_item.image_url = item.image_url
     db_item.link_url = item.link_url
@@ -2792,6 +2910,62 @@ async def delete_user(user_id: int, user: models.User = Depends(require_admin), 
     db.commit()
     return {"success": True}
 
+
+# ============== ADMIN SEO METADATA ==============
+
+@app.get("/api/admin/seo", response_model=List[SeoMetadata])
+async def admin_get_seo_metadata(user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return db.query(models.SeoMetadata).all()
+
+@app.post("/api/admin/seo", response_model=SeoMetadata)
+async def admin_create_seo_metadata(item: SeoMetadataCreate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    path = item.url_path
+    if not path.startswith('/'):
+        path = f"/{path}"
+        item.url_path = path
+
+    existing = db.query(models.SeoMetadata).filter_by(url_path=path).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="SEO configuration already exists for this path")
+        
+    new_seo = models.SeoMetadata(**item.dict())
+    db.add(new_seo)
+    db.commit()
+    db.refresh(new_seo)
+    return new_seo
+
+@app.put("/api/admin/seo/{seo_id}", response_model=SeoMetadata)
+async def admin_update_seo_metadata(seo_id: int, item: SeoMetadataUpdate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    seo = db.query(models.SeoMetadata).filter(models.SeoMetadata.id == seo_id).first()
+    if not seo:
+        raise HTTPException(status_code=404, detail="SEO metadata not found")
+
+    path = item.url_path
+    if not path.startswith('/'):
+        path = f"/{path}"
+        item.url_path = path
+
+    # Check for duplicate path on a different ID
+    dup = db.query(models.SeoMetadata).filter(models.SeoMetadata.url_path == path, models.SeoMetadata.id != seo_id).first()
+    if dup:
+        raise HTTPException(status_code=400, detail="Another SEO configuration already exists for this path")
+
+    for key, value in item.dict(exclude_unset=True).items():
+        setattr(seo, key, value)
+
+    db.commit()
+    db.refresh(seo)
+    return seo
+
+@app.delete("/api/admin/seo/{seo_id}")
+async def admin_delete_seo_metadata(seo_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    seo = db.query(models.SeoMetadata).filter(models.SeoMetadata.id == seo_id).first()
+    if not seo:
+        raise HTTPException(status_code=404, detail="SEO metadata not found")
+        
+    db.delete(seo)
+    db.commit()
+    return {"success": True}
 
 # ============== ADMIN CURRENCY MANAGEMENT ==============
 

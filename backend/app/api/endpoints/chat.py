@@ -62,8 +62,17 @@ async def send_chat_message(session_id: str, msg: ChatMessageCreate, db: Session
     
 @router.get("/admin/sessions", response_model=List[ChatSession])
 async def admin_get_chat_sessions(user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Admin get all active chat sessions sorted by recent activity"""
-    sessions = db.query(models.ChatSession).filter(models.ChatSession.status == models.ChatSessionStatus.ACTIVE).order_by(models.ChatSession.last_message_at.desc()).all()
+    """Admin get all active chat sessions sorted by recent activity, excluding empty sessions"""
+    from sqlalchemy import exists
+    sessions = (
+        db.query(models.ChatSession)
+        .filter(
+            models.ChatSession.status == models.ChatSessionStatus.ACTIVE,
+            exists().where(models.ChatMessage.session_id == models.ChatSession.id)
+        )
+        .order_by(models.ChatSession.last_message_at.desc())
+        .all()
+    )
     return sessions
 
 @router.get("/admin/sessions/{session_id}/messages", response_model=List[ChatMessage])

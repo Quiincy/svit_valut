@@ -50,7 +50,7 @@ export default function AllServicesPage() {
                   className="text-sm text-text-secondary mb-4 line-clamp-2"
                   dangerouslySetInnerHTML={{ __html: service.description }}
                 />
-                <div className="flex items-center gap-2 text-accent-blue text-sm font-medium">
+                <div className="flex items-center gap-2 text-accent-yellow text-sm font-medium">
                   <span>Детальніше</span>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>

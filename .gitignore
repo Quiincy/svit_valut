@@ -45,4 +45,4 @@ htmlcov/
 .eslintcache
 
 # Local files
-Світ Валют.xlsx
+*.xlsx

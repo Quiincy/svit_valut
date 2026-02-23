@@ -4,7 +4,7 @@ import {
   MapPin, MessageSquare, Send, Globe, HelpCircle, Briefcase,
   Users, Upload, Loader2
 } from 'lucide-react';
-import { settingsService, faqService, servicesService, branchService, adminService } from '../services/api';
+import { settingsService, faqService, servicesService, branchService, adminService, seoService } from '../services/api';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
@@ -20,7 +20,9 @@ export default function SettingsPage() {
   const [editingFaq, setEditingFaq] = useState(null);
   const [editingService, setEditingService] = useState(null);
   const [editingBranch, setEditingBranch] = useState(null);
+  const [editingSeo, setEditingSeo] = useState(null);
   const [message, setMessage] = useState(null);
+  const [seoItems, setSeoItems] = useState([]);
 
   // Operators state
   const [users, setUsers] = useState([]);
@@ -48,6 +50,24 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSeoImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const res = await adminService.uploadImage(file);
+      if (res.data && res.data.url) {
+        setEditingSeo(prev => ({ ...prev, image_url: res.data.url }));
+      }
+    } catch (error) {
+      console.error('SEO Image upload failed:', error);
+      showMessage('Помилка завантаження зображення', 'error');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -55,18 +75,20 @@ export default function SettingsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [settingsRes, faqRes, servicesRes, branchesRes, usersRes] = await Promise.all([
+      const [settingsRes, faqRes, servicesRes, branchesRes, usersRes, seoRes] = await Promise.all([
         settingsService.get(),
         faqService.getAll(),
         servicesService.getAll(),
         branchService.getAll(),
         adminService.getUsers(),
+        seoService.getAll(),
       ]);
       setSettings(settingsRes.data);
       setFaqItems(faqRes.data);
       setServices(servicesRes.data);
       setBranches(branchesRes.data);
       setUsers(usersRes.data);
+      setSeoItems(seoRes.data);
     } catch (error) {
       console.error('Error fetching settings:', error);
     } finally {
@@ -218,6 +240,7 @@ export default function SettingsPage() {
 
   const handleDeleteUser = async (userId) => {
     if (!confirm('Видалити цього оператора?')) return;
+    setUserSaving(true);
     try {
       await adminService.deleteUser(userId);
       const usersRes = await adminService.getUsers();
@@ -226,6 +249,34 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Error deleting user:', error);
       showMessage(error.response?.data?.detail || 'Помилка видалення', 'error');
+    } finally {
+      setUserSaving(false);
+    }
+  };
+
+  const handleSaveSeo = async (item) => {
+    try {
+      if (item.id) {
+        await seoService.update(item.id, item);
+      } else {
+        await seoService.create(item);
+      }
+      fetchData();
+      setEditingSeo(null);
+      showMessage('SEO налаштування збережено');
+    } catch (error) {
+      showMessage(error.response?.data?.detail || 'Помилка збереження', 'error');
+    }
+  };
+
+  const handleDeleteSeo = async (id) => {
+    if (!confirm('Видалити ці налаштування SEO?')) return;
+    try {
+      await seoService.delete(id);
+      fetchData();
+      showMessage('Видалено');
+    } catch (error) {
+      showMessage('Помилка видалення', 'error');
     }
   };
 
@@ -257,6 +308,7 @@ export default function SettingsPage() {
           { id: 'operators', label: 'Оператори', icon: Users },
           { id: 'faq', label: 'FAQ', icon: HelpCircle },
           { id: 'services', label: 'Послуги', icon: Briefcase },
+          { id: 'seo', label: 'SEO', icon: Globe },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -388,6 +440,30 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          <h4 className="text-md font-bold mt-8 mb-4">SEO-текст для головної сторінки</h4>
+          <div>
+            <label className="block text-sm text-text-secondary mb-2">
+              SEO-текст (відображається перед футером на головній сторінці)
+            </label>
+            <div className="seo-quill-editor bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+              <ReactQuill
+                theme="snow"
+                value={settings.homepage_seo_text || ''}
+                onChange={(val) => setSettings({ ...settings, homepage_seo_text: val })}
+                modules={{
+                  toolbar: [
+                    [{ header: [2, 3, false] }],
+                    ['bold', 'italic', 'underline'],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
+                    ['link'],
+                    ['clean']
+                  ]
+                }}
+                className="text-white min-h-[200px]"
+              />
+            </div>
+          </div>
+
           <button
             onClick={handleSaveSettings}
             disabled={saving}
@@ -418,8 +494,8 @@ export default function SettingsPage() {
               <div key={branch.id} className="p-4 bg-primary rounded-xl border border-white/10">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-full bg-accent-blue/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-accent-blue font-bold">{branch.number}</span>
+                    <div className="w-10 h-10 rounded-full bg-accent-yellow/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-accent-yellow font-bold">{branch.number}</span>
                     </div>
                     <div>
                       <h4 className="font-medium">{branch.address}</h4>
@@ -654,7 +730,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-bold">Послуги</h3>
             <button
-              onClick={() => setEditingService({ title: '', description: '', image_url: '', order: services.length + 1, is_active: true })}
+              onClick={() => setEditingService({ title: '', short_description: '', description: '', image_url: '', order: services.length + 1, is_active: true })}
               className="flex items-center gap-2 px-4 py-2 bg-accent-yellow rounded-xl text-primary font-medium"
             >
               <Plus className="w-4 h-4" />
@@ -670,7 +746,9 @@ export default function SettingsPage() {
                 )}
                 <div className="p-4">
                   <h4 className="font-medium mb-1">{item.title}</h4>
-                  <p className="text-sm text-text-secondary mb-3">{item.description}</p>
+                  <p className="text-sm text-text-secondary mb-3 line-clamp-3">
+                    {item.short_description || (item.description ? item.description.replace(/<[^>]*>?/gm, '') : '')}
+                  </p>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setEditingService(item)}
@@ -695,7 +773,7 @@ export default function SettingsPage() {
       {/* Branch Edit Modal */}
       {editingBranch && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-primary-light rounded-2xl p-6 max-w-lg w-full border border-white/10">
+          <div className="bg-primary-light rounded-2xl p-6 max-w-lg w-full border border-white/10 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">
                 {editingBranch.id ? `Редагувати відділення #${editingBranch.id}` : 'Нове відділення'}
@@ -782,7 +860,7 @@ export default function SettingsPage() {
       {/* FAQ Edit Modal */}
       {editingFaq && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-primary-light rounded-2xl p-6 max-w-lg w-full border border-white/10">
+          <div className="bg-primary-light rounded-2xl p-6 max-w-lg w-full border border-white/10 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">{editingFaq.id ? 'Редагувати' : 'Додати'} FAQ</h3>
               <button onClick={() => setEditingFaq(null)} className="p-2 hover:bg-white/5 rounded-lg">
@@ -833,7 +911,7 @@ export default function SettingsPage() {
       {/* Service Edit Modal */}
       {editingService && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-primary-light rounded-2xl p-6 max-w-lg w-full border border-white/10">
+          <div className="bg-primary-light rounded-2xl p-6 max-w-lg w-full border border-white/10 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">{editingService.id ? 'Редагувати' : 'Додати'} послугу</h3>
               <button onClick={() => setEditingService(null)} className="p-2 hover:bg-white/5 rounded-lg">
@@ -849,6 +927,17 @@ export default function SettingsPage() {
                   value={editingService.title}
                   onChange={(e) => setEditingService({ ...editingService, title: e.target.value })}
                   className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-text-secondary mb-2">Короткий опис (для списків)</label>
+                <textarea
+                  value={editingService.short_description || ''}
+                  onChange={(e) => setEditingService({ ...editingService, short_description: e.target.value })}
+                  rows={2}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none resize-none"
+                  placeholder="Короткий опис послуги..."
                 />
               </div>
 
@@ -926,6 +1015,195 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* SEO Tab */}
+      {activeTab === 'seo' && (
+        <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold">SEO Налаштування</h3>
+            <button
+              onClick={() => setEditingSeo({ url_path: '/', h1: '', title: '', description: '', text: '' })}
+              className="flex items-center gap-2 px-4 py-2 bg-accent-yellow rounded-xl text-primary font-medium hover:opacity-90 transition-opacity"
+            >
+              <Plus className="w-4 h-4" />
+              Додати правило
+            </button>
+          </div>
+
+          {!editingSeo ? (
+            <div className="space-y-4">
+              {seoItems.map((seo) => (
+                <div key={seo.id} className="p-4 bg-primary rounded-xl border border-white/10 group">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="inline-block px-3 py-1 bg-white/5 rounded-lg text-sm font-mono text-accent-yellow mb-2">
+                        {seo.url_path}
+                      </span>
+                      <h4 className="font-bold text-lg mb-1">{seo.title || 'Без назви'}</h4>
+                      <p className="text-sm text-text-secondary">{seo.description || 'Немає опису'}</p>
+                    </div>
+                    <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => setEditingSeo(seo)}
+                        className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSeo(seo.id)}
+                        className="p-2 bg-white/5 rounded-xl hover:bg-red-500/20 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {seoItems.length === 0 && (
+                <p className="text-center text-text-secondary py-8">Немає жодного SEO правила.</p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="p-6 bg-primary rounded-xl border border-white/10">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-text-secondary mb-2">URL шлях (наприклад: /buy-usd)</label>
+                    <input
+                      type="text"
+                      value={editingSeo.url_path || ''}
+                      onChange={(e) => setEditingSeo({ ...editingSeo, url_path: e.target.value })}
+                      placeholder="/about"
+                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-text-secondary mb-2">Meta Title</label>
+                    <input
+                      type="text"
+                      value={editingSeo.title || ''}
+                      onChange={(e) => setEditingSeo({ ...editingSeo, title: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-text-secondary mb-2">Meta Description</label>
+                    <textarea
+                      value={editingSeo.description || ''}
+                      onChange={(e) => setEditingSeo({ ...editingSeo, description: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-2">H1 Заголовок</label>
+                    <input
+                      type="text"
+                      value={editingSeo.h1 || ''}
+                      onChange={(e) => setEditingSeo({ ...editingSeo, h1: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-text-secondary mb-2">H2 Заголовок</label>
+                    <input
+                      type="text"
+                      value={editingSeo.h2 || ''}
+                      onChange={(e) => setEditingSeo({ ...editingSeo, h2: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-text-secondary mb-2">Зображення (для Hero Section)</label>
+                    <div className="flex gap-4 items-start">
+                      {editingSeo.image_url && (
+                        <div className="relative w-32 h-24 rounded-lg overflow-hidden border border-white/10">
+                          <img src={editingSeo.image_url} alt="SEO Preview" className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => setEditingSeo({ ...editingSeo, image_url: '' })}
+                            className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-500/80 rounded transition-colors"
+                          >
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="flex-1">
+                        <label className={`
+                          flex flex-col items-center justify-center w-full h-24
+                          border-2 border-dashed border-white/20 rounded-xl
+                          hover:border-accent-yellow hover:bg-white/5 transition-all
+                          cursor-pointer ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}
+                        `}>
+                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            {uploadingImage ? (
+                              <Loader2 className="w-6 h-6 text-accent-yellow animate-spin mb-2" />
+                            ) : (
+                              <Upload className="w-6 h-6 text-text-secondary mb-2 group-hover:text-accent-yellow" />
+                            )}
+                            <p className="text-xs text-text-secondary">
+                              {uploadingImage ? 'Завантаження...' : 'Натисніть для завантаження'}
+                            </p>
+                          </div>
+                          <input type="file" className="hidden" accept="image/*" onChange={handleSeoImageUpload} />
+                        </label>
+                        <input
+                          type="text"
+                          value={editingSeo.image_url || ''}
+                          onChange={(e) => setEditingSeo({ ...editingSeo, image_url: e.target.value })}
+                          placeholder="Або вставте посилання (URL) на зображення"
+                          className="w-full mt-2 px-4 py-2 text-sm bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-text-secondary mb-2">SEO Текст</label>
+                    <div className="seo-quill-editor bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                      <ReactQuill
+                        theme="snow"
+                        value={editingSeo.text || ''}
+                        onChange={(value) => setEditingSeo({ ...editingSeo, text: value })}
+                        modules={{
+                          toolbar: [
+                            [{ header: [2, 3, false] }],
+                            ['bold', 'italic', 'underline'],
+                            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                            ['link', 'clean']
+                          ]
+                        }}
+                        className="text-white min-h-[200px]"
+                        placeholder="Текст статті або основний SEO контент..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setEditingSeo(null)}
+                    className="flex-1 py-3 bg-white/5 rounded-xl hover:bg-white/10 font-medium"
+                  >
+                    Скасувати
+                  </button>
+                  <button
+                    onClick={() => handleSaveSeo(editingSeo)}
+                    className="flex-1 py-3 bg-accent-yellow rounded-xl text-primary font-bold hover:opacity-90"
+                  >
+                    Зберегти
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

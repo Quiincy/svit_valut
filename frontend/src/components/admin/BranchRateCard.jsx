@@ -164,7 +164,7 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                 </div>
             </div>
 
-            {saving && <div className="text-[9px] text-accent-blue mt-1 text-right">Зберігаю...</div>}
+            {saving && <div className="text-[9px] text-accent-yellow mt-1 text-right">Зберігаю...</div>}
         </div>
     );
 };

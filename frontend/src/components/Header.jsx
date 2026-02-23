@@ -19,12 +19,12 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
   // Show ALL currencies including UAH
   const availableCurrencies = currencies;
 
-  // Chat availability — 7:30–20:30 Kyiv time
+  // Chat availability — 08:00–20:00 Kyiv time
   const isChatAvailable = () => {
     const now = new Date();
     const kyivTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
     const totalMinutes = kyivTime.getHours() * 60 + kyivTime.getMinutes();
-    return totalMinutes >= 450 && totalMinutes <= 1230;
+    return totalMinutes >= 480 && totalMinutes <= 1200;
   };
   const chatOnline = isChatAvailable();
 
@@ -80,15 +80,19 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
           </button>
 
           {/* Logo - Flexible Width */}
-          <Link
-            to="/"
-            className="flex items-center justify-center shrink min-w-0"
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              onPresetExchange('reset');
+            }}
+            className="flex items-center justify-center shrink min-w-0 pointer-events-auto"
           >
             <div className="h-8 sm:h-10 lg:h-12 w-auto max-w-[160px] sm:max-w-none">
               {/* Use the Logo component */}
               <img src="/logo.png" alt="Svit Valut" className="h-full w-auto object-contain" />
             </div>
-          </Link>
+          </a>
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center gap-8">
@@ -191,16 +195,16 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
               onMouseEnter={() => setServicesOpen(true)}
               onMouseLeave={() => setServicesOpen(false)}
             >
-              <button className="flex items-center gap-1 text-text-secondary hover:text-white text-base font-medium transition-colors py-2">
+              <Link to="/services" className="flex items-center gap-1 text-text-secondary hover:text-white text-base font-medium transition-colors py-2">
                 Додаткові послуги
                 <ChevronDown className={`w-3 h-3 transition-transform ${servicesOpen ? 'rotate-180' : ''}`} />
-              </button>
+              </Link>
 
               <div className={`absolute top-full left-0 mt-0 w-64 bg-primary-light border border-white/10 rounded-xl shadow-xl overflow-hidden transition-all duration-200 ${servicesOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
                 {serviceItems.map(service => (
                   <Link
                     key={service.id}
-                    to={service.link_url || `/services`}
+                    to={service.link_url || `/services/${service.slug || service.id}`}
                     onClick={() => setServicesOpen(false)}
                     className="w-full text-left px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5 last:border-b-0 block"
                   >
@@ -212,9 +216,9 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
                 <Link
                   to="/services"
                   onClick={() => setServicesOpen(false)}
-                  className="w-full text-left px-4 py-3 hover:bg-accent-blue/10 flex items-center gap-2 transition-colors bg-white/5 block"
+                  className="w-full text-left px-4 py-3 hover:bg-accent-yellow/10 flex items-center gap-2 transition-colors bg-white/5 block"
                 >
-                  <span className="text-sm font-medium text-accent-blue">Всі послуги →</span>
+                  <span className="text-sm font-medium text-accent-yellow">Всі послуги →</span>
                 </Link>
               </div>
             </div>
