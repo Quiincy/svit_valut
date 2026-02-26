@@ -749,7 +749,8 @@ function PublicLayout() {
     sellCurrency, setSellCurrency,
     buyCurrency, setBuyCurrency,
     presetAction,
-    onOpenChat: handleOpenChatAction
+    onOpenChat: handleOpenChatAction,
+    loading
   };
 
   return (
@@ -828,6 +829,7 @@ function PublicLayout() {
         return (
           <button
             onClick={handleOpenChatAction}
+            aria-label="Відкрити чат"
             className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
           >
             <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -870,7 +872,8 @@ function HomePage() {
     ratesUpdated,
     seoList,
     services,
-    faqItems
+    faqItems,
+    loading
   } = useOutletContext();
 
   // Detect current currency SEO info ONLY from URL
@@ -883,7 +886,7 @@ function HomePage() {
   ) || null;
 
   // If a slug is present but it's not a recognized currency URL, render the 404 page.
-  if (slug && !pathCurrency) {
+  if (slug && !loading && !pathCurrency) {
     return <NotFoundPage />;
   }
 
@@ -933,58 +936,58 @@ function HomePage() {
         onOpenChat={onOpenChat}
         currencySeoText={currencySeoText}
         activeCurrencyInfo={activeCurrencyInfo}
+        activeSeo={activeSeo}
+        ratesUpdated={ratesUpdated}
       />
       <FeaturesSection settings={settings} />
-      <ChatSection settings={settings} />
-      <BranchesSection branches={branches} settings={settings} />
 
-      {/* Currency SEO section — desktop & mobile — after map block */}
+      {/* Currency SEO section — display image then text, centered, no duplicate headings */}
       {(activeCurrencyInfo || currencySeoText) && (
         <section className="py-16 px-4 lg:px-8 relative">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col lg:flex-row p-6 lg:p-10 gap-8 lg:gap-12 items-start">
-
-              {/* Left Column: Text Content */}
-              <div className="flex-1 space-y-6">
-                {activeH1 && (
-                  <h2 className="text-3xl lg:text-4xl font-bold leading-tight">
-                    <span className="text-accent-yellow">{activeH1}</span>
-                    {activeH2 && (
-                      <>
-                        <br />
-                        <span className="text-white font-light text-2xl lg:text-3xl">
-                          {activeH2}
-                        </span>
-                      </>
-                    )}
-                  </h2>
-                )}
-
-                {currencySeoText && (
-                  <SeoTextBlock
-                    html={currencySeoText}
-                    className="text-base"
-                    maxLines={8}
-                    prose
-                  />
-                )}
+          <div className="max-w-4xl mx-auto flex flex-col items-center text-center gap-8">
+            {/* Image (Top) */}
+            {activeImage && (
+              <div className="w-full max-w-2xl rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative">
+                <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent z-10"></div>
+                <img
+                  src={activeImage}
+                  alt={activeH1 || 'SEO Image'}
+                  className="w-full aspect-[16/9] object-cover relative z-0"
+                />
               </div>
+            )}
 
-              {/* Right Column: Image */}
-              {activeImage && (
-                <div className="w-full lg:w-1/3 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative">
-                  <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent z-10"></div>
-                  <img
-                    src={activeImage}
-                    alt={activeH1 || 'Валюта'}
-                    className="w-full aspect-[4/3] object-cover relative z-0"
-                  />
-                </div>
-              )}
-            </div>
+            {/* Text Content (Bottom) */}
+            {currencySeoText && (
+              <div className="w-full">
+                <SeoTextBlock
+                  html={currencySeoText}
+                  className="text-base"
+                  maxLines={8}
+                  prose
+                />
+              </div>
+            )}
           </div>
         </section>
       )}
+
+      {/* Global Homepage SEO section */}
+      {homepageSeoText && (
+        <section className="py-12 px-4 lg:px-8">
+          <div className="max-w-4xl mx-auto">
+            <SeoTextBlock
+              html={homepageSeoText}
+              className="text-sm"
+              maxLines={5}
+              prose
+            />
+          </div>
+        </section>
+      )}
+
+      <ChatSection settings={settings} />
+      <BranchesSection branches={branches} settings={settings} />
 
 
 
