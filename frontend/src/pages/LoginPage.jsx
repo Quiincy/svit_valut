@@ -49,7 +49,7 @@ export default function LoginPage({ onLogin }) {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
               <label htmlFor="username" className="block text-sm text-text-secondary mb-2">Логін</label>
               <div className="relative">
@@ -61,6 +61,7 @@ export default function LoginPage({ onLogin }) {
                   placeholder="Введіть логін"
                   className="w-full pl-12 pr-4 py-4 bg-primary-light rounded-xl border border-white/10 text-white placeholder:text-text-secondary focus:border-accent-yellow focus:outline-none transition-colors"
                   required
+                  autoComplete="off"
                 />
               </div>
             </div>
@@ -76,6 +77,7 @@ export default function LoginPage({ onLogin }) {
                   placeholder="Введіть пароль"
                   className="w-full pl-12 pr-4 py-4 bg-primary-light rounded-xl border border-white/10 text-white placeholder:text-text-secondary focus:border-accent-yellow focus:outline-none transition-colors"
                   required
+                  autoComplete="new-password"
                 />
               </div>
             </div>
@@ -89,20 +91,7 @@ export default function LoginPage({ onLogin }) {
             </button>
           </form>
 
-          {/* Demo credentials */}
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <p className="text-xs text-text-secondary text-center mb-3">Тестові облікові записи:</p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-2 bg-primary-light rounded-lg">
-                <div className="text-accent-yellow font-medium">Адмін</div>
-                <div className="text-text-secondary">admin / admin123</div>
-              </div>
-              <div className="p-2 bg-primary-light rounded-lg">
-                <div className="text-accent-blue font-medium">Оператор</div>
-                <div className="text-text-secondary">operator1 / op1pass</div>
-              </div>
-            </div>
-          </div>
+
         </div>
       </div>
     </div>
