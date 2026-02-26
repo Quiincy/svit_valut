@@ -401,8 +401,12 @@ export default function HeroSection({
               {/* Default Title — always visible on desktop */}
               <h1 className="text-5xl xl:text-7xl font-bold leading-tight" aria-hidden={hasCurrencyInfo}>
                 <span className="text-accent-yellow">{activeSeo?.h1 || 'Обмін валют'}</span>
-                <br />
-                <span className="text-white font-light text-4xl xl:text-6xl">{activeSeo?.h2 || 'без ризиків та переплат'}</span>
+                {!hasCurrencyInfo && (
+                  <>
+                    <br />
+                    <span className="text-white font-light text-4xl xl:text-6xl">{activeSeo?.h2 || 'без ризиків та переплат'}</span>
+                  </>
+                )}
               </h1>
 
               {/* Banner / Badge */}
@@ -415,14 +419,26 @@ export default function HeroSection({
 
               {/* Contact / Chat block — always visible on desktop */}
               <div className="mt-8">
-                <p className="text-gray-400 mb-2 text-xl font-light">
-                  Маєте питання?
-                </p>
-                <p className="text-gray-300 mb-2 text-xl font-light">— Наявність на відділеннях</p>
-                <p className="text-gray-300 mb-2 text-xl font-light">— Оптовий курс</p>
-                <p className="text-gray-300 mb-8 text-xl font-light">— інше.</p>
-
-                <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">Напишіть нам:</p>
+                {hasCurrencyInfo ? (
+                  <>
+                    <p className="text-gray-400 mb-2 text-xl font-light">
+                      Маєте питання?
+                    </p>
+                    <p className="text-gray-300 mb-2 text-xl font-light">— Наявність на відділеннях</p>
+                    <p className="text-gray-300 mb-2 text-xl font-light">— Оптовий курс</p>
+                    <p className="text-gray-300 mb-8 text-xl font-light">— інше.</p>
+                    <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">НАПИШІТЬ НАМ:</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-400 mb-2 text-xl font-light">
+                      Маєте питання?
+                    </p>
+                    <p className="text-gray-300 mb-8 text-xl font-light">
+                      Напишіть нам — відповімо за кілька хвилин.
+                    </p>
+                  </>
+                )}
                 <div className="flex items-center gap-6">
                   {/* Avatar & Status */}
                   <div className="flex items-center gap-4">
@@ -581,48 +597,58 @@ export default function HeroSection({
             </div>
           )}
 
-          {/* Mobile Questions / Chat Section  — only on default homepage */}
+          {/* Mobile Questions / Chat Section */}
           <div className="mt-6 px-2 lg:hidden">
-            {!hasCurrencyInfo && (
-              <div className="mb-4">
-                <p className="text-gray-400 text-sm mb-2">
-                  Маєте питання?
-                </p>
-                <p className="text-gray-500 text-sm mb-1">— Наявність на відділеннях</p>
-                <p className="text-gray-500 text-sm mb-1">— Оптовий курс</p>
-                <p className="text-gray-500 text-sm mb-3">— інше.</p>
+            <div className="mb-4">
+              {hasCurrencyInfo ? (
+                <>
+                  <p className="text-gray-400 text-sm mb-2">
+                    Маєте питання?
+                  </p>
+                  <p className="text-gray-500 text-sm mb-1">— Наявність на відділеннях</p>
+                  <p className="text-gray-500 text-sm mb-1">— Оптовий курс</p>
+                  <p className="text-gray-500 text-sm mb-3">— інше.</p>
+                  <p className="text-gray-500 text-sm mb-3 uppercase tracking-wider font-semibold">НАПИШІТЬ НАМ:</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-400 text-sm mb-2">
+                    Маєте питання?
+                  </p>
+                  <p className="text-gray-500 text-sm mb-4">
+                    Напишіть нам — відповімо за кілька хвилин.
+                  </p>
+                </>
+              )}
 
-                <p className="text-gray-500 text-sm mb-3">Напишіть нам:</p>
-
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <img
-                        src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
-                        alt="Irina"
-                        className="w-10 h-10 rounded-full object-cover border-2 border-white/10"
-                      />
-                      <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-                    </div>
-                    <div>
-                      <div className="font-medium text-white text-sm">Ірина</div>
-                      <div className={`text-xs ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
-                        {chatOnline ? 'в мережі' : 'не в мережі'}
-                      </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <img
+                      src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
+                      alt="Irina"
+                      className="w-10 h-10 rounded-full object-cover border-2 border-white/10"
+                    />
+                    <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                  </div>
+                  <div>
+                    <div className="font-medium text-white text-sm">Ірина</div>
+                    <div className={`text-xs ${chatOnline ? 'text-green-400' : 'text-red-400'}`}>
+                      {chatOnline ? 'в мережі' : 'не в мережі'}
                     </div>
                   </div>
-                  <button
-                    onClick={onOpenChat}
-                    className="px-6 py-2.5 bg-accent-yellow rounded-full text-primary font-bold text-sm hover:shadow-lg transition-all"
-                  >
-                    Відкрити чат
-                  </button>
                 </div>
-                {!chatOnline && (
-                  <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 08:00 до 20:00</p>
-                )}
+                <button
+                  onClick={onOpenChat}
+                  className="px-6 py-2.5 bg-accent-yellow rounded-full text-primary font-bold text-sm hover:shadow-lg transition-all"
+                >
+                  Відкрити чат
+                </button>
               </div>
-            )}
+              {!chatOnline && (
+                <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 08:00 до 20:00</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

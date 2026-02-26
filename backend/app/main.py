@@ -903,51 +903,90 @@ async def upload_rates(
                 row_addresses = df_preview.iloc[header_row - 1].astype(str).values
                 row_headers = df_preview.iloc[header_row].astype(str).values
                 
-                has_branch_numbers = any('№' in x or 'id:' in x.lower() or 'no' in x.lower() for x in row_numbers)
+                # We check if there are any valid addresses to trigger this branch logic
+                has_valid_addresses = any(str(x).strip() and str(x).strip() != 'nan' and 'unnamed' not in str(x).lower() for x in row_addresses[2:])
                 
-                if has_branch_numbers:
-                    current_branch = None
-                    for i in range(2, len(row_numbers)): # Start from col 2 or 3 depending on file
+                if has_valid_addresses:
+                # Start logging checking logic
+                    print(f"DEBUG BRANCH DETECT: row_numbers={row_numbers.tolist()}")
+                    print(f"DEBUG BRANCH DETECT: row_addresses={row_addresses.tolist()}")
+                    print(f"DEBUG BRANCH DETECT: row_headers={row_headers.tolist()}")
+                    
+                    for i in range(2, len(row_numbers)):
                         addr_val = str(row_addresses[i]).strip()
                         number_val = str(row_numbers[i]).strip()
                         
-                        if addr_val and addr_val != 'nan':
-                            branch = db.query(models.Branch).filter(models.Branch.address == addr_val).first()
+                        if addr_val and addr_val != 'nan' and 'unnamed' not in addr_val.lower():
+                            branch = None
+                            new_number = None
+
+                            import re
+                            match = re.search(r'(\d+)', number_val)
+                            if match:
+                                new_number = int(match.group(1))
+                            
+                            print(f"DEBUG BRANCH: Col {i}, addr='{addr_val}', number={new_number}")
+                            
+                            if new_number:
+                                # Prioritize exact number match
+                                branch = db.query(models.Branch).filter(models.Branch.number == new_number).first()
+                                print(f"DEBUG BRANCH: Number lookup {new_number} -> {'FOUND id=' + str(branch.id) if branch else 'NOT FOUND'}")
+                                # If branch exists but address changed, we update the address
+                                if branch and branch.address != addr_val:
+                                    branch.address = addr_val
+                                    db.add(branch)
+                            
                             if not branch:
-                                branch = db.query(models.Branch).filter(models.Branch.address.ilike(f"%{addr_val}%")).first()
+                                # Try exact address match. BUT if we have a new_number, 
+                                # we must restrict this to branches that either have no number yet, 
+                                # or have the exact same number, to prevent merging "№ 612" into "№ 611" just because they share an address.
+                                query = db.query(models.Branch).filter(models.Branch.address == addr_val)
+                                if new_number:
+                                    # Only map to an existing address-matched branch if its number is unset or matches our target number
+                                    from sqlalchemy import or_
+                                    query = query.filter(or_(models.Branch.number == None, models.Branch.number == new_number))
                                 
+                                branch = query.first()
+                                print(f"DEBUG BRANCH: Exact addr lookup '{addr_val}' (with safety) -> {'FOUND id=' + str(branch.id) if branch else 'NOT FOUND'}")
+                            
                             if not branch:
-                                import re
-                                new_number = None
-                                match = re.search(r'(\d+)', number_val)
-                                if match:
-                                    new_number = int(match.group(1))
+                                # Check if another branch exists at this address to copy coordinates
+                                existing_at_addr = db.query(models.Branch).filter(models.Branch.address == addr_val).first()
                                 
+                                print(f"DEBUG BRANCH: Creating new branch addr='{addr_val}', number={new_number}")
                                 branch = models.Branch(
                                     address=addr_val,
-                                    name=addr_val,
                                     number=new_number or (db.query(models.Branch).count() + 1),
                                     order=i,
-                                    is_active=True
+                                    is_open=True,
+                                    hours=existing_at_addr.hours if existing_at_addr else "щодня: 8:00-20:00",
+                                    lat=existing_at_addr.lat if existing_at_addr else 50.4501,
+                                    lng=existing_at_addr.lng if existing_at_addr else 30.5234,
+                                    phone=existing_at_addr.phone if existing_at_addr else None,
+                                    telegram_chat=existing_at_addr.telegram_chat if existing_at_addr else None
                                 )
                                 db.add(branch)
-                                db.flush()
+                                db.commit()
+                                db.refresh(branch)
+                                print(f"DEBUG BRANCH: Created branch id={branch.id}")
                                 
                             if branch:
                                 current_branch = branch
+                                print(f"DEBUG BRANCH: current_branch set to id={branch.id}, addr='{branch.address}'")
                                 
-                        if current_branch:
-                            h_val = str(row_headers[i]).lower()
-                            rate_type = None
-                            if 'опт' in h_val:
-                                if 'куп' in h_val: rate_type = 'wholesale_buy'
-                                elif 'прод' in h_val: rate_type = 'wholesale_sell'
-                            else:
-                                if 'куп' in h_val: rate_type = 'buy'
-                                elif 'прод' in h_val: rate_type = 'sell'
-                                
-                            if rate_type:
-                                branch_col_definitions[i] = {'branch_id': current_branch.id, 'type': rate_type}
+                    if current_branch:
+                        h_val = str(row_headers[i]).lower()
+                        rate_type = None
+                        if 'опт' in h_val:
+                            if 'куп' in h_val: rate_type = 'wholesale_buy'
+                            elif 'прод' in h_val: rate_type = 'wholesale_sell'
+                        else:
+                            if 'куп' in h_val: rate_type = 'buy'
+                            elif 'прод' in h_val: rate_type = 'sell'
+                            
+                        if rate_type:
+                            branch_col_definitions[i] = {'branch_id': current_branch.id, 'type': rate_type}
+                            print(f"DEBUG BRANCH: Mapped Col {i} ({rate_type}) to branch id={current_branch.id}")
                                 
             elif header_row == 1:
                 # 2-Row old format (Numbers in header_row - 1)
@@ -955,20 +994,37 @@ async def upload_rates(
                 order_counter = 1
                 for i in range(2, len(row_numbers)):
                     val = str(row_numbers[i])
-                    if any(marker in val for marker in ['ID:', '№', 'Nr', 'No']):
+                    if any(marker in val for marker in ['ID:', '№', 'Nr', 'No']) or (val.strip().isdigit()):
                         try:
                             import re
                             match = re.search(r'(\d+)', val)
                             if match:
                                 bid = int(match.group(1))
-                                branch_col_map[i] = bid
                                 b = db.query(models.Branch).filter(models.Branch.id == bid).first()
-                                if b and b.order != order_counter:
+                                if not b:
+                                    b = db.query(models.Branch).filter(models.Branch.number == bid).first()
+                                if not b:
+                                    b = models.Branch(
+                                        address=f"Відділення {bid}",
+                                        number=bid,
+                                        order=order_counter,
+                                        is_open=True,
+                                        hours="щодня: 8:00-20:00",
+                                        lat=50.4501,
+                                        lng=30.5234
+                                    )
+                                    db.add(b)
+                                    db.commit()
+                                    db.refresh(b)
+                                    
+                                branch_col_map[i] = b.id
+                                if b.order != order_counter:
                                     b.order = order_counter
                                     db.add(b)
+                                    db.commit()
                                 order_counter += 1
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"DEBUG: 2-Row Branch Logic error: {e}")
 
         # Read actual data
         df_base = pd.read_excel(xlsx, sheet_name=base_sheet, header=header_row)
@@ -1000,7 +1056,7 @@ async def upload_rates(
         wholesale_sell_col = next((c for c in df_base.columns if 'опт' in str(c).lower() and any(x in str(c).lower() for x in ['прода', 'sell'])), None)
         flag_col = next((c for c in df_base.columns if any(x in str(c).lower() for x in ['прапор', 'flag'])), None)
         
-        if code_col and 'валют' in code_col and not 'код' in code_col:
+        if code_col and 'валют' in str(code_col).lower() and not 'код' in str(code_col).lower():
              first_valid = df_base[df_base[code_col].notna()].head(1)
              if not first_valid.empty and len(str(first_valid.iloc[0][code_col])) > 3:
                  code_col = None

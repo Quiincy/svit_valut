@@ -1007,12 +1007,12 @@ function HomePage() {
       <FeaturesSection settings={settings} />
 
       {/* Currency SEO section — display image then text, centered, no duplicate headings */}
-      {(activeCurrencyInfo || currencySeoText) && (
+      {(activeCurrencyInfo || currencySeoText || activeH2) && (
         <section className="py-16 px-4 lg:px-8 relative">
-          <div className="max-w-4xl mx-auto flex flex-col items-center text-center gap-8">
+          <div className="max-w-4xl mx-auto flex flex-col gap-8">
             {/* Image (Top) */}
             {activeImage && (
-              <div className="w-full max-w-2xl rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative">
+              <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative">
                 <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent z-10"></div>
                 <img
                   src={activeImage}
@@ -1023,16 +1023,19 @@ function HomePage() {
             )}
 
             {/* Text Content (Bottom) */}
-            {currencySeoText && (
-              <div className="w-full">
+            <div className="w-full text-left">
+              {activeH2 && (
+                <h2 className="text-3xl font-bold mb-6 text-white">{activeH2}</h2>
+              )}
+              {currencySeoText && (
                 <SeoTextBlock
                   html={currencySeoText}
                   className="text-base"
                   maxLines={8}
                   prose
                 />
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </section>
       )}
