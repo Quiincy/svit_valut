@@ -60,7 +60,7 @@ export default function RatesPage() {
         {/* Cross Rates */}
         <div className="mb-6">
           <h2 className="text-2xl font-bold mb-2">Крос-курси</h2>
-          <p className="text-sm text-text-secondary mb-4">Вигідний обмін між валютами без участі гривні</p>
+          <p className="text-sm text-text-secondary mb-4">Вигідний обмін однієї валюти на іншу</p>
 
           <div className="bg-primary-light rounded-2xl border border-white/10 overflow-hidden">
             <div className="grid grid-cols-3 px-4 lg:px-6 py-4 border-b border-white/10 bg-white/5">

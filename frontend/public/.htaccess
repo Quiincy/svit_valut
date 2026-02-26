@@ -1,9 +1,10 @@
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteCond %{REQUEST_FILENAME} !-l
-  RewriteRule . /index.html [L]
-</IfModule>
+RewriteEngine On
+
+# Проксі для API на порт 8000 (FastAPI)
+RewriteRule ^api/(.*)$ http://127.0.0.1:8000/api/$1 [P,L]
+RewriteRule ^static/(.*)$ http://127.0.0.1:8000/static/$1 [P,L]
+
+# Роутинг React SPA (якщо файл не знайдено - віддаємо index.html)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ /index.html [L]

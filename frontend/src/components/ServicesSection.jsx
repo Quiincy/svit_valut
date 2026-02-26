@@ -50,15 +50,6 @@ export default function ServicesSection({ services }) {
             </div>
           ))}
         </div>
-
-        <div className="mt-8 flex justify-center">
-          <Link
-            to="/services"
-            className="w-full md:w-auto px-12 py-4 bg-accent-yellow rounded-xl text-primary font-bold hover:opacity-90 transition-all text-center shadow-lg shadow-accent-yellow/20"
-          >
-            Відкрити всі →
-          </Link>
-        </div>
       </div>
     </section>
   );

@@ -53,7 +53,7 @@ export default function MobileNav({ isOpen, onClose, settings, currencies = [], 
           <button
             onClick={onClose}
             className="p-2 text-text-secondary hover:text-white"
-          >
+            aria-label="Закрити меню">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -173,29 +173,22 @@ export default function MobileNav({ isOpen, onClose, settings, currencies = [], 
                 {serviceItems.map(service => (
                   <a
                     key={service.id}
-                    href={service.link_url || '/services'}
+                    href={service.link_url || `/services/${service.slug || service.id}`}
                     onClick={(e) => {
                       e.preventDefault();
-                      handleLinkClick(service.link_url || '/services');
+                      handleLinkClick(service.link_url || `/services/${service.slug || service.id}`);
                     }}
                     className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-text-secondary hover:text-white hover:bg-white/5 transition-colors text-sm"
                   >
                     <span>{service.title}</span>
                   </a>
                 ))}
-                <a
-                  href="/services"
-                  onClick={(e) => { e.preventDefault(); handleLinkClick('/services'); }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-accent-yellow hover:bg-white/5 transition-colors text-sm font-medium"
-                >
-                  Всі послуги →
-                </a>
               </div>
             )}
           </div>
 
           {/* Static Links */}
-          <a href="/rates" onClick={(e) => { e.preventDefault(); handleLinkClick('/rates'); }} className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">
+          <a href={settings?.rates_url || '/rates'} onClick={(e) => { e.preventDefault(); handleLinkClick(settings?.rates_url || '/rates'); }} className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">
             <DollarSign className="w-5 h-5" />
             <span className="font-medium">Курс валют</span>
           </a>
@@ -205,7 +198,7 @@ export default function MobileNav({ isOpen, onClose, settings, currencies = [], 
             <span className="font-medium">Відділення</span>
           </a>
 
-          <a href="/contacts" onClick={(e) => { e.preventDefault(); handleLinkClick('/contacts'); }} className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">
+          <a href={settings?.contacts_url || '/contacts'} onClick={(e) => { e.preventDefault(); handleLinkClick(settings?.contacts_url || '/contacts'); }} className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">
             <Phone className="w-5 h-5" />
             <span className="font-medium">Контакти</span>
           </a>

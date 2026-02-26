@@ -115,6 +115,7 @@ export default function LiveChat({ isOpen, onClose }) {
     return (
       <button
         onClick={() => setMinimized(false)}
+        aria-label="Відкрити чат"
         className="fixed bottom-4 right-4 z-[100] w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
       >
         <MessageSquare className="w-6 h-6 text-primary" />
@@ -146,10 +147,10 @@ export default function LiveChat({ isOpen, onClose }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setMinimized(true)} className="p-2 hover:bg-primary/10 rounded-lg text-primary">
+          <button onClick={() => setMinimized(true)} className="p-2 hover:bg-primary/10 rounded-lg text-primary" aria-label="Мінімізувати чат">
             <Minimize2 className="w-4 h-4" />
           </button>
-          <button onClick={onClose} className="p-2 hover:bg-primary/10 rounded-lg text-primary">
+          <button onClick={onClose} className="p-2 hover:bg-primary/10 rounded-lg text-primary" aria-label="Закрити чат">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -171,6 +172,7 @@ export default function LiveChat({ isOpen, onClose }) {
             onChange={(e) => setCustomerName(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleNameSubmit()}
             placeholder="Ваше ім'я"
+            aria-label="Ваше ім'я"
             className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center mb-4"
             autoFocus
           />
@@ -223,13 +225,14 @@ export default function LiveChat({ isOpen, onClose }) {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Напишіть повідомлення..."
+                  aria-label="Напишіть повідомлення"
                   className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm text-white"
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={!input.trim()}
                   className="p-3 bg-accent-yellow rounded-xl text-primary hover:opacity-90 disabled:opacity-50"
-                >
+                  aria-label="Надіслати повідомлення">
                   <Send className="w-5 h-5" />
                 </button>
               </div>
@@ -244,11 +247,13 @@ export default function LiveChat({ isOpen, onClose }) {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Залишити повідомлення..."
+                    aria-label="Напишіть повідомлення"
                     className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm text-white"
                   />
                   <button
                     onClick={handleSendMessage}
                     disabled={!input.trim()}
+                    aria-label="Надіслати повідомлення"
                     className="p-3 bg-accent-yellow/60 rounded-xl text-primary hover:opacity-90 disabled:opacity-50"
                   >
                     <Send className="w-5 h-5" />

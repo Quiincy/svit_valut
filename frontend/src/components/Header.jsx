@@ -8,7 +8,7 @@ const defaultServices = [
   { id: 3, title: 'Старі франки на нові або USD', link_url: '/services/old-francs' },
 ];
 
-export default function Header({ onMenuToggle, onOpenChat, currencies = [], services = [], onPresetExchange, currencyInfoMap = {}, branches = [] }) {
+export default function Header({ onMenuToggle, onOpenChat, settings, currencies = [], services = [], onPresetExchange, currencyInfoMap = {}, branches = [] }) {
   const navigate = useNavigate();
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
@@ -195,10 +195,10 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
               onMouseEnter={() => setServicesOpen(true)}
               onMouseLeave={() => setServicesOpen(false)}
             >
-              <Link to="/services" className="flex items-center gap-1 text-text-secondary hover:text-white text-base font-medium transition-colors py-2">
+              <span className="flex items-center gap-1 text-text-secondary hover:text-white text-base font-medium transition-colors py-2 cursor-pointer">
                 Додаткові послуги
                 <ChevronDown className={`w-3 h-3 transition-transform ${servicesOpen ? 'rotate-180' : ''}`} />
-              </Link>
+              </span>
 
               <div className={`absolute top-full left-0 mt-0 w-64 bg-primary-light border border-white/10 rounded-xl shadow-xl overflow-hidden transition-all duration-200 ${servicesOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
                 {serviceItems.map(service => (
@@ -213,18 +213,11 @@ export default function Header({ onMenuToggle, onOpenChat, currencies = [], serv
                     </div>
                   </Link>
                 ))}
-                <Link
-                  to="/services"
-                  onClick={() => setServicesOpen(false)}
-                  className="w-full text-left px-4 py-3 hover:bg-accent-yellow/10 flex items-center gap-2 transition-colors bg-white/5 block"
-                >
-                  <span className="text-sm font-medium text-accent-yellow">Всі послуги →</span>
-                </Link>
               </div>
             </div>
 
 
-            <Link to="/contacts" className="text-text-secondary hover:text-white text-base font-medium transition-colors">
+            <Link to={settings?.contacts_url || '/contacts'} className="text-text-secondary hover:text-white text-base font-medium transition-colors">
               Контакти
             </Link>
           </nav>

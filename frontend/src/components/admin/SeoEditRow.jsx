@@ -38,7 +38,7 @@ export default function SeoEditRow({ currency, onSave, onCancel }) {
                                 URL сторінок для {currency.code}
                             </h4>
                         </div>
-                        <button onClick={onCancel} className="text-text-secondary hover:text-white transition-colors">
+                        <button onClick={onCancel} className="text-text-secondary hover:text-white transition-colors" aria-label="Закрити">
                             <X className="w-4 h-4" />
                         </button>
                     </div>

@@ -1,131 +1,147 @@
-# Деплой Світ Валют на VPS (ukraine.com.ua)
+# Деплой Світ Валют
 
-> ⚠️ На ukraine.com.ua потрібен **VPS**, не shared-хостинг.
-> Shared-хостинг підтримує тільки PHP, а проект використовує Python (FastAPI).
-> VPS плани: https://www.ukraine.com.ua/vps/
+## Шляхи на сервері
 
-## Крок 1: Замовити VPS
+| Що | Шлях |
+|---|---|
+| Вихідний код | `/home/leadgin/mirvalut.com/src/svit_valut` |
+| Document root (піддомен) | `/home/leadgin/mirvalut.com/test` |
+| Логи | `.../src/svit_valut/logs/` |
+| БД | `.../src/svit_valut/backend/svit_valut.db` |
 
-- **Мінімальні вимоги:** 1 CPU, 1 GB RAM, 20 GB SSD
-- **ОС:** Ubuntu 22.04 або 24.04
-- Після створення отримаєте **IP адресу** та **root пароль**
+---
 
-## Крок 2: Підключитися до VPS
+## Перший деплой
+
+### 1. Перевірити залежності (SSH)
 
 ```bash
-ssh root@YOUR_SERVER_IP
+ssh leadgin@mirvalut.com
+
+# Вже встановлено на хостингу:
+python3.12 --version    # Python 3.12.12
+node --version          # v24.13.0
 ```
 
-## Крок 3: Встановити Docker
+> Хостинг: CloudLinux (ukraine.com.ua). Python 3.12 та Node.js вже доступні. Root доступ не потрібен.
+
+### 2. Завантажити файли (з Mac)
 
 ```bash
-# Оновити систему
-apt update && apt upgrade -y
-
-# Встановити Docker
-curl -fsSL https://get.docker.com | sh
-
-# Встановити Docker Compose
-apt install -y docker-compose-plugin
-
-# Перевірити
-docker --version
-docker compose version
+cd /Users/quincy/Desktop/svit_valut
+./deploy.sh
 ```
 
-## Крок 4: Завантажити проект
+> Скрипт `deploy.sh` використовує `rsync` — завантажує тільки потрібні файли, без `node_modules`, `venv`, `.git`, баз даних.
 
-**Варіант A — через Git:**
-```bash
-apt install -y git
-cd /var/www
-git clone https://github.com/YOUR_USERNAME/svit_valut.git
-cd svit_valut
-```
-
-**Варіант B — через SCP (з вашого Mac):**
-```bash
-# На вашому Mac:
-scp -r /Users/quincy/Desktop/svit_valut root@YOUR_SERVER_IP:/var/www/svit_valut
-```
-
-## Крок 5: Налаштувати змінні
+### 3. Налаштувати .env (SSH)
 
 ```bash
-cd /var/www/svit_valut
+ssh leadgin@mirvalut.com
+cd /home/leadgin/mirvalut.com/src/svit_valut
 cp .env.example .env
 nano .env
 ```
 
-Заповнити:
 ```
 DATABASE_URL=sqlite:///./svit_valut.db
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=ваш_надійний_пароль
-FRONTEND_URL=https://ваш-домен.com
+ADMIN_PASSWORD=ваш_пароль
+FRONTEND_URL=https://test.mirvalut.com
 TZ=Europe/Kyiv
 ```
 
-## Крок 6: Запустити
+### 4. Запустити (SSH)
 
 ```bash
-docker compose up -d --build
+cd /home/leadgin/mirvalut.com/src/svit_valut
+chmod +x start.sh stop.sh restart.sh deploy.sh
+./start.sh
 ```
-
-Перевірити:
-```bash
-# Статус контейнерів
-docker compose ps
-
-# Логи
-docker compose logs -f
-
-# Тест API
-curl http://localhost:8000/api/health
-```
-
-## Крок 7: Налаштувати домен
-
-1. В DNS панелі ukraine.com.ua створити **A-запис**:
-   - `@` → `YOUR_SERVER_IP`
-   - `www` → `YOUR_SERVER_IP`
-
-2. Почекати 5-15 хвилин на поширення DNS.
-
-## Крок 8: SSL сертифікат (HTTPS)
-
-```bash
-# Встановити Certbot
-apt install -y certbot
-
-# Зупинити frontend контейнер тимчасово
-docker compose stop frontend
-
-# Отримати сертифікат
-certbot certonly --standalone -d ваш-домен.com -d www.ваш-домен.com
-
-# Запустити назад
-docker compose up -d
-```
-
-Після отримання SSL, оновити `frontend/nginx.conf` для HTTPS і перебілдити.
 
 ---
 
-## Корисні команди
+## Оновлення коду
+
+З Mac — одна команда:
+```bash
+./deploy.sh
+```
+
+Скрипт запитає чи перезапустити сервер після завантаження.
+
+---
+
+## Управління сервером (SSH)
 
 ```bash
-# Перезапустити
-docker compose restart
+cd /home/leadgin/mirvalut.com/src/svit_valut
 
-# Оновити код і перебілдити
-cd /var/www/svit_valut
-git pull
-docker compose up -d --build
+./start.sh       # Запуск (бекенд + збірка фронту)
+./stop.sh        # Зупинка бекенду
+./restart.sh     # Перезапуск
+```
 
-# Подивитися логи бекенду
-docker compose logs backend -f --tail=50
+## Корисні команди (SSH)
 
-# Бекап бази даних
-docker compose exec backend cp /app/svit_valut.db /app/data/backup_$(date +%F).db
+```bash
+# Логи
+tail -f /home/leadgin/mirvalut.com/src/svit_valut/logs/backend.log
+
+# Перевірка API
+curl http://127.0.0.1:8000/api/health
+
+# Бекап БД
+cp .../backend/svit_valut.db .../backend/backup_$(date +%F).db
+```
+
+---
+
+## Як це працює
+
+```
+Mac (розробка)                    Сервер (продакшн)
+─────────────                     ─────────────────
+./deploy.sh  ──── rsync ────►  /home/leadgin/mirvalut.com/src/svit_valut/
+                                    │
+                               ./start.sh
+                                    │
+                          ┌─────────┴──────────┐
+                          │                    │
+                    Backend (8000)       npm run build
+                    uvicorn, 2 workers         │
+                          │                    ▼
+                          │         /home/leadgin/mirvalut.com/src/svit_valut/frontend/dist/
+                          │         (сюди копіюється app.js)
+                          │                    ▲
+                          │                    │ Симлінк
+                          │                    │
+                          └────── Passenger ───┘
+                                   Node.js
+                          (test.mirvalut.com/www)
+```
+
+## Структура
+
+```
+/home/leadgin/mirvalut.com/src/svit_valut/   # Вихідний код
+├── backend/
+│   ├── app/
+│   ├── svit_valut.db
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   ├── dist/            # Зібраний bundle + app.js
+│   └── app.js
+├── logs/
+├── pids/
+├── start.sh
+├── stop.sh
+├── restart.sh
+├── deploy.sh
+└── .env
+
+/home/leadgin/test.mirvalut.com/
+├── .htaccess            # Дозволяє слідувати за симлінками
+└── www/                 # Симлінк -> ../mirvalut.com/src/svit_valut/frontend/dist/
 ```

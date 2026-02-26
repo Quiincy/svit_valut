@@ -852,10 +852,13 @@ async def upload_rates(
         xlsx = pd.ExcelFile(io.BytesIO(contents)) # Use io.BytesIO for pd.ExcelFile
         sheet_names = [s.lower() for s in xlsx.sheet_names]
     except zipfile.BadZipFile:
+        print("DEBUG: BadZipFile Error")
         raise HTTPException(status_code=400, detail="Невірний формат файлу. Будь ласка, завантажте коректний .xlsx файл.")
     except ValueError as e:
+        print(f"DEBUG: ValueError: {e}")
         raise HTTPException(status_code=400, detail=f"Помилка читання Excel: {str(e)}")
     except Exception as e:
+        print(f"DEBUG: Unknown Error: {e}")
         raise HTTPException(status_code=400, detail=f"Не вдалося відкрити файл: {str(e)}")
 
     # Process Logic 
@@ -880,112 +883,78 @@ async def upload_rates(
         # Old "ID" row: Row 0 = ID, Row 1 = Headers
         # New "3-row": Row 0 = Number, Row 1 = Address, Row 2 = Headers
         
-        # Read first 3 rows
-        df_preview = pd.read_excel(xlsx, sheet_name=base_sheet, header=None, nrows=3)
+        # Read first 10 rows to dynamically find the header row
+        df_preview = pd.read_excel(xlsx, sheet_name=base_sheet, header=None, nrows=10)
         
         header_row = 0
-        branch_col_map = {} # {col_idx: branch_id} - actually branch object or ID
         branch_col_definitions = {} # {col_idx: {'branch_id': ..., 'type': ...}}
+        branch_col_map = {}
         
-        if not df_preview.empty and df_preview.shape[0] >= 3:
-             row0 = df_preview.iloc[0].astype(str).values
-             row1 = df_preview.iloc[1].astype(str).values
-             # Check for "№" or "ID" in Row 0
-             has_id_row0 = any(x for x in row0 if 'ID:' in str(x) or '№' in str(x) or 'No' in str(x))
-             
-             # Check for "Address" like strings in Row 1? 
-             # Actually, if Row 0 has "№", we assume it's one of the fancy formats.
-             # If Row 1 has strings that look like addresses, we likely have 3-row format.
-             # If Row 2 has "Code/Currency" headers, then it's 3-row.
-             
-             row2 = df_preview.iloc[2].astype(str).values
-             has_headers_row2 = any(x for x in row2 if 'Код' in str(x) or 'Code' in str(x) or 'Валюта' in str(x))
-             
-             if has_id_row0 and has_headers_row2:
-                 header_row = 2
-                 # 3-Row Format Detected
-                 current_branch = None
-                 
-                 for i in range(3, len(row0)):
-                     # Check if this column starts a new branch block (merged cell)
-                     addr_val = str(row1[i]).strip()
-                     number_val = str(row0[i]).strip()
-                     
-                     if addr_val and addr_val != 'nan':
-                          # New branch block start
-                          branch = db.query(models.Branch).filter(models.Branch.address == addr_val).first()
-                          if not branch:
-                              branch = db.query(models.Branch).filter(models.Branch.address.ilike(f"%{addr_val}%")).first()
-                          
-                          if not branch:
-                              # Auto-create new branch from Excel
-                              import re
-                              new_number = None
-                              if number_val and number_val != 'nan':
-                                  match = re.search(r'(\d+)', number_val)
-                                  if match:
-                                      new_number = int(match.group(1))
-                              
-                              branch = models.Branch(
-                                  address=addr_val,
-                                  name=addr_val,
-                                  number=new_number or (db.query(models.Branch).count() + 1),
-                                  order=i,
-                                  is_active=True
-                              )
-                              db.add(branch)
-                              db.flush()  # Get the ID
-                              print(f"AUTO-CREATE: New branch '{addr_val}' (ID={branch.id})")
-
-                          if branch:
-                              current_branch = branch
-                              # Update number and order logic
-                              new_number = None
-                              if number_val and number_val != 'nan':
-                                  import re
-                                  match = re.search(r'(\d+)', number_val)
-                                  if match:
-                                      new_number = int(match.group(1))
-                              
-                              needs_update = False
-                              if new_number is not None and new_number != branch.number:
-                                  branch.number = new_number
-                                  needs_update = True
-                                  
-                              if branch.order != i:
-                                  branch.order = i
-                                  needs_update = True
-                                  
-                              if needs_update:
-                                  db.add(branch)
-                     
-                     # Map THIS column based on header in Row 2
-                     if current_branch:
-                         header_val = str(row2[i]).lower()
-                         rate_type = None
-                         print(f"DEBUG: Col {i} Header: '{header_val}'")
-                         
-                         if 'опт' in header_val:
-                             if 'куп' in header_val: rate_type = 'wholesale_buy'
-                             elif 'прод' in header_val: rate_type = 'wholesale_sell'
-                         else:
-                             if 'куп' in header_val: rate_type = 'buy'
-                             elif 'прод' in header_val: rate_type = 'sell'
-                         
-                         print(f"DEBUG: Rate Type: {rate_type}")
-                         
-                         if rate_type:
-                             branch_col_definitions[i] = {'branch_id': current_branch.id, 'type': rate_type}
-                 
-                 print(f"DEBUG: Final Definitions: {branch_col_definitions}")
-
-             elif has_id_row0:
-                 # 2-Row Format (Old "ID" row)
-                 header_row = 1
-                 # Parse IDs from Row 0
-                 order_counter = 1
-                 for i in range(3, len(row0)):
-                    val = str(row0[i])
+        if not df_preview.empty:
+            for i, row in df_preview.iterrows():
+                row_vals = [str(x).lower() for x in row.values]
+                if any('код' in x or 'code' in x or 'валют' in x for x in row_vals):
+                    header_row = i
+                    break
+                    
+            if header_row >= 2:
+                # Check for 3-row format (Addresses in header_row - 1, Numbers in header_row - 2)
+                row_numbers = df_preview.iloc[header_row - 2].astype(str).values
+                row_addresses = df_preview.iloc[header_row - 1].astype(str).values
+                row_headers = df_preview.iloc[header_row].astype(str).values
+                
+                has_branch_numbers = any('№' in x or 'id:' in x.lower() or 'no' in x.lower() for x in row_numbers)
+                
+                if has_branch_numbers:
+                    current_branch = None
+                    for i in range(2, len(row_numbers)): # Start from col 2 or 3 depending on file
+                        addr_val = str(row_addresses[i]).strip()
+                        number_val = str(row_numbers[i]).strip()
+                        
+                        if addr_val and addr_val != 'nan':
+                            branch = db.query(models.Branch).filter(models.Branch.address == addr_val).first()
+                            if not branch:
+                                branch = db.query(models.Branch).filter(models.Branch.address.ilike(f"%{addr_val}%")).first()
+                                
+                            if not branch:
+                                import re
+                                new_number = None
+                                match = re.search(r'(\d+)', number_val)
+                                if match:
+                                    new_number = int(match.group(1))
+                                
+                                branch = models.Branch(
+                                    address=addr_val,
+                                    name=addr_val,
+                                    number=new_number or (db.query(models.Branch).count() + 1),
+                                    order=i,
+                                    is_active=True
+                                )
+                                db.add(branch)
+                                db.flush()
+                                
+                            if branch:
+                                current_branch = branch
+                                
+                        if current_branch:
+                            h_val = str(row_headers[i]).lower()
+                            rate_type = None
+                            if 'опт' in h_val:
+                                if 'куп' in h_val: rate_type = 'wholesale_buy'
+                                elif 'прод' in h_val: rate_type = 'wholesale_sell'
+                            else:
+                                if 'куп' in h_val: rate_type = 'buy'
+                                elif 'прод' in h_val: rate_type = 'sell'
+                                
+                            if rate_type:
+                                branch_col_definitions[i] = {'branch_id': current_branch.id, 'type': rate_type}
+                                
+            elif header_row == 1:
+                # 2-Row old format (Numbers in header_row - 1)
+                row_numbers = df_preview.iloc[0].astype(str).values
+                order_counter = 1
+                for i in range(2, len(row_numbers)):
+                    val = str(row_numbers[i])
                     if any(marker in val for marker in ['ID:', '№', 'Nr', 'No']):
                         try:
                             import re
@@ -993,8 +962,6 @@ async def upload_rates(
                             if match:
                                 bid = int(match.group(1))
                                 branch_col_map[i] = bid
-                                
-                                # Update order in DB
                                 b = db.query(models.Branch).filter(models.Branch.id == bid).first()
                                 if b and b.order != order_counter:
                                     b.order = order_counter
@@ -1022,16 +989,16 @@ async def upload_rates(
         
         # Find columns
         # ... (standard find logic)
-        code_col = next((c for c in df_base.columns if any(x in c for x in ['код', 'code', 'iso'])), None)
+        code_col = next((c for c in df_base.columns if any(x in str(c).lower() for x in ['код', 'code', 'iso'])), None)
         if not code_col:
-             code_col = next((c for c in df_base.columns if any(x in c for x in ['валют', 'currency']) and not any(x in c for x in ['назва', 'name'])), None)
+             code_col = next((c for c in df_base.columns if any(x in str(c).lower() for x in ['валют', 'currency']) and not any(x in str(c).lower() for x in ['назва', 'name'])), None)
              
-        name_col = next((c for c in df_base.columns if c != code_col and any(x in c for x in ['назва', 'name', 'валют', 'currency'])), None)
-        buy_col = next((c for c in df_base.columns if any(x in c for x in ['купів', 'buy', 'покуп']) and not 'опт' in str(c).lower()), None)
-        sell_col = next((c for c in df_base.columns if any(x in c for x in ['прода', 'sell']) and not 'опт' in str(c).lower()), None)
-        wholesale_buy_col = next((c for c in df_base.columns if 'опт' in str(c).lower() and any(x in c for x in ['купів', 'buy', 'покуп'])), None)
-        wholesale_sell_col = next((c for c in df_base.columns if 'опт' in str(c).lower() and any(x in c for x in ['прода', 'sell'])), None)
-        flag_col = next((c for c in df_base.columns if any(x in c for x in ['прапор', 'flag'])), None)
+        name_col = next((c for c in df_base.columns if c != code_col and any(x in str(c).lower() for x in ['назва', 'name', 'валют', 'currency'])), None)
+        buy_col = next((c for c in df_base.columns if any(x in str(c).lower() for x in ['купів', 'buy', 'покуп']) and not 'опт' in str(c).lower()), None)
+        sell_col = next((c for c in df_base.columns if any(x in str(c).lower() for x in ['прода', 'sell']) and not 'опт' in str(c).lower()), None)
+        wholesale_buy_col = next((c for c in df_base.columns if 'опт' in str(c).lower() and any(x in str(c).lower() for x in ['купів', 'buy', 'покуп'])), None)
+        wholesale_sell_col = next((c for c in df_base.columns if 'опт' in str(c).lower() and any(x in str(c).lower() for x in ['прода', 'sell'])), None)
+        flag_col = next((c for c in df_base.columns if any(x in str(c).lower() for x in ['прапор', 'flag'])), None)
         
         if code_col and 'валют' in code_col and not 'код' in code_col:
              first_valid = df_base[df_base[code_col].notna()].head(1)
@@ -1346,15 +1313,15 @@ async def upload_rates(
             df_branch.columns = new_cols
             
             # Check format type
-            has_branch_col = any(x in c for c in df_branch.columns for x in ['відділ', 'branch', 'філі', 'каса', 'cashier'])
+            has_branch_col = any(x in str(c).lower() for c in df_branch.columns for x in ['відділ', 'branch', 'філі', 'каса', 'cashier'])
             
             if has_branch_col:
                 # Vertical Format OR Hybrid Matrix (Row=Branch)
-                branch_col_name = next((c for c in df_branch.columns if any(x in c for x in ['відділ', 'branch', 'філі'])), None)
-                cashier_col_name = next((c for c in df_branch.columns if any(x in c for x in ['каса', 'cashier', 'касир'])), None)
-                code_col_b = next((c for c in df_branch.columns if any(x in c for x in ['код', 'code', 'валют'])), None)
-                buy_col_b = next((c for c in df_branch.columns if any(x in c for x in ['купів', 'buy'])), None)
-                sell_col_b = next((c for c in df_branch.columns if any(x in c for x in ['прода', 'sell'])), None)
+                branch_col_name = next((c for c in df_branch.columns if any(x in str(c).lower() for x in ['відділ', 'branch', 'філі'])), None)
+                cashier_col_name = next((c for c in df_branch.columns if any(x in str(c).lower() for x in ['каса', 'cashier', 'касир'])), None)
+                code_col_b = next((c for c in df_branch.columns if any(x in str(c).lower() for x in ['код', 'code', 'валют'])), None)
+                buy_col_b = next((c for c in df_branch.columns if any(x in str(c).lower() for x in ['купів', 'buy'])), None)
+                sell_col_b = next((c for c in df_branch.columns if any(x in str(c).lower() for x in ['прода', 'sell'])), None)
 
                 # Check for Branch Matrix Cols (Hybrid)
                 # Map lower cased symbols and codes to canonical codes
@@ -1565,7 +1532,7 @@ async def upload_rates(
                         errors.append(f"Відділення (ряд): {str(e)}")
             else:
                 # Matrix Format (Legacy: Row=Currency, Cols=Branches[1_buy, 1_sell])
-                code_col_b = next((c for c in df_branch.columns if any(x in c for x in ['код', 'code', 'валют'])), df_branch.columns[0])
+                code_col_b = next((c for c in df_branch.columns if any(x in str(c).lower() for x in ['код', 'code', 'валют'])), df_branch.columns[0])
                 
                 branch_cols = {}
                 for col in df_branch.columns:
@@ -1702,6 +1669,8 @@ async def upload_rates(
         
     except Exception as e:
         db.rollback()
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Помилка обробки файлу: {str(e)}")
 
 @app.get("/api/admin/rates/template")
@@ -2707,6 +2676,8 @@ class BranchUpdate(BaseModel):
     telegram_chat: Optional[str] = None
     cashier: Optional[str] = None
     is_open: Optional[bool] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 @app.get("/api/admin/branches")
 async def get_admin_branches(user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -2735,8 +2706,17 @@ async def update_branch(branch_id: int, update: BranchUpdate, user: models.User 
     if update.is_open is not None:
         branch.is_open = update.is_open
     
-    # Auto-geocode if address changed
-    if update.address is not None and update.address != branch.address:
+    # Manual coordinate override
+    manual_coords = False
+    if update.lat is not None:
+        branch.lat = update.lat
+        manual_coords = True
+    if update.lng is not None:
+        branch.lng = update.lng
+        manual_coords = True
+        
+    # Auto-geocode if address changed, but only if manual coords weren't just explicitly provided
+    if update.address is not None and update.address != branch.address and not manual_coords:
         coords = geocode_address(update.address)
         if coords:
             branch.lat = coords[0]

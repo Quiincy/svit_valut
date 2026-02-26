@@ -24,7 +24,6 @@ import ServicePage from './pages/ServicePage';
 import ContactsPage from './pages/ContactsPage';
 import FAQPage from './pages/FAQPage';
 import NotFoundPage from './pages/NotFoundPage';
-import AllServicesPage from './pages/AllServicesPage';
 import {
   currencyService, branchService, settingsService, faqService, servicesService,
   reservationService, authService, restoreAuth, clearAuthCredentials, seoService
@@ -216,7 +215,10 @@ function PublicLayout() {
       inf.buy_url === pathname.replace(/^\//, '') ||
       inf.sell_url === pathname.replace(/^\//, '')
     );
-    const isKnownPage = pathname === '/' || pathname.startsWith('/services') || pathname.startsWith('/rates') || pathname.startsWith('/contacts') || pathname.startsWith('/faq') || pathname.startsWith('/admin') || pathname.startsWith('/panel') || pathname.startsWith('/operator') || pathname.startsWith('/login');
+    const ratesUrl = settings?.rates_url || '/rates';
+    const contactsUrl = settings?.contacts_url || '/contacts';
+    const faqUrl = settings?.faq_url || '/faq';
+    const isKnownPage = pathname === '/' || pathname.startsWith('/services') || pathname.startsWith(ratesUrl) || pathname.startsWith('/rates') || pathname.startsWith(contactsUrl) || pathname.startsWith('/contacts') || pathname.startsWith(faqUrl) || pathname.startsWith('/faq') || pathname.startsWith('/admin') || pathname.startsWith('/panel') || pathname.startsWith('/operator') || pathname.startsWith('/login');
 
     if (!isKnownPage && !isKnownSeoPath) {
       // It's a 404 path, let React Router handle it without syncing/redirecting
@@ -230,7 +232,7 @@ function PublicLayout() {
       const targetUrl = mode === 'buy' ? info.buy_url : info.sell_url;
 
       // Prevent automatic redirect from homepage to the default currency SEO URL (Sell USD) ON MOUNT ONLY
-      const isOnDedicatedPage = pathname.startsWith('/contacts') || pathname.startsWith('/faq') || pathname.startsWith('/services') || pathname.startsWith('/rates');
+      const isOnDedicatedPage = pathname.startsWith(contactsUrl) || pathname.startsWith('/contacts') || pathname.startsWith(faqUrl) || pathname.startsWith('/faq') || pathname.startsWith('/services') || pathname.startsWith('/rates') || pathname.startsWith(ratesUrl);
 
       // Check if path just changed (navigation event)
       const pathChanged = pathname !== prevPathRef.current;
@@ -249,7 +251,7 @@ function PublicLayout() {
         }
       }
     } else {
-      if (pathname !== '/' && !pathname.startsWith('/services') && !pathname.startsWith('/rates') && !pathname.startsWith('/contacts') && !pathname.startsWith('/faq')) {
+      if (pathname !== '/' && !pathname.startsWith('/services') && !pathname.startsWith('/rates') && !pathname.startsWith(ratesUrl) && !pathname.startsWith('/contacts') && !pathname.startsWith(contactsUrl) && !pathname.startsWith('/faq') && !pathname.startsWith(faqUrl)) {
         navigate('/', { replace: true });
       }
     }
@@ -885,6 +887,34 @@ function HomePage() {
     (info.sell_url && (pathname === info.sell_url || pathname === '/' + info.sell_url))
   ) || null;
 
+  // Dynamic route resolution for custom contacts URL and service link URLs
+  const contactsPath = (settings?.contacts_url || '/contacts').replace(/^\//, '');
+  if (slug && slug === contactsPath) {
+    return <ContactsPage />;
+  }
+
+  // Check if slug matches custom FAQ URL
+  const faqPath = (settings?.faq_url || '/faq').replace(/^\//, '');
+  if (slug && slug === faqPath) {
+    return <FAQPage />;
+  }
+
+  // Check if slug matches custom Rates URL
+  const ratesPath = (settings?.rates_url || '/rates').replace(/^\//, '');
+  if (slug && slug === ratesPath) {
+    return <RatesPage />;
+  }
+
+  // Check if slug matches any service link_url
+  const matchedService = services?.find(s => {
+    if (!s.link_url) return false;
+    const svcSlug = s.link_url.replace(/^\//, '');
+    return svcSlug === slug;
+  });
+  if (slug && matchedService) {
+    return <ServicePage />;
+  }
+
   // If a slug is present but it's not a recognized currency URL, render the 404 page.
   if (slug && !loading && !pathCurrency) {
     return <NotFoundPage />;
@@ -991,7 +1021,7 @@ function HomePage() {
 
 
 
-      <RatesSection currencies={currencies} crossRates={crossRates} updatedAt={ratesUpdated} />
+      <RatesSection currencies={currencies} crossRates={crossRates} updatedAt={ratesUpdated} settings={settings} />
       <ServicesSection services={services} />
       <FAQSection faqItems={faqItems} />
 
@@ -1003,6 +1033,14 @@ function ProtectedRoute({ children, user, requiredRole }) {
   if (!user) return <Navigate to="/login" replace />;
   if (requiredRole && user.role !== requiredRole) return <Navigate to="/panel" replace />;
   return children;
+}
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
 }
 
 function App() {
@@ -1045,11 +1083,11 @@ function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<PublicLayout />}>
           <Route index element={<HomePage />} />
           <Route path="rates" element={<RatesPage />} />
-          <Route path="services" element={<AllServicesPage />} />
           <Route path="services/:slug" element={<ServicePage />} />
           <Route path="contacts" element={<ContactsPage />} />
           <Route path="faq" element={<FAQPage />} />

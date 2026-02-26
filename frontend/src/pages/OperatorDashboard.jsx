@@ -219,6 +219,7 @@ export default function OperatorDashboard({ user, onLogout }) {
             <button
               onClick={onLogout}
               className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+              aria-label="Вийти"
             >
               <LogOut className="w-5 h-5" />
             </button>
@@ -319,6 +320,7 @@ export default function OperatorDashboard({ user, onLogout }) {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
+                  aria-label="Початкова дата"
                   className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
                 />
                 <span className="text-text-secondary">—</span>
@@ -326,6 +328,7 @@ export default function OperatorDashboard({ user, onLogout }) {
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
+                  aria-label="Кінцева дата"
                   className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
                 />
               </div>
@@ -495,6 +498,7 @@ export default function OperatorDashboard({ user, onLogout }) {
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
+              aria-label="Нотатка оператора"
               placeholder="Введіть нотатку..."
               className="w-full h-32 p-4 bg-primary rounded-xl border border-white/10 text-white placeholder:text-text-secondary resize-none focus:outline-none focus:border-accent-yellow"
             />

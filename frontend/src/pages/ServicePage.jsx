@@ -21,7 +21,7 @@ export default function ServicePage() {
   }
 
   return (
-    <div className="bg-primary pb-12">
+    <div className="bg-primary pb-12 pt-24">
       {/* Content */}
       <main className="max-w-4xl mx-auto px-4 lg:px-8 py-8">
         {service.image_url && (

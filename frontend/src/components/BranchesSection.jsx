@@ -206,10 +206,36 @@ export default function BranchesSection({ branches = [], settings }) {
   };
 
   // Prepare branches with coords and distance
-  const mapBranches = branches.map(b => ({
+  const mapBranches = branches.map((b, originalIdx) => ({
     ...b,
+    originalIdx,
     coords: { lat: b.lat, lng: b.lng, address: b.address }
-  })).filter(b => b.coords && b.coords.lat && b.coords.lng);
+  })).filter(b => b.coords && b.coords.lat && b.coords.lng && b.coords.lat !== 0 && b.coords.lng !== 0);
+
+  // Group by coordinates to detect co-located branches
+  const overlapGroups = {};
+  mapBranches.forEach(b => {
+    // Round to 4 decimal places (~11m precision) to catch near-duplicates too
+    const key = `${Number(b.coords.lat).toFixed(4)}-${Number(b.coords.lng).toFixed(4)}`;
+    if (!overlapGroups[key]) overlapGroups[key] = [];
+    overlapGroups[key].push(b);
+  });
+
+  // Apply circular offset for branches sharing the same location
+  Object.values(overlapGroups).forEach(group => {
+    if (group.length > 1) {
+      const radius = 0.00015; // ~15 meters radius
+      const angleStep = (2 * Math.PI) / group.length;
+      group.forEach((b, i) => {
+        // Place each branch evenly around a circle
+        b.coords.lat += radius * Math.cos(angleStep * i);
+        b.coords.lng += radius * Math.sin(angleStep * i);
+        // Tag with overlap info for the map component
+        b._overlapCount = group.length;
+        b._overlapIndex = i;
+      });
+    }
+  });
 
   // Sorted branches
   const displayBranches = [...branches].map((b, idx) => {
@@ -347,11 +373,17 @@ export default function BranchesSection({ branches = [], settings }) {
                     }`}
                 >
                   <button
-                    onClick={() => setExpandedBranch(isExpanded ? null : branch.id)}
+                    onClick={() => {
+                      const newExpanded = isExpanded ? null : branch.id;
+                      setExpandedBranch(newExpanded);
+                      if (newExpanded && branch.lat && branch.lng) {
+                        setMapCenter({ lat: branch.lat, lng: branch.lng });
+                      }
+                    }}
                     className="w-full p-4 flex items-center gap-4 text-left"
                   >
                     <div className={`w-12 h-12 rounded-full ${isNearest ? 'bg-accent-yellow text-primary' : 'bg-accent-yellow/20 text-accent-yellow'} flex items-center justify-center flex-shrink-0 font-bold text-lg`}>
-                      {branch.originalIdx + 1}
+                      {branch.number || branch.originalIdx + 1}
                     </div>
                     <div className="flex-1">
                       <div className={`font-bold ${isNearest ? 'text-accent-yellow' : ''}`}>

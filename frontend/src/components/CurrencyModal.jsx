@@ -17,7 +17,7 @@ export default function CurrencyModal({ isOpen, onClose, currencies, onSelect, t
           <button
             onClick={onClose}
             className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-          >
+           aria-label="Закрити">
             <X className="w-5 h-5 text-text-secondary" />
           </button>
         </div>

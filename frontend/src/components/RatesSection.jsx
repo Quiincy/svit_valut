@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-export default function RatesSection({ currencies, crossRates = {}, updatedAt }) {
+export default function RatesSection({ currencies, crossRates = {}, updatedAt, settings }) {
   const topCurrencies = currencies.filter(c => c.code !== 'UAH').slice(0, 5);
   const commonCrossPairs = Object.entries(crossRates).slice(0, 3);
 
@@ -102,7 +102,7 @@ export default function RatesSection({ currencies, crossRates = {}, updatedAt })
         {/* View All Button */}
         <div className="flex justify-center mt-8">
           <Link
-            to="/rates"
+            to={settings?.rates_url || '/rates'}
             className="inline-flex items-center gap-2 px-8 py-3 bg-accent-yellow rounded-xl text-primary font-bold hover:opacity-90 transition-all shadow-lg shadow-accent-yellow/20"
           >
             Дивитися всі курси →

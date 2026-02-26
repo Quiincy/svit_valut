@@ -331,8 +331,8 @@ export default function SettingsPage() {
 
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Назва компанії</label>
-              <input
+              <label htmlFor="field_1" className="block text-sm text-text-secondary mb-2">Назва компанії</label>
+              <input id="field_1"
                 type="text"
                 value={settings.company_name || ''}
                 onChange={(e) => setSettings({ ...settings, company_name: e.target.value })}
@@ -341,8 +341,8 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Основний телефон</label>
-              <input
+              <label htmlFor="field_2" className="block text-sm text-text-secondary mb-2">Основний телефон</label>
+              <input id="field_2"
                 type="text"
                 value={settings.phone || ''}
                 onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
@@ -351,8 +351,8 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Email</label>
-              <input
+              <label htmlFor="email_3" className="block text-sm text-text-secondary mb-2">Email</label>
+              <input id="email_3"
                 type="email"
                 value={settings.email || ''}
                 onChange={(e) => setSettings({ ...settings, email: e.target.value })}
@@ -361,8 +361,8 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Години роботи</label>
-              <input
+              <label htmlFor="field_4" className="block text-sm text-text-secondary mb-2">Години роботи</label>
+              <input id="field_4"
                 type="text"
                 value={settings.working_hours || ''}
                 onChange={(e) => setSettings({ ...settings, working_hours: e.target.value })}
@@ -375,8 +375,8 @@ export default function SettingsPage() {
 
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Telegram URL</label>
-              <input
+              <label htmlFor="telegram_url_5" className="block text-sm text-text-secondary mb-2">Telegram URL</label>
+              <input id="telegram_url_5"
                 type="text"
                 value={settings.telegram_url || ''}
                 onChange={(e) => setSettings({ ...settings, telegram_url: e.target.value })}
@@ -386,8 +386,8 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Viber URL</label>
-              <input
+              <label htmlFor="viber_url_6" className="block text-sm text-text-secondary mb-2">Viber URL</label>
+              <input id="viber_url_6"
                 type="text"
                 value={settings.viber_url || ''}
                 onChange={(e) => setSettings({ ...settings, viber_url: e.target.value })}
@@ -396,8 +396,8 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-text-secondary mb-2">WhatsApp URL</label>
-              <input
+              <label htmlFor="whatsapp_url_7" className="block text-sm text-text-secondary mb-2">WhatsApp URL</label>
+              <input id="whatsapp_url_7"
                 type="text"
                 value={settings.whatsapp_url || ''}
                 onChange={(e) => setSettings({ ...settings, whatsapp_url: e.target.value })}
@@ -406,8 +406,8 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Instagram URL</label>
-              <input
+              <label htmlFor="instagram_url_8" className="block text-sm text-text-secondary mb-2">Instagram URL</label>
+              <input id="instagram_url_8"
                 type="text"
                 value={settings.instagram_url || ''}
                 onChange={(e) => setSettings({ ...settings, instagram_url: e.target.value })}
@@ -420,23 +420,51 @@ export default function SettingsPage() {
 
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Мін. сума для оптового курсу ($)</label>
-              <input
-                type="number"
-                value={settings.min_wholesale_amount || 1000}
-                onChange={(e) => setSettings({ ...settings, min_wholesale_amount: parseInt(e.target.value) })}
-                className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">Час бронювання (хвилин)</label>
-              <input
+              <label htmlFor="field_10" className="block text-sm text-text-secondary mb-2">Час бронювання (хвилин)</label>
+              <input id="field_10"
                 type="number"
                 value={settings.reservation_time_minutes || 60}
                 onChange={(e) => setSettings({ ...settings, reservation_time_minutes: parseInt(e.target.value) })}
                 className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
               />
+            </div>
+          </div>
+
+          <h4 className="text-md font-bold mt-8 mb-4">Динамічні URL</h4>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="contacts_url" className="block text-sm text-text-secondary mb-2">URL сторінки контактів</label>
+              <input id="contacts_url"
+                type="text"
+                value={settings.contacts_url || '/contacts'}
+                onChange={(e) => setSettings({ ...settings, contacts_url: e.target.value })}
+                placeholder="/contacts"
+                className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+              />
+              <p className="text-xs text-text-secondary mt-1">Наприклад: /contacts, /kontakty, /zv-yazok</p>
+            </div>
+            <div>
+              <label htmlFor="faq_url" className="block text-sm text-text-secondary mb-2">URL сторінки FAQ</label>
+              <input id="faq_url"
+                type="text"
+                value={settings.faq_url || '/faq'}
+                onChange={(e) => setSettings({ ...settings, faq_url: e.target.value })}
+                placeholder="/faq"
+                className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+              />
+              <p className="text-xs text-text-secondary mt-1">Наприклад: /faq, /chasti-pytannya</p>
+            </div>
+            <div>
+              <label htmlFor="rates_url" className="block text-sm text-text-secondary mb-2">URL сторінки курсів</label>
+              <input id="rates_url"
+                type="text"
+                value={settings.rates_url || '/rates'}
+                onChange={(e) => setSettings({ ...settings, rates_url: e.target.value })}
+                placeholder="/rates"
+                className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+              />
+              <p className="text-xs text-text-secondary mt-1">Наприклад: /rates, /kursy-valyut</p>
             </div>
           </div>
 
@@ -610,8 +638,8 @@ export default function SettingsPage() {
             <div className="space-y-4">
               {!editingUser && (
                 <div>
-                  <label className="block text-sm text-text-secondary mb-1">Логін</label>
-                  <input
+                  <label htmlFor="field_11" className="block text-sm text-text-secondary mb-1">Логін</label>
+                  <input id="field_11"
                     type="text"
                     value={userForm.username}
                     onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
@@ -622,8 +650,8 @@ export default function SettingsPage() {
               )}
 
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Ім'я</label>
-                <input
+                <label htmlFor="field_12" className="block text-sm text-text-secondary mb-1">Ім'я</label>
+                <input id="field_12"
                   type="text"
                   value={userForm.name}
                   onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
@@ -633,10 +661,10 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-secondary mb-1">
+                <label htmlFor="editinguser_13" className="block text-sm text-text-secondary mb-1">
                   {editingUser ? 'Новий пароль (залиште пустим для збереження)' : 'Пароль'}
                 </label>
-                <input
+                <input id="editinguser_13"
                   type="password"
                   value={userForm.password}
                   onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
@@ -646,15 +674,15 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Відділення</label>
-                <select
+                <label htmlFor="field_14" className="block text-sm text-text-secondary mb-1">Відділення</label>
+                <select id="field_14"
                   value={userForm.branch_id}
                   onChange={(e) => setUserForm({ ...userForm, branch_id: e.target.value ? parseInt(e.target.value) : '' })}
                   className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
                 >
                   <option value="">— Без відділення —</option>
                   {branches.map((b) => (
-                    <option key={b.id} value={b.id}>{b.address}</option>
+                    <option key={b.id} value={b.id}>{b.address} (#{b.number})</option>
                   ))}
                 </select>
               </div>
@@ -778,15 +806,15 @@ export default function SettingsPage() {
               <h3 className="text-lg font-bold">
                 {editingBranch.id ? `Редагувати відділення #${editingBranch.id}` : 'Нове відділення'}
               </h3>
-              <button onClick={() => setEditingBranch(null)} className="p-2 hover:bg-white/5 rounded-lg">
+              <button onClick={() => setEditingBranch(null)} className="p-2 hover:bg-white/5 rounded-lg" aria-label="Закрити">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-text-secondary mb-2">Адреса</label>
-                <input
+                <label htmlFor="field_15" className="block text-sm text-text-secondary mb-2">Адреса</label>
+                <input id="field_15"
                   type="text"
                   value={editingBranch.address}
                   onChange={(e) => setEditingBranch({ ...editingBranch, address: e.target.value })}
@@ -795,8 +823,8 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-secondary mb-2">Години роботи</label>
-                <input
+                <label htmlFor="field_16" className="block text-sm text-text-secondary mb-2">Години роботи</label>
+                <input id="field_16"
                   type="text"
                   value={editingBranch.hours}
                   onChange={(e) => setEditingBranch({ ...editingBranch, hours: e.target.value })}
@@ -805,8 +833,8 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-secondary mb-2">Телефон</label>
-                <input
+                <label htmlFor="field_17" className="block text-sm text-text-secondary mb-2">Телефон</label>
+                <input id="field_17"
                   type="text"
                   value={editingBranch.phone || ''}
                   onChange={(e) => setEditingBranch({ ...editingBranch, phone: e.target.value })}
@@ -816,8 +844,8 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-text-secondary mb-2">Номер відділення</label>
-                  <input
+                  <label htmlFor="field_18" className="block text-sm text-text-secondary mb-2">Номер відділення</label>
+                  <input id="field_18"
                     type="number"
                     value={editingBranch.number || editingBranch.id}
                     onChange={(e) => setEditingBranch({ ...editingBranch, number: parseInt(e.target.value) })}
@@ -825,8 +853,8 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-text-secondary mb-2">Telegram чат</label>
-                  <input
+                  <label htmlFor="telegram_19" className="block text-sm text-text-secondary mb-2">Telegram чат</label>
+                  <input id="telegram_19"
                     type="text"
                     value={editingBranch.telegram_chat || ''}
                     onChange={(e) => setEditingBranch({ ...editingBranch, telegram_chat: e.target.value })}
@@ -836,6 +864,33 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="field_lat" className="block text-sm text-text-secondary mb-2">Широта (Lat)</label>
+                  <input id="field_lat"
+                    type="number"
+                    step="0.000001"
+                    value={editingBranch.lat || ''}
+                    onChange={(e) => setEditingBranch({ ...editingBranch, lat: e.target.value ? parseFloat(e.target.value) : null })}
+                    placeholder="50.4501"
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none placeholder-white/20"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="field_lng" className="block text-sm text-text-secondary mb-2">Довгота (Lng)</label>
+                  <input id="field_lng"
+                    type="number"
+                    step="0.000001"
+                    value={editingBranch.lng || ''}
+                    onChange={(e) => setEditingBranch({ ...editingBranch, lng: e.target.value ? parseFloat(e.target.value) : null })}
+                    placeholder="30.5234"
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none placeholder-white/20"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-text-secondary">
+                * Якщо координати не вказані, вони визначаться автоматично за адресою
+              </p>
 
             </div>
 
@@ -863,15 +918,15 @@ export default function SettingsPage() {
           <div className="bg-primary-light rounded-2xl p-6 max-w-lg w-full border border-white/10 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">{editingFaq.id ? 'Редагувати' : 'Додати'} FAQ</h3>
-              <button onClick={() => setEditingFaq(null)} className="p-2 hover:bg-white/5 rounded-lg">
+              <button onClick={() => setEditingFaq(null)} className="p-2 hover:bg-white/5 rounded-lg" aria-label="Закрити">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-text-secondary mb-2">Питання</label>
-                <input
+                <label htmlFor="field_20" className="block text-sm text-text-secondary mb-2">Питання</label>
+                <input id="field_20"
                   type="text"
                   value={editingFaq.question}
                   onChange={(e) => setEditingFaq({ ...editingFaq, question: e.target.value })}
@@ -880,8 +935,8 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-secondary mb-2">Відповідь</label>
-                <textarea
+                <label htmlFor="field_21" className="block text-sm text-text-secondary mb-2">Відповідь</label>
+                <textarea id="field_21"
                   value={editingFaq.answer}
                   onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })}
                   rows={4}
@@ -914,15 +969,15 @@ export default function SettingsPage() {
           <div className="bg-primary-light rounded-2xl p-6 max-w-lg w-full border border-white/10 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">{editingService.id ? 'Редагувати' : 'Додати'} послугу</h3>
-              <button onClick={() => setEditingService(null)} className="p-2 hover:bg-white/5 rounded-lg">
+              <button onClick={() => setEditingService(null)} className="p-2 hover:bg-white/5 rounded-lg" aria-label="Закрити">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-text-secondary mb-2">Назва</label>
-                <input
+                <label htmlFor="field_22" className="block text-sm text-text-secondary mb-2">Назва</label>
+                <input id="field_22"
                   type="text"
                   value={editingService.title}
                   onChange={(e) => setEditingService({ ...editingService, title: e.target.value })}
@@ -931,14 +986,26 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-secondary mb-2">Короткий опис (для списків)</label>
-                <textarea
+                <label htmlFor="field_23" className="block text-sm text-text-secondary mb-2">Короткий опис (для списків)</label>
+                <textarea id="field_23"
                   value={editingService.short_description || ''}
                   onChange={(e) => setEditingService({ ...editingService, short_description: e.target.value })}
                   rows={2}
                   className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none resize-none"
                   placeholder="Короткий опис послуги..."
                 />
+              </div>
+
+              <div>
+                <label htmlFor="service_link_url" className="block text-sm text-text-secondary mb-2">URL послуги</label>
+                <input id="service_link_url"
+                  type="text"
+                  value={editingService.link_url || ''}
+                  onChange={(e) => setEditingService({ ...editingService, link_url: e.target.value })}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                  placeholder="/obmin-valyut"
+                />
+                <p className="text-xs text-text-secondary mt-1">Кастомний URL для цієї послуги (наприклад: /obmin-valyut)</p>
               </div>
 
               <div>
@@ -970,6 +1037,7 @@ export default function SettingsPage() {
                     onChange={(e) => setEditingService({ ...editingService, image_url: e.target.value })}
                     className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
                     placeholder="https://..."
+                    aria-label="URL зображення"
                   />
                   <label className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-3 flex items-center justify-center transition-colors">
                     {uploadingImage ? (
@@ -983,6 +1051,7 @@ export default function SettingsPage() {
                       className="hidden"
                       onChange={handleImageUpload}
                       disabled={uploadingImage}
+                      aria-label="Завантажити зображення"
                     />
                   </label>
                 </div>
@@ -1070,8 +1139,8 @@ export default function SettingsPage() {
               <div className="p-6 bg-primary rounded-xl border border-white/10">
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="md:col-span-2">
-                    <label className="block text-sm text-text-secondary mb-2">URL шлях (наприклад: /buy-usd)</label>
-                    <input
+                    <label htmlFor="url_buy_usd_24" className="block text-sm text-text-secondary mb-2">URL шлях (наприклад: /buy-usd)</label>
+                    <input id="url_buy_usd_24"
                       type="text"
                       value={editingSeo.url_path || ''}
                       onChange={(e) => setEditingSeo({ ...editingSeo, url_path: e.target.value })}
@@ -1081,8 +1150,8 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-sm text-text-secondary mb-2">Meta Title</label>
-                    <input
+                    <label htmlFor="meta_title_25" className="block text-sm text-text-secondary mb-2">Meta Title</label>
+                    <input id="meta_title_25"
                       type="text"
                       value={editingSeo.title || ''}
                       onChange={(e) => setEditingSeo({ ...editingSeo, title: e.target.value })}
@@ -1091,8 +1160,8 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-sm text-text-secondary mb-2">Meta Description</label>
-                    <textarea
+                    <label htmlFor="meta_description_26" className="block text-sm text-text-secondary mb-2">Meta Description</label>
+                    <textarea id="meta_description_26"
                       value={editingSeo.description || ''}
                       onChange={(e) => setEditingSeo({ ...editingSeo, description: e.target.value })}
                       rows={3}
@@ -1101,8 +1170,8 @@ export default function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-text-secondary mb-2">H1 Заголовок</label>
-                    <input
+                    <label htmlFor="h1_27" className="block text-sm text-text-secondary mb-2">H1 Заголовок</label>
+                    <input id="h1_27"
                       type="text"
                       value={editingSeo.h1 || ''}
                       onChange={(e) => setEditingSeo({ ...editingSeo, h1: e.target.value })}
@@ -1111,8 +1180,8 @@ export default function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-text-secondary mb-2">H2 Заголовок</label>
-                    <input
+                    <label htmlFor="h2_28" className="block text-sm text-text-secondary mb-2">H2 Заголовок</label>
+                    <input id="h2_28"
                       type="text"
                       value={editingSeo.h2 || ''}
                       onChange={(e) => setEditingSeo({ ...editingSeo, h2: e.target.value })}
@@ -1129,7 +1198,7 @@ export default function SettingsPage() {
                           <button
                             onClick={() => setEditingSeo({ ...editingSeo, image_url: '' })}
                             className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-500/80 rounded transition-colors"
-                          >
+                            aria-label="Видалити зображення">
                             <X className="w-3 h-3 text-white" />
                           </button>
                         </div>
@@ -1152,13 +1221,14 @@ export default function SettingsPage() {
                               {uploadingImage ? 'Завантаження...' : 'Натисніть для завантаження'}
                             </p>
                           </div>
-                          <input type="file" className="hidden" accept="image/*" onChange={handleSeoImageUpload} />
+                          <input type="file" className="hidden" accept="image/*" onChange={handleSeoImageUpload} aria-label="Завантажити SEO зображення" />
                         </label>
                         <input
                           type="text"
                           value={editingSeo.image_url || ''}
                           onChange={(e) => setEditingSeo({ ...editingSeo, image_url: e.target.value })}
                           placeholder="Або вставте посилання (URL) на зображення"
+                          aria-label="URL SEO зображення"
                           className="w-full mt-2 px-4 py-2 text-sm bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
                         />
                       </div>

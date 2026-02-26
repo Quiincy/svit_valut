@@ -1,91 +1,115 @@
 #!/bin/bash
 
-# Світ Валют - Start Script
-# This script starts both backend and frontend servers
+# ============================================
+# Світ Валют — Start Server (Production)
+# ============================================
+# Хостинг: mirvalut.com (ukraine.com.ua)
+# Вихідний код: /home/leadgin/mirvalut.com/src/svit_valut
+# Субдомен test.mirvalut.com → симлінк на frontend/dist
+# ============================================
 
-echo "🚀 Starting Світ Валют..."
+set -e
+
+PROJECT_DIR="/home/leadgin/mirvalut.com/src/svit_valut"
+BACKEND_DIR="$PROJECT_DIR/backend"
+FRONTEND_DIR="$PROJECT_DIR/frontend"
+DIST_DIR="$FRONTEND_DIR/dist"
+SUBDOMAIN_DIR="/home/leadgin/mirvalut.com/test"
+LOG_DIR="$PROJECT_DIR/logs"
+PID_DIR="$PROJECT_DIR/pids"
+
+# Create dirs
+mkdir -p "$LOG_DIR" "$PID_DIR" "$DIST_DIR"
+
+echo "🚀 Запуск Світ Валют..."
 echo ""
 
-# Check if we're in the right directory
-if [ ! -d "backend" ] || [ ! -d "frontend" ]; then
-    echo "❌ Error: Please run this script from the project root directory"
-    exit 1
-fi
+# ---- Backend ----
+echo "📦 Запуск Backend (FastAPI)..."
 
-# Function to cleanup on exit
-cleanup() {
-    echo ""
-    echo "🛑 Stopping servers..."
-    kill $BACKEND_PID 2>/dev/null
-    kill $FRONTEND_PID 2>/dev/null
-    exit 0
-}
+cd "$BACKEND_DIR"
 
-trap cleanup SIGINT SIGTERM
-
-# Start Backend
-echo "📦 Starting Backend (FastAPI)..."
-cd backend
 if [ ! -d "venv" ]; then
-    echo "   Creating virtual environment..."
+    echo "   Створення віртуального оточення..."
     python3.12 -m venv venv
 fi
+
 source venv/bin/activate
-echo "   Installing dependencies..."
-export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
+
+echo "   Встановлення залежностей..."
 pip install --upgrade pip -q 2>/dev/null
-pip install -r requirements.txt -q 2>/dev/null || pip install -r requirements.txt
-echo "   Starting uvicorn server..."
-python -m uvicorn app.main:app --host 0.0.0.0 --reload --port 8000 &
-BACKEND_PID=$!
-cd ..
+pip install -r requirements.txt -q 2>/dev/null
 
-# Wait for backend to start
-sleep 3
+echo "   Запуск міграцій..."
+python migrate_rates_url.py 2>/dev/null || true
 
-# Start Frontend
-echo "🎨 Starting Frontend (React + Vite)..."
-cd frontend
+nohup python -m uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 2 \
+    > "$LOG_DIR/backend.log" 2>&1 &
+
+echo $! > "$PID_DIR/backend.pid"
+echo "   ✅ Backend запущено (PID: $(cat "$PID_DIR/backend.pid"))"
+
+cd "$PROJECT_DIR"
+
+# ---- Frontend ----
+echo "🎨 Збірка Frontend..."
+
+cd "$FRONTEND_DIR"
+
 if [ ! -d "node_modules" ]; then
-    echo "   Installing dependencies..."
+    echo "   Встановлення залежностей..."
     npm install
 fi
-npm run dev -- --host &
-FRONTEND_PID=$!
-cd ..
 
-# Get local IP address
-get_local_ip() {
-    if command -v ifconfig &> /dev/null; then
-        ifconfig 2>/dev/null | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1
-    elif command -v ip &> /dev/null; then
-        ip route get 1 2>/dev/null | awk '{print $7}' | head -1
-    elif command -v hostname &> /dev/null; then
-        hostname -I 2>/dev/null | awk '{print $1}'
-    fi
+# Build into frontend/dist/
+echo "   Збірка production bundle..."
+npm run build
+
+# Copy app.js into dist for Passenger
+cp "$FRONTEND_DIR/app.js" "$DIST_DIR/app.js"
+
+# Create package.json for hosting Node.js runner
+cat > "$DIST_DIR/package.json" << 'EOF'
+{
+  "name": "svit-valut-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node app.js"
+  }
 }
+EOF
 
-LOCAL_IP=$(get_local_ip)
+# Create symlink: mirvalut.com/test → frontend/dist
+echo "   Налаштування симлінку..."
 
-echo ""
-echo "✅ Світ Валют is running!"
-echo ""
-echo "   🔹 Frontend: http://localhost:5173"
-echo "   🔹 Backend:  http://localhost:8000"
-echo "   🔹 API Docs: http://localhost:8000/docs"
-echo ""
-if [ -n "$LOCAL_IP" ]; then
-    echo "   📱 Доступ з мережі (для телефону):"
-    echo "   🔹 Frontend: http://$LOCAL_IP:5173"
-    echo "   🔹 Backend:  http://$LOCAL_IP:8000"
-    echo ""
+# Remove old test (symlink or directory)
+if [ -L "$SUBDOMAIN_DIR" ]; then
+    rm -f "$SUBDOMAIN_DIR"
+elif [ -d "$SUBDOMAIN_DIR" ]; then
+    rm -rf "$SUBDOMAIN_DIR"
 fi
-echo "   🔐 Тестові дані для входу:"
-echo "   🔹 Адмін:    admin / admin123"
-echo "   🔹 Оператор: operator1 / op1pass"
-echo ""
-echo "Press Ctrl+C to stop all servers"
-echo ""
 
-# Wait for processes
-wait
+ln -s "$DIST_DIR" "$SUBDOMAIN_DIR"
+
+echo "   ✅ Frontend зібрано (симлінк: mirvalut.com/test → frontend/dist)"
+
+cd "$PROJECT_DIR"
+
+# ---- Summary ----
+echo ""
+echo "═══════════════════════════════════════"
+echo "  ✅ Світ Валют запущено!"
+echo "═══════════════════════════════════════"
+echo ""
+echo "  🔹 Backend API:  http://127.0.0.1:8000"
+echo "  🔹 Frontend:     $DIST_DIR"
+echo "  🔹 Симлінк:      $SUBDOMAIN_DIR/www → $DIST_DIR"
+echo ""
+echo "  📁 Логи:         $LOG_DIR/"
+echo "  📁 PID файли:    $PID_DIR/"
+echo ""
+echo "  🛑 Для зупинки:  ./stop.sh"
+echo ""

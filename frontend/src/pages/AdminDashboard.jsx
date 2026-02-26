@@ -511,6 +511,7 @@ export default function AdminDashboard({ user, onLogout }) {
             <button
               onClick={onLogout}
               className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+              aria-label="Вийти"
             >
               <LogOut className="w-5 h-5" />
             </button>
@@ -652,6 +653,7 @@ export default function AdminDashboard({ user, onLogout }) {
                       onChange={handleFileUpload}
                       className="hidden"
                       id="file-upload"
+                      aria-label="Завантажити файл"
                     />
                     <label htmlFor="file-upload" className="cursor-pointer">
                       <Upload className="w-12 h-12 text-text-secondary mx-auto mb-4" />
@@ -808,6 +810,7 @@ export default function AdminDashboard({ user, onLogout }) {
                   <button
                     onClick={fetchData}
                     className="p-2 text-text-secondary hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+                    aria-label="Оновити курси"
                   >
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                   </button>
@@ -919,11 +922,13 @@ export default function AdminDashboard({ user, onLogout }) {
                       value={branchCurrencySearch}
                       onChange={(e) => setBranchCurrencySearch(e.target.value.toUpperCase())}
                       placeholder="Фільтр валюти... (USD, EUR)"
+                      aria-label="Фільтр валюти"
                       className="pl-9 pr-4 py-2 bg-primary border border-white/10 rounded-xl text-sm focus:outline-none focus:border-accent-yellow w-52"
                     />
                     {branchCurrencySearch && (
                       <button
                         onClick={() => setBranchCurrencySearch('')}
+                        aria-label="Очистити пошук"
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-white"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -1075,13 +1080,13 @@ export default function AdminDashboard({ user, onLogout }) {
             <div className="bg-primary-light rounded-2xl p-6 w-full max-w-sm border border-white/10">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold">{editingCrossRate ? 'Редагувати пару' : 'Додати крос-курс'}</h3>
-                <button onClick={() => setCrossRateModal(false)}><X className="w-5 h-5 text-text-secondary" /></button>
+                <button onClick={() => setCrossRateModal(false)} aria-label="Закрити"><X className="w-5 h-5 text-text-secondary" /></button>
               </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">Базова</label>
-                    <input
+                    <label htmlFor="field_1" className="block text-sm text-text-secondary mb-1">Базова</label>
+                    <input id="field_1"
                       type="text"
                       placeholder="EUR"
                       value={crossRateForm.base_currency}
@@ -1091,8 +1096,8 @@ export default function AdminDashboard({ user, onLogout }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">Котирувальна</label>
-                    <input
+                    <label htmlFor="field_2" className="block text-sm text-text-secondary mb-1">Котирувальна</label>
+                    <input id="field_2"
                       type="text"
                       placeholder="USD"
                       value={crossRateForm.quote_currency}
@@ -1104,8 +1109,8 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">Купівля</label>
-                    <input
+                    <label htmlFor="field_3" className="block text-sm text-text-secondary mb-1">Купівля</label>
+                    <input id="field_3"
                       type="number"
                       step="0.0001"
                       value={crossRateForm.buy_rate}
@@ -1114,8 +1119,8 @@ export default function AdminDashboard({ user, onLogout }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">Продаж</label>
-                    <input
+                    <label htmlFor="field_4" className="block text-sm text-text-secondary mb-1">Продаж</label>
+                    <input id="field_4"
                       type="number"
                       step="0.0001"
                       value={crossRateForm.sell_rate}
@@ -1197,6 +1202,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
+                    aria-label="Початкова дата"
                     className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
                   />
                   <span className="text-text-secondary">—</span>
@@ -1204,6 +1210,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     type="date"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
+                    aria-label="Кінцева дата"
                     className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
                   />
                 </div>
@@ -1223,6 +1230,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <button
                   onClick={fetchData}
                   className="p-2 text-text-secondary hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+                  aria-label="Оновити бронювання"
                 >
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </button>
@@ -1348,13 +1356,13 @@ export default function AdminDashboard({ user, onLogout }) {
             <div className="bg-primary-light rounded-2xl p-6 w-full max-w-sm border border-white/10 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold">Додати/Редагувати курс</h3>
-                <button onClick={() => setRateModal({ ...rateModal, open: false })}><X className="w-5 h-5 text-text-secondary" /></button>
+                <button onClick={() => setRateModal({ ...rateModal, open: false })} aria-label="Закрити"><X className="w-5 h-5 text-text-secondary" /></button>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-text-secondary mb-1">Валюта</label>
-                  <select
+                  <label htmlFor="field_5" className="block text-sm text-text-secondary mb-1">Валюта</label>
+                  <select id="field_5"
                     className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
                     value={rateForm.currency}
                     onChange={(e) => setRateForm({ ...rateForm, currency: e.target.value })}
@@ -1367,8 +1375,8 @@ export default function AdminDashboard({ user, onLogout }) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">Купівля</label>
-                    <input
+                    <label htmlFor="field_6" className="block text-sm text-text-secondary mb-1">Купівля</label>
+                    <input id="field_6"
                       type="number" step="0.01"
                       className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
                       value={rateForm.buy}
@@ -1376,8 +1384,8 @@ export default function AdminDashboard({ user, onLogout }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">Продаж</label>
-                    <input
+                    <label htmlFor="field_7" className="block text-sm text-text-secondary mb-1">Продаж</label>
+                    <input id="field_7"
                       type="number" step="0.01"
                       className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
                       value={rateForm.sell}
@@ -1388,8 +1396,8 @@ export default function AdminDashboard({ user, onLogout }) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-accent-yellow/80 mb-1">Опт Купівля</label>
-                    <input
+                    <label htmlFor="field_8" className="block text-sm text-accent-yellow/80 mb-1">Опт Купівля</label>
+                    <input id="field_8"
                       type="number" step="0.01"
                       className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
                       value={rateForm.wholesale_buy}
@@ -1397,8 +1405,8 @@ export default function AdminDashboard({ user, onLogout }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-accent-yellow/80 mb-1">Опт Продаж</label>
-                    <input
+                    <label htmlFor="field_9" className="block text-sm text-accent-yellow/80 mb-1">Опт Продаж</label>
+                    <input id="field_9"
                       type="number" step="0.01"
                       className="w-full bg-primary border border-white/10 rounded-lg p-2.5 text-white"
                       value={rateForm.wholesale_sell}
@@ -1552,8 +1560,8 @@ export default function AdminDashboard({ user, onLogout }) {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">Ім'я клієнта</label>
-                    <input
+                    <label htmlFor="field_10" className="block text-sm text-text-secondary mb-1">Ім'я клієнта</label>
+                    <input id="field_10"
                       type="text"
                       value={resForm.customer_name}
                       onChange={(e) => setResForm({ ...resForm, customer_name: e.target.value })}
@@ -1562,8 +1570,8 @@ export default function AdminDashboard({ user, onLogout }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">Телефон</label>
-                    <input
+                    <label htmlFor="field_11" className="block text-sm text-text-secondary mb-1">Телефон</label>
+                    <input id="field_11"
                       type="text"
                       value={resForm.phone}
                       onChange={(e) => setResForm({ ...resForm, phone: e.target.value })}
@@ -1575,10 +1583,10 @@ export default function AdminDashboard({ user, onLogout }) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">
+                    <label htmlFor="editingreservation_give_currency_12" className="block text-sm text-text-secondary mb-1">
                       Віддає ({editingReservation.give_currency})
                     </label>
-                    <input
+                    <input id="editingreservation_give_currency_12"
                       type="number"
                       value={resForm.give_amount}
                       onChange={(e) => setResForm({ ...resForm, give_amount: e.target.value })}
@@ -1586,10 +1594,10 @@ export default function AdminDashboard({ user, onLogout }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-text-secondary mb-1">
+                    <label htmlFor="editingreservation_get_currency_13" className="block text-sm text-text-secondary mb-1">
                       Отримує ({editingReservation.get_currency})
                     </label>
-                    <input
+                    <input id="editingreservation_get_currency_13"
                       type="number"
                       value={resForm.get_amount}
                       onChange={(e) => setResForm({ ...resForm, get_amount: e.target.value })}
@@ -1599,8 +1607,8 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm text-text-secondary mb-1">Курс</label>
-                  <input
+                  <label htmlFor="field_14" className="block text-sm text-text-secondary mb-1">Курс</label>
+                  <input id="field_14"
                     type="number"
                     step="0.01"
                     value={resForm.rate}
@@ -1610,8 +1618,8 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm text-text-secondary mb-1">Відділення</label>
-                  <select
+                  <label htmlFor="field_15" className="block text-sm text-text-secondary mb-1">Відділення</label>
+                  <select id="field_15"
                     value={resForm.branch_id}
                     onChange={(e) => setResForm({ ...resForm, branch_id: e.target.value ? parseInt(e.target.value) : '' })}
                     className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
@@ -1624,8 +1632,8 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm text-text-secondary mb-1">Статус</label>
-                  <select
+                  <label htmlFor="field_16" className="block text-sm text-text-secondary mb-1">Статус</label>
+                  <select id="field_16"
                     value={resForm.status || editingReservation?.status || ''}
                     onChange={(e) => setResForm({ ...resForm, status: e.target.value })}
                     className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
@@ -1640,8 +1648,8 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm text-text-secondary mb-1">Нотатка оператора</label>
-                  <textarea
+                  <label htmlFor="field_17" className="block text-sm text-text-secondary mb-1">Нотатка оператора</label>
+                  <textarea id="field_17"
                     value={resForm.operator_note || ''}
                     onChange={(e) => setResForm({ ...resForm, operator_note: e.target.value })}
                     placeholder="Нотатка до бронювання..."

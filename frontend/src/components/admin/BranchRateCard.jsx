@@ -93,6 +93,7 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                             step="0.01"
                             value={buy}
                             onChange={(e) => setBuy(e.target.value)}
+                            aria-label="Роздріб купівля"
                             onBlur={handleBlur}
                             onKeyDown={handleKeyDown}
                             disabled={isActive === false}
@@ -107,6 +108,7 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                             step="0.01"
                             value={sell}
                             onChange={(e) => setSell(e.target.value)}
+                            aria-label="Роздріб продаж"
                             onBlur={handleBlur}
                             onKeyDown={handleKeyDown}
                             disabled={isActive === false}
@@ -125,6 +127,7 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                             step="0.01"
                             value={wholesaleBuy}
                             onChange={(e) => setWholesaleBuy(e.target.value)}
+                            aria-label="Опт купівля"
                             onBlur={handleBlur}
                             onKeyDown={handleKeyDown}
                             disabled={isActive === false}
@@ -139,6 +142,7 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                             step="0.01"
                             value={wholesaleSell}
                             onChange={(e) => setWholesaleSell(e.target.value)}
+                            aria-label="Опт продаж"
                             onBlur={handleBlur}
                             onKeyDown={handleKeyDown}
                             disabled={isActive === false}
@@ -155,6 +159,7 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                         type="number"
                         value={threshold}
                         onChange={(e) => setThreshold(e.target.value)}
+                        aria-label="Поріг опту"
                         onBlur={handleBlur}
                         onKeyDown={handleKeyDown}
                         disabled={isActive === false}

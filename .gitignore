@@ -31,8 +31,12 @@ build/
 Thumbs.db
 
 # Logs
+logs/
 *.log
 npm-debug.log*
+
+# PID files
+pids/
 
 # Testing
 coverage/
@@ -46,3 +50,7 @@ htmlcov/
 
 # Local files
 *.xlsx
+
+# Deploy artifacts
+deploy_package/
+*.tar.gz

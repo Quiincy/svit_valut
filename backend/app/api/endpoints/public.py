@@ -49,6 +49,9 @@ async def get_site_settings(db: Session = Depends(get_db)):
         "meta_title": getattr(settings, "meta_title", None),
         "meta_description": getattr(settings, "meta_description", None),
         "homepage_seo_text": getattr(settings, "homepage_seo_text", None),
+        "contacts_url": getattr(settings, "contacts_url", "/contacts"),
+        "faq_url": getattr(settings, "faq_url", "/faq"),
+        "rates_url": getattr(settings, "rates_url", "/rates"),
     }
 
 @router.get("/faq", response_model=List[FAQItem])

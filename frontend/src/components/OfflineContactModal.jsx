@@ -15,7 +15,7 @@ export default function OfflineContactModal({ isOpen, onClose, settings }) {
                 <button
                     onClick={onClose}
                     className="absolute top-4 right-4 p-2 hover:bg-white/5 rounded-lg transition-colors"
-                >
+                 aria-label="Закрити">
                     <X className="w-5 h-5 text-text-secondary" />
                 </button>
 

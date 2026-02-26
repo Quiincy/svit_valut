@@ -15,6 +15,7 @@ class ReservationStatus(str, enum.Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
+    DELETED = "deleted"
 
 class ChatSessionStatusEnum(str, enum.Enum):
     ACTIVE = "active"
@@ -59,6 +60,9 @@ class SiteSettingsBase(BaseModel):
     reservation_time_minutes: int = 60
     google_maps_embed: Optional[str] = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d162757.7284!2d30.3907!3d50.4017!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x40d4cf4ee15a4505%3A0x764931d2170146fe!2z0JrQuNGX0LI!5e0!3m2!1suk!2sua!4v1702000000000!5m2!1suk!2sua"
     homepage_seo_text: Optional[str] = None
+    contacts_url: str = "/contacts"
+    faq_url: str = "/faq"
+    rates_url: str = "/rates"
 
 class SiteSettings(SiteSettingsBase):
     class Config:

@@ -24,7 +24,9 @@ export default function HeroSection({
   branchCurrencyMap = {},
   currencyInfoMap = {},
   onOpenChat,
-  activeCurrencyInfo
+  activeCurrencyInfo,
+  activeSeo,
+  ratesUpdated
 }) {
   const location = useLocation();
   const [bookingStep, setBookingStep] = useState(null); // null, 'branch', 'name', 'phone'
@@ -38,7 +40,6 @@ export default function HeroSection({
   const [sellInputValue, setSellInputValue] = useState('');
   const [buyInputValue, setBuyInputValue] = useState('');
 
-  const minAmount = settings?.min_wholesale_amount || 1000;
   const reservationTime = settings?.reservation_time_minutes || 60;
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
@@ -158,8 +159,9 @@ export default function HeroSection({
     }
     setError('');
 
-    // Pre-select branch: activeBranch or first available
-    setSelectedBranch(activeBranch || branches[0] || null);
+    // Pre-select branch: branch with best rate, then activeBranch, then first
+    const { available } = getAvailableBranches();
+    setSelectedBranch(available[0] || activeBranch || branches[0] || null);
     setBookingStep('name');
   };
 
@@ -204,10 +206,33 @@ export default function HeroSection({
     setError('');
 
     try {
+      let finalGiveAmount = giveAmount;
+      let finalGiveCurrency = giveCurrency.code;
+      let finalGetCurrency = getCurrency.code;
+
+      if (!isSellMode) {
+        // User is buying foreign currency with UAH.
+        // The user gives UAH, gets Foreign Currency.
+        finalGiveCurrency = 'UAH';
+        finalGetCurrency = buyCurrency.code;
+
+        // Calculate the UAH amount needed
+        const foreignAmount = Number(buyInputValue.replace(/[^\d.]/g, '')) || 0;
+        const rate = getEffectiveRate(buyCurrency, foreignAmount, 'sell');
+        finalGiveAmount = foreignAmount * rate;
+      } else {
+        // User is selling foreign currency for UAH.
+        // The user gives foreign currency, gets UAH.
+        const foreignAmount = Number(sellInputValue.replace(/[^\d.]/g, '')) || 0;
+        finalGiveAmount = foreignAmount;
+        finalGiveCurrency = sellCurrency.code;
+        finalGetCurrency = 'UAH';
+      }
+
       await onReserve({
-        give_amount: giveAmount,
-        give_currency: giveCurrency.code,
-        get_currency: getCurrency.code,
+        give_amount: finalGiveAmount,
+        give_currency: finalGiveCurrency,
+        get_currency: finalGetCurrency,
         phone: '+' + phoneDigits,
         customer_name: customerName.trim(),
         branch_id: selectedBranch.id,
@@ -233,8 +258,12 @@ export default function HeroSection({
   // Helper to calculate effective rate based on amount and threshold
   const getEffectiveRate = (currency, amount, type) => {
     if (!currency) return 0;
-    const threshold = currency.wholesale_threshold || minAmount || 1000;
-    const isWholesale = amount >= threshold;
+
+    // Explicitly check for disabled wholesale (0 or null means disabled)
+    const threshold = currency.wholesale_threshold || 0;
+
+    const isWholesaleEnabled = threshold > 0;
+    const isWholesale = isWholesaleEnabled && amount >= threshold;
 
     if (type === 'buy') { // We BUY from user (User SELLS)
       // If wholesale setup exists and amount > threshold
@@ -370,9 +399,9 @@ export default function HeroSection({
 
               {/* Default Title — always visible on desktop */}
               <h1 className="text-5xl xl:text-7xl font-bold leading-tight" aria-hidden={hasCurrencyInfo}>
-                <span className="text-accent-yellow">Обмін валют</span>
+                <span className="text-accent-yellow">{activeSeo?.h1 || 'Обмін валют'}</span>
                 <br />
-                <span className="text-white font-light text-4xl xl:text-6xl">без ризиків та переплат</span>
+                <span className="text-white font-light text-4xl xl:text-6xl">{activeSeo?.h2 || 'без ризиків та переплат'}</span>
               </h1>
 
               {/* Banner / Badge */}
@@ -388,9 +417,9 @@ export default function HeroSection({
                 <p className="text-gray-400 mb-2 text-xl font-light">
                   Маєте питання?
                 </p>
-                <p className="text-gray-300 mb-8 text-xl font-light">
-                  Напишіть нам — відповімо за кілька хвилин.
-                </p>
+                <p className="text-gray-300 mb-2 text-xl font-light">— Наявність на відділеннях</p>
+                <p className="text-gray-300 mb-2 text-xl font-light">— Оптовий курс</p>
+                <p className="text-gray-300 mb-8 text-xl font-light">— інше.</p>
 
                 <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">Напишіть нам:</p>
                 <div className="flex items-center gap-6">
@@ -458,7 +487,7 @@ export default function HeroSection({
                 setSellInputValue={setSellInputValue}
                 buyInputValue={buyInputValue}
                 setBuyInputValue={setBuyInputValue}
-                minAmount={minAmount}
+
                 reservationTime={reservationTime}
                 branchDropdownOpen={branchDropdownOpen}
                 setBranchDropdownOpen={setBranchDropdownOpen}
@@ -471,6 +500,7 @@ export default function HeroSection({
                 sellRate={displaySellRate}
                 getEffectiveRate={getEffectiveRate}
                 currencyInfoMap={currencyInfoMap}
+                ratesUpdated={ratesUpdated}
               />
             </div>
           </div>
@@ -518,7 +548,6 @@ export default function HeroSection({
               setSellInputValue={setSellInputValue}
               buyInputValue={buyInputValue}
               setBuyInputValue={setBuyInputValue}
-              minAmount={minAmount}
               reservationTime={reservationTime}
               branchDropdownOpen={branchDropdownOpen}
               setBranchDropdownOpen={setBranchDropdownOpen}
@@ -531,15 +560,16 @@ export default function HeroSection({
               sellRate={displaySellRate}
               getEffectiveRate={getEffectiveRate}
               currencyInfoMap={currencyInfoMap}
+              ratesUpdated={ratesUpdated}
             />
           </div>
 
           {!hasCurrencyInfo && (
             <div className="flex flex-col gap-4 text-center items-center">
               <h1 className="text-3xl font-bold leading-tight">
-                <span className="text-accent-yellow text-4xl">Обмін валют</span>
+                <span className="text-accent-yellow text-4xl">{activeSeo?.h1 || 'Обмін валют'}</span>
                 <br />
-                <span className="text-white font-light text-2xl">без ризиків та переплат</span>
+                <span className="text-white font-light text-2xl">{activeSeo?.h2 || 'без ризиків та переплат'}</span>
               </h1>
               <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
                 <div className="w-8 h-8 bg-accent-yellow/20 rounded-full flex items-center justify-center">
@@ -609,7 +639,7 @@ export default function HeroSection({
                 <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <AlertCircle className="w-8 h-8 text-red-500" />
                 </div>
-                <h3 className="text-xl font-bold mb-2">Вибачте, тимчасово не приймаємо валюту {selectedFlag} на цьому відділенні</h3>
+                <h2 className="text-xl font-bold mb-2">Вибачте, тимчасово не приймаємо валюту {selectedFlag} на цьому відділенні</h2>
                 <p className="text-text-secondary text-sm mb-4">
                   Оберіть інше відділення, де вона доступна
                 </p>
@@ -629,7 +659,7 @@ export default function HeroSection({
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <MapPin className={`w-4 h-4 ${isBest ? 'text-accent-yellow' : 'text-white/50'}`} />
-                            <span className="font-bold text-white text-sm">{branch.name || branch.address}</span>
+                            <span className="font-bold text-white text-sm">{branch.name || `${branch.address} (№${branch.number})`}</span>
                           </div>
                           {isBest && (
                             <span className="text-[10px] bg-accent-yellow/20 text-accent-yellow px-2.5 py-1 rounded-full font-bold tracking-wide">
@@ -638,21 +668,46 @@ export default function HeroSection({
                           )}
                         </div>
                         <div className="pl-6 space-y-1">
-                          {branch.name && <p className="text-xs text-text-secondary">{branch.address}</p>}
+                          {branch.name && (
+                            <p className="text-xs text-text-secondary">
+                              {branch.address} (№{branch.number})
+                            </p>
+                          )}
                           <div className="flex items-center gap-1 text-xs text-text-secondary">
                             <Clock className="w-3 h-3" />
                             <span>{branch.hours || branch.working_hours}</span>
                           </div>
                           {rate && (
-                            <div className="flex items-center gap-4 mt-1.5">
-                              <div className="text-xs">
-                                <span className="text-text-secondary">Купівля: </span>
-                                <span className="text-white font-semibold">{rate.buy_rate?.toFixed(2)}</span>
+                            <div className="flex flex-col gap-1.5 mt-2">
+                              <div className="flex items-center gap-4">
+                                <div className="text-xs flex items-center gap-1">
+                                  <span className="text-text-secondary">Купівля:</span>
+                                  <span className="text-white font-semibold">{rate.buy_rate?.toFixed(2)}</span>
+                                </div>
+                                <div className="text-xs flex items-center gap-1">
+                                  <span className="text-text-secondary">Продаж:</span>
+                                  <span className="text-white font-semibold">{rate.sell_rate?.toFixed(2)}</span>
+                                </div>
                               </div>
-                              <div className="text-xs">
-                                <span className="text-text-secondary">Продаж: </span>
-                                <span className="text-white font-semibold">{rate.sell_rate?.toFixed(2)}</span>
-                              </div>
+                              {rate.wholesale_threshold > 0 && (rate.wholesale_buy_rate > 0 || rate.wholesale_sell_rate > 0) && (
+                                <div className="flex items-center gap-3">
+                                  <span className="text-[10px] text-accent-yellow bg-accent-yellow/10 px-1.5 py-0.5 rounded">
+                                    Опт від {rate.wholesale_threshold} {selectedCode}
+                                  </span>
+                                  {rate.wholesale_buy_rate > 0 && (
+                                    <div className="text-[10px] text-accent-yellow">
+                                      <span className="opacity-70">Куп: </span>
+                                      <span className="font-semibold">{rate.wholesale_buy_rate.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  {rate.wholesale_sell_rate > 0 && (
+                                    <div className="text-[10px] text-accent-yellow">
+                                      <span className="opacity-70">Прод: </span>
+                                      <span className="font-semibold">{rate.wholesale_sell_rate.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -680,7 +735,7 @@ export default function HeroSection({
               <div className="w-16 h-16 bg-accent-yellow/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <User className="w-8 h-8 text-accent-yellow" />
               </div>
-              <h3 className="text-xl font-bold mb-2">Бронювання</h3>
+              <h2 className="text-xl font-bold mb-2">Бронювання</h2>
               <p className="text-text-secondary text-sm">Вкажіть ваше ім'я та оберіть відділення</p>
             </div>
 
@@ -690,70 +745,111 @@ export default function HeroSection({
                 value={customerName}
                 onChange={(e) => { setCustomerName(e.target.value); setError(''); }}
                 placeholder="Ваше ім'я"
+                aria-label="Ваше ім'я"
                 autoFocus
                 className="w-full px-4 py-4 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center text-lg"
               />
 
               {/* Branch Selection Dropdown */}
               <div className="relative">
-                <button
-                  onClick={() => setBranchBookingOpen(!branchBookingOpen)}
-                  className={`w-full px-4 py-4 bg-primary rounded-xl border text-left flex items-center justify-between transition-colors ${branchBookingOpen ? 'border-accent-yellow' : 'border-white/10'
-                    }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-accent-yellow" />
-                    <span className={selectedBranch ? 'text-white' : 'text-text-secondary'}>
-                      {selectedBranch ? (selectedBranch.name || selectedBranch.address) : 'Оберіть відділення'}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${branchBookingOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {branchBookingOpen && (() => {
+                {(() => {
                   const { available } = getAvailableBranches();
                   const bestBranchId = available.length > 0 ? available[0].id : null;
-                  const selectedCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
+                  const isSelectedBest = selectedBranch && selectedBranch.id === bestBranchId;
 
                   return (
-                    <div className="absolute z-50 w-full mt-2 bg-[#1A1F2E] border border-white/10 rounded-xl shadow-2xl max-h-[250px] overflow-y-auto ring-1 ring-white/5">
-                      {branches.map((branch) => {
-                        const rate = getBranchRate(branch.id);
-                        const isBest = branch.id === bestBranchId;
-                        const rateValue = rate ? (isSellMode ? rate.buy_rate : rate.sell_rate) : 0;
-
-                        return (
-                          <button
-                            key={branch.id}
-                            onClick={() => {
-                              setSelectedBranch(branch);
-                              setBranchBookingOpen(false);
-                              setError('');
-                            }}
-                            className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3 ${selectedBranch?.id === branch.id ? 'bg-accent-yellow/10 text-accent-yellow' : 'text-white'
-                              }`}
-                          >
-                            <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-text-secondary" />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium truncate">{branch.name || branch.address}</span>
-                                {isBest && (
-                                  <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                                    ★ Найкращий
-                                  </span>
-                                )}
-                              </div>
-                              {branch.name && <div className="text-xs text-text-secondary truncate">{branch.address}</div>}
-                            </div>
-                            {rateValue > 0 && (
-                              <span className={`text-xs font-mono flex-shrink-0 ${isBest ? 'text-green-400' : 'text-text-secondary'}`}>
+                    <>
+                      <button
+                        onClick={() => setBranchBookingOpen(!branchBookingOpen)}
+                        className={`w-full px-4 py-4 bg-primary rounded-xl border text-left flex items-center justify-between transition-colors ${branchBookingOpen ? 'border-accent-yellow' : 'border-white/10'
+                          }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 flex-1 min-w-0 pr-2">
+                          <div className="flex items-center gap-2 truncate">
+                            <MapPin className="w-4 h-4 text-accent-yellow flex-shrink-0" />
+                            <span className={`${selectedBranch ? 'text-white' : 'text-text-secondary'} truncate`}>
+                              {selectedBranch ? (selectedBranch.name || selectedBranch.address) : 'Оберіть  відділення'}
+                            </span>
+                          </div>
+                          {isSelectedBest && (
+                            <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full whitespace-nowrap w-max">
+                              ★ Найкращий курс
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 mt-1 sm:mt-0">
+                          {selectedBranch && (() => {
+                            const rate = getBranchRate(selectedBranch.id);
+                            const rateValue = rate ? (isSellMode ? rate.buy_rate : rate.sell_rate) : 0;
+                            return rateValue > 0 ? (
+                              <span className="font-mono text-accent-yellow font-medium">
                                 {rateValue.toFixed(2)}
                               </span>
-                            )}
-                          </button>
+                            ) : null;
+                          })()}
+                          <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${branchBookingOpen ? 'rotate-180' : ''}`} />
+                        </div>
+                      </button>
+
+                      {branchBookingOpen && (() => {
+                        const selectedCode = isSellMode ? sellCurrency?.code : buyCurrency?.code;
+                        return (
+                          <div className="absolute z-50 w-full mt-2 bg-[#1A1F2E] border border-white/10 rounded-xl shadow-2xl max-h-[250px] overflow-y-auto ring-1 ring-white/5">
+                            {branches.map((branch) => {
+                              const rate = getBranchRate(branch.id);
+                              const isBest = branch.id === bestBranchId;
+                              const rateValue = rate ? (isSellMode ? rate.buy_rate : rate.sell_rate) : 0;
+                              const wholesaleRateValue = rate ? (isSellMode ? rate.wholesale_buy_rate : rate.wholesale_sell_rate) : 0;
+                              const wholesaleThreshold = rate ? rate.wholesale_threshold : 0;
+
+                              return (
+                                <button
+                                  key={branch.id}
+                                  onClick={() => {
+                                    setSelectedBranch(branch);
+                                    setBranchBookingOpen(false);
+                                    setError('');
+                                  }}
+                                  className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3 ${selectedBranch?.id === branch.id ? 'bg-accent-yellow/10 text-accent-yellow' : 'text-white'
+                                    }`}
+                                >
+                                  <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-text-secondary mt-1" />
+                                  <div className="flex-1 min-w-0 pr-2">
+                                    <div className="text-sm font-medium truncate whitespace-normal leading-tight">
+                                      {branch.name || `${branch.address} (№${branch.number})`}
+                                    </div>
+                                    {branch.name && (
+                                      <div className="text-xs text-text-secondary truncate mt-0.5">
+                                        {branch.address} (№{branch.number})
+                                      </div>
+                                    )}
+                                  </div>
+                                  {rateValue > 0 && (
+                                    <div className="flex flex-col items-end flex-shrink-0 text-right">
+                                      <div className="flex items-center gap-2">
+                                        <span className={`text-sm font-mono flex-shrink-0 ${isBest ? 'text-green-400' : 'text-text-secondary'}`}>
+                                          {rateValue.toFixed(2)}
+                                        </span>
+                                      </div>
+                                      {isBest && (
+                                        <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full whitespace-nowrap mt-0.5">
+                                          ★ Найкращий
+                                        </span>
+                                      )}
+                                      {(wholesaleThreshold > 0 && wholesaleRateValue > 0) && (
+                                        <span className="text-[10px] text-accent-yellow mt-0.5 whitespace-nowrap">
+                                          від {wholesaleThreshold} {selectedCode} — {wholesaleRateValue.toFixed(2)} опт
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
                         );
-                      })}
-                    </div>
+                      })()}
+                    </>
                   );
                 })()}
               </div>
@@ -784,7 +880,7 @@ export default function HeroSection({
               <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Phone className="w-8 h-8 text-green-400" />
               </div>
-              <h3 className="text-xl font-bold mb-2">Ваш номер телефону</h3>
+              <h2 className="text-xl font-bold mb-2">Ваш номер телефону</h2>
               <p className="text-text-secondary text-sm">Ми зателефонуємо для підтвердження</p>
             </div>
 
@@ -794,6 +890,7 @@ export default function HeroSection({
                 value={phone}
                 onChange={(e) => { setPhone(formatPhone(e.target.value)); setError(''); }}
                 placeholder="+38 (0XX) XXX-XX-XX"
+                aria-label="Ваш номер телефону"
                 autoFocus
                 className="w-full px-4 py-4 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-center text-lg font-mono"
               />
@@ -803,7 +900,11 @@ export default function HeroSection({
                 <div className="text-sm text-text-secondary mb-2">Ваше бронювання:</div>
                 <div className="flex justify-between mb-1">
                   <span>Сума:</span>
-                  <span className="font-bold">{giveAmount} {giveCurrency.code} → {getAmount.toLocaleString()} {getCurrency.code}</span>
+                  <span className="font-bold">
+                    {!isSellMode
+                      ? `${(Number(buyInputValue.replace(/[^\d.]/g, '')) * getEffectiveRate(buyCurrency, Number(buyInputValue.replace(/[^\d.]/g, '')), 'sell')).toFixed(2)} UAH → ${buyInputValue} ${buyCurrency?.code || getCurrency.code}`
+                      : `${sellInputValue || giveAmount} ${sellCurrency?.code || giveCurrency.code} → ${getAmount.toLocaleString()} UAH`}
+                  </span>
                 </div>
                 <div className="flex justify-between mb-1">
                   <span>Відділення:</span>
@@ -857,6 +958,7 @@ function BookingModal({ children, onClose, step, totalSteps }) {
         {/* Close Button */}
         <button
           onClick={onClose}
+          aria-label="Закрити вікно"
           className="absolute top-4 right-4 p-2 hover:bg-white/5 rounded-lg transition-colors"
         >
           <X className="w-5 h-5 text-text-secondary" />
@@ -902,7 +1004,6 @@ function ExchangeCard({
   setSellInputValue,
   buyInputValue,
   setBuyInputValue,
-  minAmount,
   reservationTime,
   branchDropdownOpen,
   setBranchDropdownOpen,
@@ -915,11 +1016,12 @@ function ExchangeCard({
   sellRate,
   getEffectiveRate,
   isMobile,
-  currencyInfoMap = {}
+  currencyInfoMap = {},
+  ratesUpdated
 }) {
   return (
     <div className={`rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'bg-transparent px-8 py-8' : 'backdrop-blur-md bg-primary-card/80 p-6 lg:p-8 max-w-xl w-full'}`}>
-      <h3 className={`${isMobile ? 'text-2xl' : 'text-lg lg:text-xl'} font-bold text-center mb-1 text-white`}>Забронювати валюту</h3>
+      <h2 className={`${isMobile ? 'text-2xl' : 'text-lg lg:text-xl'} font-bold text-center mb-1 text-white`}>Забронювати валюту</h2>
       <p className={`${isMobile ? 'text-sm' : 'text-[10px] lg:text-sm'} text-text-secondary text-center mb-6`}>
         Фіксація курсу на {reservationTime} хвилин
       </p>
@@ -934,6 +1036,8 @@ function ExchangeCard({
                 type="text"
                 value={sellInputValue}
                 onChange={(e) => handleSellChange(e.target.value)}
+                onFocus={() => setFocusedInput('sell')}
+                aria-label="Сума продажу"
                 className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
               />
             </div>
@@ -950,6 +1054,7 @@ function ExchangeCard({
                 type="text"
                 value={((isSellMode && !buyInputValue && sellInputValue) ? getAmount : ((Number(sellInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(sellCurrency, Number(sellInputValue.replace(/[^\d.]/g, '')) || 0, 'buy') : (sellCurrency?.buy_rate || 0)))).toFixed(2)}
                 readOnly
+                aria-label="Сума отримання"
                 onChange={() => { }}
                 className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-left text-green-400`}
               />
@@ -974,6 +1079,8 @@ function ExchangeCard({
                 type="text"
                 value={buyInputValue}
                 onChange={(e) => handleBuyChange(e.target.value)}
+                onFocus={() => setFocusedInput('buy')}
+                aria-label="Сума купівлі"
                 className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
               />
             </div>
@@ -990,6 +1097,7 @@ function ExchangeCard({
                 type="text"
                 value={((!isSellMode && buyInputValue) ? giveAmount : ((Number(buyInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(buyCurrency, Number(buyInputValue.replace(/[^\d.]/g, '')) || 0, 'sell') : (buyCurrency?.sell_rate || 0)))).toFixed(2)}
                 readOnly
+                aria-label="Необхідна сума"
                 onChange={() => { }}
                 className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-left text-red-400 placeholder-red-400/50`}
               />
@@ -1011,13 +1119,13 @@ function ExchangeCard({
           <span className="text-xs text-text-secondary">Курс:</span>
           <div className="text-right flex flex-col items-end">
             <span className="text-sm sm:text-base font-bold text-accent-yellow leading-tight">
-              1 {isSellMode ? sellCurrency?.code : buyCurrency?.code} = {(isSellMode ? (sellCurrency?.buy_rate || 0) : (buyCurrency?.sell_rate || 0)).toFixed(2)} UAH
+              {(() => {
+                const showSellRate = focusedInput === 'sell' || (!focusedInput && isSellMode);
+                const currency = showSellRate ? sellCurrency : buyCurrency;
+                const rate = showSellRate ? (currency?.buy_rate || 0) : (currency?.sell_rate || 0);
+                return `1 ${currency?.code || 'USD'} = ${rate.toFixed(2)} UAH`;
+              })()}
             </span>
-            {((isSellMode ? sellCurrency?.wholesale_threshold : buyCurrency?.wholesale_threshold) > 0) && (
-              <span className="text-[10px] text-text-secondary leading-tight mt-0.5">
-                (від {(isSellMode ? sellCurrency?.wholesale_threshold : buyCurrency?.wholesale_threshold) || 1000} {isSellMode ? sellCurrency?.code : buyCurrency?.code} — {(isSellMode ? sellCurrency?.wholesale_buy_rate : buyCurrency?.wholesale_sell_rate).toFixed(2)} опт)
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -1026,11 +1134,29 @@ function ExchangeCard({
         Забронювати
       </button>
 
-      <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10 text-center">
-        <p className="text-sm text-accent-yellow">
-          Оптовий курс від 1000$ або в еквіваленті
+      {/* Relevancy Date below button */}
+      {ratesUpdated && (
+        <p className="text-center text-xs text-white/60 mt-4">
+          {(() => {
+            const dateObj = new Date(ratesUpdated);
+            const formattedDate = dateObj.toLocaleDateString('uk-UA', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            });
+            const pathname = window.location.pathname.replace(/\/$/, '');
+            const isHomepage = pathname === '' || pathname === '/';
+            const activeCurr = isSellMode ? sellCurrency : buyCurrency;
+
+            // Show generic text only if on the homepage AND the currency is the default USD.
+            if (isHomepage && activeCurr?.code === 'USD') {
+              return `Актуальний курс валют на ${formattedDate}`;
+            } else {
+              return `Курс ${activeCurr?.code || ''} на ${formattedDate}`;
+            }
+          })()}
         </p>
-      </div>
+      )}
     </div>
   );
 }

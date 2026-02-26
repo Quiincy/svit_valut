@@ -37,6 +37,9 @@ class SiteSettings(Base):
     meta_title = Column(String, default="Світ Валют - Обмін валют за вигідним курсом")
     meta_description = Column(String, default="Найкращий обмін валют у вашому місті")
     homepage_seo_text = Column(Text, nullable=True)
+    contacts_url = Column(String, default="/contacts")
+    faq_url = Column(String, default="/faq")
+    rates_url = Column(String, default="/rates")
 
 class FAQItem(Base):
     __tablename__ = "faq_items"
