@@ -158,13 +158,30 @@ function PublicLayout() {
       }
 
       // 2. Handle Specific SEO URLs
+      const match = pathname.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
+      if (match) {
+        const routeMode = match[1].toLowerCase();
+        const routeCode = match[2].toUpperCase();
+
+        if (currencyInfoMap[routeCode]) {
+          if (routeMode === 'buy') {
+            if (getCurrency.code === routeCode && giveCurrency.code === 'UAH') return;
+            handlePresetExchange('buy', routeCode);
+          } else {
+            if (giveCurrency.code === routeCode && getCurrency.code === 'UAH') return;
+            handlePresetExchange('sell', routeCode);
+          }
+          return;
+        }
+      }
+
       for (const [code, info] of Object.entries(currencyInfoMap)) {
-        if (info.buy_url && pathname === info.buy_url) {
+        if (info.buy_url && (pathname === info.buy_url || pathname === '/' + info.buy_url)) {
           if (getCurrency.code === code && giveCurrency.code === 'UAH') return;
           handlePresetExchange('buy', code);
           return;
         }
-        if (info.sell_url && pathname === info.sell_url) {
+        if (info.sell_url && (pathname === info.sell_url || pathname === '/' + info.sell_url)) {
           if (giveCurrency.code === code && getCurrency.code === 'UAH') return;
           handlePresetExchange('sell', code);
           return;
@@ -179,7 +196,12 @@ function PublicLayout() {
 
     // 1. UPDATE METADATA (Title & Description) globally based on URL
     const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
-    const activeSeo = seoList.find(s => s.url_path === cleanPathname || s.url_path === cleanPathname + '/');
+    const reqPath = cleanPathname.toLowerCase();
+    const activeSeo = seoList.find(s => {
+      if (!s.url_path) return false;
+      const dbPath = s.url_path.toLowerCase();
+      return dbPath === reqPath || dbPath === reqPath + '/';
+    });
 
     if (activeSeo) {
       const metaTitle = activeSeo.title || activeSeo.h1 || 'Світ Валют';
@@ -212,9 +234,9 @@ function PublicLayout() {
 
     // Check if the current route is unknown (404)
     const isKnownSeoPath = Object.values(currencyInfoMap).some(inf =>
-      inf.buy_url === pathname.replace(/^\//, '') ||
-      inf.sell_url === pathname.replace(/^\//, '')
-    );
+      (inf.buy_url && inf.buy_url === pathname.replace(/^\//, '')) ||
+      (inf.sell_url && inf.sell_url === pathname.replace(/^\//, ''))
+    ) || !!pathname.match(/^\/(buy|sell)-[a-zA-Z]{3,}$/i);
     const ratesUrl = settings?.rates_url || '/rates';
     const contactsUrl = settings?.contacts_url || '/contacts';
     const faqUrl = settings?.faq_url || '/faq';
@@ -229,7 +251,7 @@ function PublicLayout() {
       const info = currencyInfoMap[targetCode];
 
       // 2. Update URL if needed
-      const targetUrl = mode === 'buy' ? info.buy_url : info.sell_url;
+      const targetUrl = mode === 'buy' ? (info.buy_url || `buy-${targetCode.toLowerCase()}`) : (info.sell_url || `sell-${targetCode.toLowerCase()}`);
 
       // Prevent automatic redirect from homepage to the default currency SEO URL (Sell USD) ON MOUNT ONLY
       const isOnDedicatedPage = pathname.startsWith(contactsUrl) || pathname.startsWith('/contacts') || pathname.startsWith(faqUrl) || pathname.startsWith('/faq') || pathname.startsWith('/services') || pathname.startsWith('/rates') || pathname.startsWith(ratesUrl);
@@ -882,10 +904,18 @@ function HomePage() {
   const pathname = decodeURIComponent(location.pathname);
   const slug = pathname.replace(/^\//, '');
   const urlIsSellMode = pathname.includes('/продати-') || pathname.startsWith('/sell-');
-  const pathCurrency = Object.values(currencyInfoMap || {}).find(info =>
+  let pathCurrency = Object.values(currencyInfoMap || {}).find(info =>
     (info.buy_url && (pathname === info.buy_url || pathname === '/' + info.buy_url)) ||
     (info.sell_url && (pathname === info.sell_url || pathname === '/' + info.sell_url))
   ) || null;
+
+  if (!pathCurrency) {
+    const match = pathname.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
+    if (match && currencyInfoMap) {
+      const code = match[2].toUpperCase();
+      pathCurrency = currencyInfoMap[code] || null;
+    }
+  }
 
   // Dynamic route resolution for custom contacts URL and service link URLs
   const contactsPath = (settings?.contacts_url || '/contacts').replace(/^\//, '');
@@ -931,7 +961,12 @@ function HomePage() {
   const activeCurrencyInfo = slug ? pathCurrency : null;
 
   const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
-  const activeSeo = seoList.find(s => s.url_path === cleanPathname || s.url_path === cleanPathname + '/');
+  const reqPath = cleanPathname.toLowerCase();
+  const activeSeo = seoList.find(s => {
+    if (!s.url_path) return false;
+    const dbPath = s.url_path.toLowerCase();
+    return dbPath === reqPath || dbPath === reqPath + '/';
+  });
 
   const activeH1 = activeSeo?.h1 || null;
   const activeH2 = activeSeo?.h2 || null;

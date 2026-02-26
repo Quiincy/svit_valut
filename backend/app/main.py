@@ -2950,6 +2950,10 @@ async def delete_user(user_id: int, user: models.User = Depends(require_admin), 
     return {"success": True}
 
 
+@app.get("/api/seo", response_model=List[SeoMetadata])
+async def public_get_seo_metadata(db: Session = Depends(get_db)):
+    return db.query(models.SeoMetadata).all()
+
 # ============== ADMIN SEO METADATA ==============
 
 @app.get("/api/admin/seo", response_model=List[SeoMetadata])

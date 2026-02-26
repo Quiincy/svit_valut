@@ -14,6 +14,7 @@ export default function SettingsPage() {
   const [faqItems, setFaqItems] = useState([]);
   const [services, setServices] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [currencies, setCurrencies] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -75,13 +76,14 @@ export default function SettingsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [settingsRes, faqRes, servicesRes, branchesRes, usersRes, seoRes] = await Promise.all([
+      const [settingsRes, faqRes, servicesRes, branchesRes, usersRes, seoRes, currenciesRes] = await Promise.all([
         settingsService.get(),
         faqService.getAll(),
         servicesService.getAll(),
         branchService.getAll(),
         adminService.getUsers(),
         seoService.getAll(),
+        adminService.getCurrencies(),
       ]);
       setSettings(settingsRes.data);
       setFaqItems(faqRes.data);
@@ -89,6 +91,7 @@ export default function SettingsPage() {
       setBranches(branchesRes.data);
       setUsers(usersRes.data);
       setSeoItems(seoRes.data);
+      setCurrencies(currenciesRes?.data || []);
     } catch (error) {
       console.error('Error fetching settings:', error);
     } finally {
@@ -1140,13 +1143,39 @@ export default function SettingsPage() {
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="md:col-span-2">
                     <label htmlFor="url_buy_usd_24" className="block text-sm text-text-secondary mb-2">URL шлях (наприклад: /buy-usd)</label>
-                    <input id="url_buy_usd_24"
-                      type="text"
-                      value={editingSeo.url_path || ''}
-                      onChange={(e) => setEditingSeo({ ...editingSeo, url_path: e.target.value })}
-                      placeholder="/about"
-                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
-                    />
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <select
+                        className="px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none sm:max-w-xs"
+                        onChange={(e) => {
+                          if (e.target.value) setEditingSeo({ ...editingSeo, url_path: e.target.value });
+                          e.target.value = ""; // reset select after pick 
+                        }}
+                        value=""
+                        aria-label="Шаблони URL"
+                      >
+                        <option value="" disabled>-- Швидкі шаблони --</option>
+                        <option value="/">Головна сторінка (/)</option>
+                        <optgroup label="Купівля (Bank Buys)">
+                          {currencies.map(c => {
+                            const url = c.buy_url || `/buy-${c.code.toLowerCase()}`;
+                            return <option key={`buy-${c.code}`} value={url}>Купівля {c.code} ({url})</option>;
+                          })}
+                        </optgroup>
+                        <optgroup label="Продаж (Bank Sells)">
+                          {currencies.map(c => {
+                            const url = c.sell_url || `/sell-${c.code.toLowerCase()}`;
+                            return <option key={`sell-${c.code}`} value={url}>Продаж {c.code} ({url})</option>;
+                          })}
+                        </optgroup>
+                      </select>
+                      <input id="url_buy_usd_24"
+                        type="text"
+                        value={editingSeo.url_path || ''}
+                        onChange={(e) => setEditingSeo({ ...editingSeo, url_path: e.target.value })}
+                        placeholder="/buy-usd"
+                        className="flex-1 px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                      />
+                    </div>
                   </div>
 
                   <div className="md:col-span-2">

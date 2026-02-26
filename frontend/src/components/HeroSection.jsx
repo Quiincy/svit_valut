@@ -216,10 +216,11 @@ export default function HeroSection({
         finalGiveCurrency = 'UAH';
         finalGetCurrency = buyCurrency.code;
 
-        // Calculate the UAH amount needed
+        // Calculate the UAH amount needed USING THE SELECTED BRANCH RATE
         const foreignAmount = Number(buyInputValue.replace(/[^\d.]/g, '')) || 0;
-        const rate = getEffectiveRate(buyCurrency, foreignAmount, 'sell');
-        finalGiveAmount = foreignAmount * rate;
+        const branchCurr = selectedBranch ? getBranchRate(selectedBranch.id) : null;
+        const rateToUse = branchCurr ? getEffectiveRate(branchCurr, foreignAmount, 'sell') : getEffectiveRate(buyCurrency, foreignAmount, 'sell');
+        finalGiveAmount = foreignAmount * rateToUse;
       } else {
         // User is selling foreign currency for UAH.
         // The user gives foreign currency, gets UAH.
@@ -902,8 +903,20 @@ export default function HeroSection({
                   <span>Сума:</span>
                   <span className="font-bold">
                     {!isSellMode
-                      ? `${(Number(buyInputValue.replace(/[^\d.]/g, '')) * getEffectiveRate(buyCurrency, Number(buyInputValue.replace(/[^\d.]/g, '')), 'sell')).toFixed(2)} UAH → ${buyInputValue} ${buyCurrency?.code || getCurrency.code}`
-                      : `${sellInputValue || giveAmount} ${sellCurrency?.code || giveCurrency.code} → ${getAmount.toLocaleString()} UAH`}
+                      ? (() => {
+                        const foreignAmount = Number(buyInputValue.replace(/[^\d.]/g, '')) || 0;
+                        const branchCurr = selectedBranch ? getBranchRate(selectedBranch.id) : null;
+                        const rateToUse = branchCurr ? getEffectiveRate(branchCurr, foreignAmount, 'sell') : getEffectiveRate(buyCurrency, foreignAmount, 'sell');
+                        const uahAmount = foreignAmount * rateToUse;
+                        return `${uahAmount.toFixed(2)} UAH → ${foreignAmount} ${buyCurrency?.code || getCurrency.code}`;
+                      })()
+                      : (() => {
+                        const foreignAmount = Number(sellInputValue.replace(/[^\d.]/g, '')) || giveAmount || 0;
+                        const branchCurr = selectedBranch ? getBranchRate(selectedBranch.id) : null;
+                        const rateToUse = branchCurr ? getEffectiveRate(branchCurr, foreignAmount, 'buy') : getEffectiveRate(sellCurrency || giveCurrency, foreignAmount, 'buy');
+                        const uahAmount = foreignAmount * rateToUse;
+                        return `${foreignAmount} ${sellCurrency?.code || giveCurrency.code} → ${uahAmount.toFixed(2)} UAH`;
+                      })()}
                   </span>
                 </div>
                 <div className="flex justify-between mb-1">
