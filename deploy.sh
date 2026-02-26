@@ -32,6 +32,8 @@ rsync -avz --progress --delete \
   --exclude '.DS_Store' \
   --exclude '*.db' \
   --exclude '.env' \
+  --exclude 'backend/static/uploads/' \
+  --exclude 'static/uploads/' \
   "$LOCAL_DIR" "$SSH_HOST:$REMOTE_DIR/"
 
 if [ $? -ne 0 ]; then
