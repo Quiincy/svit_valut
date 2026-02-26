@@ -399,7 +399,7 @@ export default function HeroSection({
               )}
 
               {/* Default Title — always visible on desktop */}
-              <h1 className="text-5xl xl:text-7xl font-bold leading-tight" aria-hidden={hasCurrencyInfo}>
+              <h1 className={`${hasCurrencyInfo ? 'text-[3.5rem]' : 'text-5xl xl:text-7xl'} font-bold leading-tight`} aria-hidden={hasCurrencyInfo}>
                 <span className="text-accent-yellow">{activeSeo?.h1 || 'Обмін валют'}</span>
                 {!hasCurrencyInfo && (
                   <>
@@ -581,21 +581,31 @@ export default function HeroSection({
             />
           </div>
 
-          {!hasCurrencyInfo && (
-            <div className="flex flex-col gap-4 text-center items-center">
-              <h1 className="text-3xl font-bold leading-tight">
-                <span className="text-accent-yellow text-4xl">{activeSeo?.h1 || 'Обмін валют'}</span>
-                <br />
-                <span className="text-white font-light text-2xl">{activeSeo?.h2 || 'без ризиків та переплат'}</span>
+          <div className="flex flex-col gap-4 text-center items-center">
+            {hasCurrencyInfo && (
+              <h1
+                aria-hidden="false"
+                style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
+              >
+                {activeH1}
               </h1>
-              <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
-                <div className="w-8 h-8 bg-accent-yellow/20 rounded-full flex items-center justify-center">
-                  <ArrowRight className="w-4 h-4 text-accent-yellow transform -rotate-45" />
-                </div>
-                <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
+            )}
+            <h1 className="text-3xl font-bold leading-tight" aria-hidden={hasCurrencyInfo}>
+              <span className="text-accent-yellow text-4xl">{activeSeo?.h1 || 'Обмін валют'}</span>
+              {!hasCurrencyInfo && (
+                <>
+                  <br />
+                  <span className="text-white font-light text-2xl">{activeSeo?.h2 || 'без ризиків та переплат'}</span>
+                </>
+              )}
+            </h1>
+            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
+              <div className="w-8 h-8 bg-accent-yellow/20 rounded-full flex items-center justify-center">
+                <ArrowRight className="w-4 h-4 text-accent-yellow transform -rotate-45" />
               </div>
+              <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
             </div>
-          )}
+          </div>
 
           {/* Mobile Questions / Chat Section */}
           <div className="mt-6 px-2 lg:hidden">
