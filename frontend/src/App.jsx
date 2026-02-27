@@ -1,34 +1,49 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { getStaticUrl } from './services/api';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet, useOutletContext } from 'react-router-dom';
+// Critical above-fold components — keep eagerly loaded
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
 import FeaturesSection from './components/FeaturesSection';
-import BranchesSection from './components/BranchesSection';
-import RatesSection from './components/RatesSection';
-import ServicesSection from './components/ServicesSection';
-import FAQSection from './components/FAQSection';
-import ChatSection from './components/ChatSection';
 import Footer from './components/Footer';
 import CurrencyModal from './components/CurrencyModal';
-import SuccessModal from './components/SuccessModal';
-import MobileNav from './components/MobileNav';
-import LiveChat from './components/LiveChat';
 import ScrollToTopButton from './components/ScrollToTopButton';
 import SeoTextBlock from './components/SeoTextBlock';
-import OfflineContactModal from './components/OfflineContactModal';
-import LoginPage from './pages/LoginPage';
-import AdminDashboard from './pages/AdminDashboard';
-import OperatorDashboard from './pages/OperatorDashboard';
-import RatesPage from './pages/RatesPage';
-import ServicePage from './pages/ServicePage';
-import ContactsPage from './pages/ContactsPage';
-import FAQPage from './pages/FAQPage';
-import NotFoundPage from './pages/NotFoundPage';
+
+// Below-fold homepage sections — lazy loaded
+const BranchesSection = lazy(() => import('./components/BranchesSection'));
+const RatesSection = lazy(() => import('./components/RatesSection'));
+const ServicesSection = lazy(() => import('./components/ServicesSection'));
+const FAQSection = lazy(() => import('./components/FAQSection'));
+const ChatSection = lazy(() => import('./components/ChatSection'));
+
+// Modals & overlays — lazy loaded (only rendered on interaction)
+const SuccessModal = lazy(() => import('./components/SuccessModal'));
+const MobileNav = lazy(() => import('./components/MobileNav'));
+const LiveChat = lazy(() => import('./components/LiveChat'));
+const OfflineContactModal = lazy(() => import('./components/OfflineContactModal'));
+
+// Pages — lazy loaded (separate routes)
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const OperatorDashboard = lazy(() => import('./pages/OperatorDashboard'));
+const RatesPage = lazy(() => import('./pages/RatesPage'));
+const ServicePage = lazy(() => import('./pages/ServicePage'));
+const ContactsPage = lazy(() => import('./pages/ContactsPage'));
+const FAQPage = lazy(() => import('./pages/FAQPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+
 import {
   currencyService, branchService, settingsService, faqService, servicesService,
   reservationService, authService, restoreAuth, clearAuthCredentials, seoService
 } from './services/api';
+
+// Minimal loading fallback
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center py-12">
+    <div className="w-8 h-8 border-2 border-accent-yellow border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 // Public Layout: Handles State, Data Fetching, Header, Footer
 function PublicLayout() {
@@ -790,15 +805,17 @@ function PublicLayout() {
         branches={branches}
         onPresetExchange={handlePresetExchange}
       />
-      <MobileNav
-        isOpen={mobileMenuOpen}
-        onClose={() => setMobileMenuOpen(false)}
-        settings={settings}
-        currencies={headerCurrencies}
-        services={services}
-        onPresetExchange={handlePresetExchange}
-        currencyInfoMap={currencyInfoMap}
-      />
+      <Suspense fallback={null}>
+        <MobileNav
+          isOpen={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+          settings={settings}
+          currencies={headerCurrencies}
+          services={services}
+          onPresetExchange={handlePresetExchange}
+          currencyInfoMap={currencyInfoMap}
+        />
+      </Suspense>
 
       <main>
         <Outlet context={contextValue} />
@@ -830,21 +847,27 @@ function PublicLayout() {
         type={currencyModalType}
       />
 
-      <SuccessModal
-        isOpen={successModalOpen}
-        onClose={() => setSuccessModalOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <SuccessModal
+          isOpen={successModalOpen}
+          onClose={() => setSuccessModalOpen(false)}
+        />
+      </Suspense>
 
-      <LiveChat
-        isOpen={chatOpen}
-        onClose={() => setChatOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <LiveChat
+          isOpen={chatOpen}
+          onClose={() => setChatOpen(false)}
+        />
+      </Suspense>
 
-      <OfflineContactModal
-        isOpen={offlineModalOpen}
-        onClose={() => setOfflineModalOpen(false)}
-        settings={settings}
-      />
+      <Suspense fallback={null}>
+        <OfflineContactModal
+          isOpen={offlineModalOpen}
+          onClose={() => setOfflineModalOpen(false)}
+          settings={settings}
+        />
+      </Suspense>
 
       {!chatOpen && !offlineModalOpen && (() => {
         const now = new Date();
@@ -1055,14 +1078,13 @@ function HomePage() {
         </section>
       )}
 
-      <ChatSection settings={settings} />
-      <BranchesSection branches={branches} settings={settings} />
-
-
-
-      <RatesSection currencies={currencies} crossRates={crossRates} updatedAt={ratesUpdated} settings={settings} />
-      <ServicesSection services={services} />
-      <FAQSection faqItems={faqItems} />
+      <Suspense fallback={<LoadingFallback />}>
+        <ChatSection settings={settings} />
+        <BranchesSection branches={branches} settings={settings} />
+        <RatesSection currencies={currencies} crossRates={crossRates} updatedAt={ratesUpdated} settings={settings} />
+        <ServicesSection services={services} />
+        <FAQSection faqItems={faqItems} />
+      </Suspense>
 
     </>
   );
@@ -1123,33 +1145,39 @@ function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <Routes>
-        <Route path="/" element={<PublicLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="rates" element={<RatesPage />} />
-          <Route path="services/:slug" element={<ServicePage />} />
-          <Route path="contacts" element={<ContactsPage />} />
-          <Route path="faq" element={<FAQPage />} />
-          <Route path="articles/:id" element={<FAQPage />} />
-          <Route path=":slug" element={<HomePage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
+      <Suspense fallback={
+        <div className="min-h-screen bg-primary flex items-center justify-center">
+          <div className="w-12 h-12 border-4 border-accent-yellow border-t-transparent rounded-full animate-spin" />
+        </div>
+      }>
+        <Routes>
+          <Route path="/" element={<PublicLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="rates" element={<RatesPage />} />
+            <Route path="services/:slug" element={<ServicePage />} />
+            <Route path="contacts" element={<ContactsPage />} />
+            <Route path="faq" element={<FAQPage />} />
+            <Route path="articles/:id" element={<FAQPage />} />
+            <Route path=":slug" element={<HomePage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
 
-        <Route path="/login" element={user ? <Navigate to="/panel" replace /> : <LoginPage onLogin={handleLogin} />} />
-        <Route path="/panel" element={
-          user ? (user.role === 'admin' ? <Navigate to="/admin" replace /> : <Navigate to="/operator" replace />) : <Navigate to="/login" replace />
-        } />
-        <Route path="/admin" element={
-          <ProtectedRoute user={user} requiredRole="admin">
-            <AdminDashboard user={user} onLogout={handleLogout} />
-          </ProtectedRoute>
-        } />
-        <Route path="/operator" element={
-          <ProtectedRoute user={user}>
-            <OperatorDashboard user={user} onLogout={handleLogout} />
-          </ProtectedRoute>
-        } />
-      </Routes>
+          <Route path="/login" element={user ? <Navigate to="/panel" replace /> : <LoginPage onLogin={handleLogin} />} />
+          <Route path="/panel" element={
+            user ? (user.role === 'admin' ? <Navigate to="/admin" replace /> : <Navigate to="/operator" replace />) : <Navigate to="/login" replace />
+          } />
+          <Route path="/admin" element={
+            <ProtectedRoute user={user} requiredRole="admin">
+              <AdminDashboard user={user} onLogout={handleLogout} />
+            </ProtectedRoute>
+          } />
+          <Route path="/operator" element={
+            <ProtectedRoute user={user}>
+              <OperatorDashboard user={user} onLogout={handleLogout} />
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

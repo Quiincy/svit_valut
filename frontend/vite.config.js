@@ -7,6 +7,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'map-vendor': ['leaflet', 'react-leaflet'],
+          'admin-vendor': ['react-quill', 'xlsx'],
+        }
+      }
+    }
   },
   server: {
     port: 5173,
@@ -31,3 +40,4 @@ export default defineConfig({
     'process.env': {}
   }
 })
+

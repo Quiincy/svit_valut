@@ -444,8 +444,12 @@ export default function HeroSection({
                   <div className="flex items-center gap-4">
                     <div className="relative">
                       <img
-                        src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
-                        alt="Irina"
+                        src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=112&h=112&fit=crop&crop=faces&q=80"
+                        alt="Ірина"
+                        width="56"
+                        height="56"
+                        loading="lazy"
+                        decoding="async"
                         className="w-14 h-14 rounded-full object-cover border-2 border-white/10"
                       />
                       <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
@@ -536,7 +540,7 @@ export default function HeroSection({
           <div
             className="p-0 rounded-3xl overflow-hidden"
             style={{
-              backgroundImage: "url('/hero-bg.jpg')",
+              backgroundImage: "url('/hero-bg-mobile.jpg')",
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.5)'
@@ -635,8 +639,12 @@ export default function HeroSection({
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <img
-                      src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces"
-                      alt="Irina"
+                      src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop&crop=faces&q=80"
+                      alt="Ірина"
+                      width="40"
+                      height="40"
+                      loading="lazy"
+                      decoding="async"
                       className="w-10 h-10 rounded-full object-cover border-2 border-white/10"
                     />
                     <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-primary ${chatOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
