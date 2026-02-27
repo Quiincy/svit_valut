@@ -5,7 +5,7 @@
 | Що | Шлях |
 |---|---|
 | Вихідний код | `/home/leadgin/mirvalut.com/src/svit_valut` |
-| Document root (піддомен) | `/home/leadgin/mirvalut.com/test` |
+| Document root (основний) | `/home/leadgin/mirvalut.com/www` |
 | Логи | `.../src/svit_valut/logs/` |
 | БД | `.../src/svit_valut/backend/svit_valut.db` |
 
@@ -47,7 +47,7 @@ nano .env
 DATABASE_URL=sqlite:///./svit_valut.db
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=ваш_пароль
-FRONTEND_URL=https://test.mirvalut.com
+FRONTEND_URL=https://mirvalut.com
 TZ=Europe/Kyiv
 ```
 
@@ -118,7 +118,7 @@ Mac (розробка)                    Сервер (продакшн)
                           │                    │
                           └────── Passenger ───┘
                                    Node.js
-                          (test.mirvalut.com/www)
+                          (mirvalut.com/www)
 ```
 
 ## Структура
@@ -141,7 +141,7 @@ Mac (розробка)                    Сервер (продакшн)
 ├── deploy.sh
 └── .env
 
-/home/leadgin/test.mirvalut.com/
+/home/leadgin/mirvalut.com/
 ├── .htaccess            # Дозволяє слідувати за симлінками
 └── www/                 # Симлінк -> ../mirvalut.com/src/svit_valut/frontend/dist/
 ```

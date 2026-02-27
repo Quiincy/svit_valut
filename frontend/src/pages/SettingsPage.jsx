@@ -4,7 +4,7 @@ import {
   MapPin, MessageSquare, Send, Globe, HelpCircle, Briefcase,
   Users, Upload, Loader2
 } from 'lucide-react';
-import { settingsService, faqService, servicesService, branchService, adminService, seoService } from '../services/api';
+import { settingsService, faqService, servicesService, branchService, adminService, seoService, getStaticUrl } from '../services/api';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
@@ -773,7 +773,7 @@ export default function SettingsPage() {
             {services.map((item) => (
               <div key={item.id} className="bg-primary rounded-xl border border-white/10 overflow-hidden">
                 {item.image_url && (
-                  <img src={item.image_url} alt={item.title} className="w-full h-32 object-cover" />
+                  <img src={getStaticUrl(item.image_url)} alt={item.title} className="w-full h-32 object-cover" />
                 )}
                 <div className="p-4">
                   <h4 className="font-medium mb-1">{item.title}</h4>
@@ -1060,7 +1060,7 @@ export default function SettingsPage() {
                 </div>
                 {editingService.image_url && (
                   <div className="mt-2 relative w-full h-32 bg-black/20 rounded-xl overflow-hidden border border-white/5 group">
-                    <img src={editingService.image_url} alt="Preview" className="w-full h-full object-cover" />
+                    <img src={getStaticUrl(editingService.image_url)} alt="Preview" className="w-full h-full object-cover" />
                     <button
                       onClick={() => setEditingService({ ...editingService, image_url: '' })}
                       className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1223,7 +1223,7 @@ export default function SettingsPage() {
                     <div className="flex gap-4 items-start">
                       {editingSeo.image_url && (
                         <div className="relative w-32 h-24 rounded-lg overflow-hidden border border-white/10">
-                          <img src={editingSeo.image_url} alt="SEO Preview" className="w-full h-full object-cover" />
+                          <img src={getStaticUrl(editingSeo.image_url)} alt="SEO Preview" className="w-full h-full object-cover" />
                           <button
                             onClick={() => setEditingSeo({ ...editingSeo, image_url: '' })}
                             className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-500/80 rounded transition-colors"

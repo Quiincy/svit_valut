@@ -13,6 +13,18 @@ const getApiUrl = () => {
   return '/api';
 };
 
+// Helper to resolve static file URLs (images, etc.) through the API domain
+export const getStaticUrl = (path) => {
+  if (!path) return null;
+  // Already a full URL (http/https) — return as-is
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  // Relative path like /static/uploads/xxx.webp — prepend API domain
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL + path;
+  }
+  return path;
+};
+
 const API_BASE_URL = getApiUrl();
 
 const api = axios.create({

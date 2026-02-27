@@ -17,7 +17,7 @@ export default function CurrencyModal({ isOpen, onClose, currencies, onSelect, t
           <button
             onClick={onClose}
             className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-           aria-label="Закрити">
+            aria-label="Закрити">
             <X className="w-5 h-5 text-text-secondary" />
           </button>
         </div>
@@ -39,7 +39,7 @@ export default function CurrencyModal({ isOpen, onClose, currencies, onSelect, t
               {currency.code !== 'UAH' && (
                 <div className="mt-1 lg:mt-0 text-xs lg:text-sm font-semibold bg-white/5 px-2 py-0.5 rounded lg:bg-transparent lg:p-0">
                   <span className={currency.is_popular ? 'text-success' : 'text-accent-yellow'}>
-                    {currency.buy_rate?.toFixed(2)}
+                    {(type === 'buy_currency' ? currency.sell_rate : currency.buy_rate)?.toFixed(2)}
                   </span>
                 </div>
               )}

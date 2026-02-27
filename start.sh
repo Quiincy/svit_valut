@@ -5,7 +5,7 @@
 # ============================================
 # Хостинг: mirvalut.com (ukraine.com.ua)
 # Вихідний код: /home/leadgin/mirvalut.com/src/svit_valut
-# Субдомен test.mirvalut.com → симлінк на frontend/dist
+# Субдомен mirvalut.com → симлінк на frontend/dist
 # ============================================
 
 set -e
@@ -14,7 +14,7 @@ PROJECT_DIR="/home/leadgin/mirvalut.com/src/svit_valut"
 BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
 DIST_DIR="$FRONTEND_DIR/dist"
-SUBDOMAIN_DIR="/home/leadgin/mirvalut.com/test"
+SUBDOMAIN_DIR="/home/leadgin/mirvalut.com/www"
 LOG_DIR="$PROJECT_DIR/logs"
 PID_DIR="$PROJECT_DIR/pids"
 
@@ -82,7 +82,7 @@ cat > "$DIST_DIR/package.json" << 'EOF'
 }
 EOF
 
-# Create symlink: mirvalut.com/test → frontend/dist
+# Create symlink: mirvalut.com/www → frontend/dist
 echo "   Налаштування симлінку..."
 
 # Remove old test (symlink or directory)
@@ -94,7 +94,7 @@ fi
 
 ln -s "$DIST_DIR" "$SUBDOMAIN_DIR"
 
-echo "   ✅ Frontend зібрано (симлінк: mirvalut.com/test → frontend/dist)"
+echo "   ✅ Frontend зібрано (симлінк: mirvalut.com/www → frontend/dist)"
 
 cd "$PROJECT_DIR"
 

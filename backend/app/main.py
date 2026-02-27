@@ -43,8 +43,8 @@ app.add_middleware(
         "https://svit-valut-front.onrender.com",
         "https://mirvalut.com",
         "http://mirvalut.com",
-        "https://test.mirvalut.com",
-        "http://test.mirvalut.com",
+        "https://src.mirvalut.com",
+        "http://src.mirvalut.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -3369,7 +3369,7 @@ async def admin_close_chat_session(session_id: str, user: models.User = Depends(
 @app.get("/sitemap.xml", response_class=Response)
 async def get_sitemap(db: Session = Depends(get_db)):
     """Generate dynamic XML sitemap"""
-    frontend_url = os.environ.get("FRONTEND_URL", "https://test.mirvalut.com").rstrip("/")
+    frontend_url = os.environ.get("FRONTEND_URL", "https://mirvalut.com").rstrip("/")
     
     pages = [
         "",

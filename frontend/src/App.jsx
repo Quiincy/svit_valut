@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getStaticUrl } from './services/api';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet, useOutletContext } from 'react-router-dom';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
@@ -1015,7 +1016,7 @@ function HomePage() {
               <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative">
                 <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent z-10"></div>
                 <img
-                  src={activeImage}
+                  src={getStaticUrl(activeImage)}
                   alt={activeH1 || 'SEO Image'}
                   className="w-full aspect-[16/9] object-cover relative z-0"
                 />

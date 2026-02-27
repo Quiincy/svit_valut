@@ -1,5 +1,6 @@
 import { useParams, Link, useOutletContext } from 'react-router-dom';
 import { Phone, MessageSquare } from 'lucide-react';
+import { getStaticUrl } from '../services/api';
 
 export default function ServicePage() {
   const { slug } = useParams();
@@ -26,7 +27,7 @@ export default function ServicePage() {
       <main className="max-w-4xl mx-auto px-4 lg:px-8 py-8">
         {service.image_url && (
           <img
-            src={service.image_url}
+            src={getStaticUrl(service.image_url)}
             alt={service.title}
             className="w-full h-64 lg:h-96 object-cover rounded-2xl mb-8"
           />

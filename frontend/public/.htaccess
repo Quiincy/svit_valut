@@ -1,10 +1,6 @@
 RewriteEngine On
 
-# Проксі для API на порт 8000 (FastAPI)
-RewriteRule ^api/(.*)$ http://127.0.0.1:8000/api/$1 [P,L]
-RewriteRule ^static/(.*)$ http://127.0.0.1:8000/static/$1 [P,L]
-
 # Роутинг React SPA (якщо файл не знайдено - віддаємо index.html)
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ /index.html [L]
+RewriteRule ^(.*)$ /index.php [L]

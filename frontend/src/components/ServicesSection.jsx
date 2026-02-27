@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { getStaticUrl } from '../services/api';
 
 const defaultServices = [
   { id: 1, title: 'Приймаємо валюту, яка вийшла з обігу', description: 'Миттєво обміняємо старі фунти, франки, марки, та багато інших.', image_url: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400&h=200&fit=crop', link_url: '/services/old-currency' },
@@ -23,7 +24,7 @@ export default function ServicesSection({ services }) {
               {service.image_url && (
                 <div className="h-32 lg:h-40 overflow-hidden">
                   <img
-                    src={service.image_url}
+                    src={getStaticUrl(service.image_url)}
                     alt={service.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />

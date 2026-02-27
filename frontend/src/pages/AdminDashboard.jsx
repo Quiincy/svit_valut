@@ -273,8 +273,9 @@ export default function AdminDashboard({ user, onLogout }) {
 
   const handleDownloadTemplate = () => {
     const token = localStorage.getItem('authToken');
+    const apiBase = import.meta.env.VITE_API_URL || '';
     const xhr = new XMLHttpRequest();
-    xhr.open('GET', '/api/admin/rates/template', true);
+    xhr.open('GET', `${apiBase}/api/admin/rates/template`, true);
     xhr.setRequestHeader('Authorization', `Basic ${token}`);
     xhr.responseType = 'arraybuffer';
 
