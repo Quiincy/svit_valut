@@ -119,6 +119,7 @@ export const branchService = {
   getOne: (id) => api.get(`/branches/${id}`),
   create: (data) => api.post('/admin/branches', data),
   delete: (id) => api.delete(`/admin/branches/${id}`),
+  getMyLocation: () => api.get('/my-location'),
 };
 
 export const reservationService = {

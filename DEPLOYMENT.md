@@ -145,3 +145,20 @@ Mac (розробка)                    Сервер (продакшн)
 ├── .htaccess            # Дозволяє слідувати за симлінками
 └── www/                 # Симлінк -> ../mirvalut.com/src/svit_valut/frontend/dist/
 ```
+---
+
+## Автоматизація Sitemap
+
+Щоб карта сайту оновлювалася автоматично (наприклад, раз на добу), додайте завдання в Cron на сервері:
+
+1. Відкрийте редактор cron:
+   ```bash
+   crontab -e
+   ```
+
+2. Додайте рядок для запуску скрипта оновлення о 3:00 ночі:
+   ```bash
+   0 3 * * * /usr/bin/python3 /home/leadgin/mirvalut.com/src/svit_valut/backend/generate_sitemap.py >> /home/leadgin/mirvalut.com/src/svit_valut/logs/sitemap.log 2>&1
+   ```
+
+> Переконайтеся, що шлях до Python та скрипта правильний для вашого сервера.

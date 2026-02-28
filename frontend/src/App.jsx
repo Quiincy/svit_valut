@@ -101,45 +101,39 @@ function PublicLayout() {
     return R * c;
   };
 
-  // GPS Auto-Selection
+  // IP-based Geo Auto-Selection (Avoids browser prompt)
   useEffect(() => {
     // Only run if branches are loaded and we haven't selected a branch yet
     if (branches.length > 0 && !activeBranch && !loading) {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
-            let nearest = null;
-            let minDistance = Infinity;
+      branchService.getMyLocation()
+        .then(response => {
+          const { lat, lng } = response.data;
+          let nearest = null;
+          let minDistance = Infinity;
 
-            branches.forEach(branch => {
-              const bLat = Number(branch.lat);
-              const bLng = Number(branch.lng);
-              if (!isNaN(bLat) && !isNaN(bLng) && bLat !== 0 && bLng !== 0) {
-                const distance = getDistance(latitude, longitude, bLat, bLng);
-                if (distance < minDistance) {
-                  minDistance = distance;
-                  nearest = branch;
-                }
+          branches.forEach(branch => {
+            const bLat = Number(branch.lat);
+            const bLng = Number(branch.lng);
+            if (!isNaN(bLat) && !isNaN(bLng) && bLat !== 0 && bLng !== 0) {
+              const distance = getDistance(lat, lng, bLat, bLng);
+              if (distance < minDistance) {
+                minDistance = distance;
+                nearest = branch;
               }
-            });
-
-            if (nearest) {
-              setActiveBranch(nearest);
-              // We could also call handleBranchChange(nearest) if we want to update rates immediately,
-              // but setActiveBranch might trigger the other useEffect if we aren't careful.
-              // Actually, handleBranchChange updates rates. Let's do that to be safe.
-              handleBranchChange(nearest);
             }
-          },
-          (error) => {
-            // Fallback is handled by the other useEffect (Best Rate) or default state
-          },
-          { timeout: 5000, maximumAge: 60000 }
-        );
-      }
+          });
+
+          if (nearest) {
+            setActiveBranch(nearest);
+            handleBranchChange(nearest);
+          }
+        })
+        .catch(() => {
+          // Fallback handled by best rate logic
+        });
     }
-  }, [branches, loading]); // Run when branches defined. ActiveBranch check prevents override.
+  }, [branches, activeBranch, loading]);
+  // Run when branches defined. ActiveBranch check prevents override.
 
   // Handle hash scrolling and preset currency links
   useEffect(() => {
