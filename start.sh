@@ -83,7 +83,9 @@ cat > "$DIST_DIR/package.json" << 'EOF'
 EOF
 
 # Create symlink: mirvalut.com/www → frontend/dist
-echo "   Налаштування симлінку..."
+echo "   Налаштування симлінку та перезапуск Passenger..."
+mkdir -p "$DIST_DIR/tmp"
+touch "$DIST_DIR/tmp/restart.txt"
 
 # Remove old test (symlink or directory)
 if [ -L "$SUBDOMAIN_DIR" ]; then

@@ -230,7 +230,7 @@ function PublicLayout() {
 
     // 1. UPDATE METADATA (Title & Description) globally based on URL
     const decodedPathname = decodeURIComponent(pathname);
-    const cleanPathname = decodedPathname.endsWith('/') && decodedPathname.length > 1 ? decodedPathname.slice(0, -1) : decodedPathname;
+    const cleanPathname = (decodedPathname.endsWith('/') && decodedPathname.length > 1 ? decodedPathname.slice(0, -1) : decodedPathname).toLowerCase();
     const reqPath = cleanPathname.toLowerCase();
     const activeSeo = seoList.find(s => {
       if (!s.url_path) return false;
@@ -278,17 +278,19 @@ function PublicLayout() {
     const normalizePath = (u) => {
       if (!u) return null;
       try {
-        let res = decodeURIComponent(u.trim());
+        let res = decodeURIComponent(u.trim().toLowerCase());
         if (!res.startsWith('/')) res = '/' + res;
         if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
         return res;
       } catch (e) {
-        let res = u.trim();
+        let res = u.trim().toLowerCase();
         if (!res.startsWith('/')) res = '/' + res;
         if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
         return res;
       }
     };
+
+    // cleanPathname is already defined and normalized above
 
     const isKnownSeoPath = Object.values(currencyInfoMap).some(inf => {
       return normalizePath(inf.buy_url) === cleanPathname || normalizePath(inf.sell_url) === cleanPathname;
@@ -1002,20 +1004,20 @@ function HomePage() {
 
   // Detect current currency SEO info ONLY from URL
   const pathname = decodeURIComponent(location.pathname);
-  const normalizedPath = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const normalizedPath = (pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname).toLowerCase();
   const slug = normalizedPath.replace(/^\//, '');
 
-  const urlIsSellMode = normalizedPath.includes('/продати-') || normalizedPath.startsWith('/sell-');
+  const urlIsSellMode = normalizedPath.includes('/продати-') || normalizedPath.startsWith('/sell-') || normalizedPath.includes('/продать-') || normalizedPath.startsWith('/sell-');
   let pathCurrency = Object.values(currencyInfoMap || {}).find(info => {
     const normalize = (u) => {
       if (!u) return null;
       try {
-        let res = decodeURIComponent(u.trim());
+        let res = decodeURIComponent(u.trim().toLowerCase());
         if (!res.startsWith('/')) res = '/' + res;
         if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
         return res;
       } catch (e) {
-        let res = u.trim();
+        let res = u.trim().toLowerCase();
         if (!res.startsWith('/')) res = '/' + res;
         if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
         return res;

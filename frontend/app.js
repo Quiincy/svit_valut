@@ -82,7 +82,7 @@ function fetchValidPaths() {
     Promise.allSettled([
         fetchJSON('/api/seo/'),
         fetchJSON('/api/settings'),
-        fetchJSON('/api/currencies/info'),
+        fetchJSON('/api/currencies/info/all'),
         fetchJSON('/api/services'),
     ]).then(([seoResult, settingsResult, currInfoResult, servicesResult]) => {
         const paths = new Set();
@@ -91,7 +91,7 @@ function fetchValidPaths() {
         if (seoResult.status === 'fulfilled' && Array.isArray(seoResult.value)) {
             seoResult.value.forEach(item => {
                 const p = normalize(item.url_path);
-                if (p) paths.add(p);
+                if (p) paths.add(p.toLowerCase());
             });
         }
 
@@ -100,7 +100,7 @@ function fetchValidPaths() {
             const s = settingsResult.value;
             ['contacts_url', 'faq_url', 'rates_url'].forEach(key => {
                 const p = normalize(s[key]);
-                if (p) paths.add(p);
+                if (p) paths.add(p.toLowerCase());
             });
         }
 
@@ -110,8 +110,8 @@ function fetchValidPaths() {
             Object.values(info).forEach(ci => {
                 const pBuy = normalize(ci.buy_url);
                 const pSell = normalize(ci.sell_url);
-                if (pBuy) paths.add(pBuy);
-                if (pSell) paths.add(pSell);
+                if (pBuy) paths.add(pBuy.toLowerCase());
+                if (pSell) paths.add(pSell.toLowerCase());
             });
         }
 
@@ -119,7 +119,7 @@ function fetchValidPaths() {
         if (servicesResult.status === 'fulfilled' && Array.isArray(servicesResult.value)) {
             servicesResult.value.forEach(svc => {
                 const p = normalize(svc.link_url);
-                if (p) paths.add(p);
+                if (p) paths.add(p.toLowerCase());
             });
         }
 
@@ -137,8 +137,8 @@ setInterval(fetchValidPaths, 5 * 60 * 1000);
 
 function isKnownRoute(urlPath) {
     try {
-        // Normalize: decode URI, strip trailing slash, handle queries
-        let p = decodeURIComponent(urlPath.split('?')[0].split('#')[0]);
+        // Normalize: decode URI, strip trailing slash, handle queries, LOWERCASE
+        let p = decodeURIComponent(urlPath.split('?')[0].split('#')[0]).toLowerCase();
         if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
         if (!p.startsWith('/')) p = '/' + p;
 
@@ -155,8 +155,8 @@ function isKnownRoute(urlPath) {
         if (/^\/articles\/[^/]+$/.test(p)) return true;
         if (/^\/services\/[^/]+$/.test(p)) return true;
 
-        // Check cyrillic patterns if any (though these should be in validDynamicPaths)
-        if (p.includes('/купити-') || p.includes('/продати-')) return true;
+        // Common Cyrillic exchange patterns (buy/sell in UKR/RUS)
+        if (p.includes('/купити-') || p.includes('/продати-') || p.includes('/купить-') || p.includes('/продать-')) return true;
 
         return false;
     } catch (e) {
