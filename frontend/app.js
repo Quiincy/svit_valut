@@ -201,17 +201,13 @@ const server = http.createServer((req, res) => {
 
             // For SPA fallback routes, check if the route is known
             // If not, serve index.html with 404 status for proper SEO
-            // We only return 404 if the FIRST fetch of valid paths from backend is completed
             if (isSpaFallback) {
+                // FORCE 200 OK for any SPA route to fix the 404-on-refresh bug.
+                // The frontend React code will handle displaying a 404 page if the route is truly invalid.
+                // This is the safest way to ensure Cyrillic URLs work on refresh.
                 const known = isKnownRoute(urlPath);
-                // Return 404 status only if we are SURE it's a bad route
-                // If fetching isn't done yet, we play safe and return 200
-                if (firstFetchDone && !known) {
-                    log(`404: ${urlPath}`);
-                    res.writeHead(404, { 'Content-Type': mimeType });
-                } else {
-                    res.writeHead(200, { 'Content-Type': mimeType });
-                }
+                log(`SPA Fallback [${known ? 'KNOWN' : 'UNKNOWN'}]: ${urlPath} -> 200 OK`);
+                res.writeHead(200, { 'Content-Type': mimeType });
             } else {
                 res.writeHead(200, { 'Content-Type': mimeType });
             }
