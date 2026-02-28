@@ -42,6 +42,7 @@ const KNOWN_STATIC_ROUTES = new Set([
 
 // Dynamic valid paths fetched from the backend (SEO URLs, currency info URLs, service URLs, etc.)
 let validDynamicPaths = new Set();
+let firstFetchDone = false;
 
 function fetchValidPaths() {
     const fetchJSON = (apiPath) => new Promise((resolve, reject) => {
@@ -50,9 +51,10 @@ function fetchValidPaths() {
             port: API_PORT,
             path: apiPath,
             method: 'GET',
-            headers: { 'Accept': 'application/json', 'Host': API_HOST },
+            headers: { 'Accept': 'application/json' },
         };
-        const req = https.request(options, (res) => {
+        // Use http module for local backend on 8000
+        const req = http.request(options, (res) => {
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
@@ -65,6 +67,18 @@ function fetchValidPaths() {
         req.end();
     });
 
+    const normalize = (p) => {
+        if (!p) return null;
+        try {
+            let res = decodeURIComponent(p.trim());
+            if (!res.startsWith('/')) res = '/' + res;
+            if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+            return res;
+        } catch (e) {
+            return p.trim();
+        }
+    };
+
     Promise.allSettled([
         fetchJSON('/api/seo/'),
         fetchJSON('/api/settings'),
@@ -76,11 +90,8 @@ function fetchValidPaths() {
         // SEO paths
         if (seoResult.status === 'fulfilled' && Array.isArray(seoResult.value)) {
             seoResult.value.forEach(item => {
-                if (item.url_path) {
-                    let p = item.url_path.startsWith('/') ? item.url_path : '/' + item.url_path;
-                    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
-                    paths.add(decodeURIComponent(p));
-                }
+                const p = normalize(item.url_path);
+                if (p) paths.add(p);
             });
         }
 
@@ -88,11 +99,8 @@ function fetchValidPaths() {
         if (settingsResult.status === 'fulfilled' && settingsResult.value) {
             const s = settingsResult.value;
             ['contacts_url', 'faq_url', 'rates_url'].forEach(key => {
-                if (s[key]) {
-                    let p = s[key].startsWith('/') ? s[key] : '/' + s[key];
-                    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
-                    paths.add(decodeURIComponent(p));
-                }
+                const p = normalize(s[key]);
+                if (p) paths.add(p);
             });
         }
 
@@ -100,37 +108,23 @@ function fetchValidPaths() {
         if (currInfoResult.status === 'fulfilled' && currInfoResult.value) {
             const info = currInfoResult.value;
             Object.values(info).forEach(ci => {
-                const normalize = (u) => {
-                    if (!u) return null;
-                    let res = u.trim();
-                    if (!res.startsWith('/')) res = '/' + res;
-                    if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
-                    return decodeURIComponent(res);
-                };
-                if (ci.buy_url) {
-                    const p = normalize(ci.buy_url);
-                    if (p) paths.add(p);
-                }
-                if (ci.sell_url) {
-                    const p = normalize(ci.sell_url);
-                    if (p) paths.add(p);
-                }
+                const pBuy = normalize(ci.buy_url);
+                const pSell = normalize(ci.sell_url);
+                if (pBuy) paths.add(pBuy);
+                if (pSell) paths.add(pSell);
             });
         }
 
         // Service link URLs
         if (servicesResult.status === 'fulfilled' && Array.isArray(servicesResult.value)) {
             servicesResult.value.forEach(svc => {
-                if (svc.link_url) {
-                    let p = svc.link_url.trim();
-                    if (!p.startsWith('/')) p = '/' + p;
-                    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
-                    paths.add(decodeURIComponent(p));
-                }
+                const p = normalize(svc.link_url);
+                if (p) paths.add(p);
             });
         }
 
         validDynamicPaths = paths;
+        firstFetchDone = true;
         console.log(`[Routes] Loaded ${paths.size} dynamic valid paths`);
     }).catch(err => {
         console.error('[Routes] Failed to fetch valid paths:', err.message);
@@ -220,7 +214,8 @@ const server = http.createServer((req, res) => {
 
             // For SPA fallback routes, check if the route is known
             // If not, serve index.html with 404 status for proper SEO
-            if (isSpaFallback && !isKnownRoute(urlPath)) {
+            // We only return 404 if the FIRST fetch of valid paths from backend is completed
+            if (isSpaFallback && firstFetchDone && !isKnownRoute(urlPath)) {
                 res.writeHead(404, { 'Content-Type': mimeType });
             } else {
                 res.writeHead(200, { 'Content-Type': mimeType });

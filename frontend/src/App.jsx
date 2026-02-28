@@ -277,10 +277,17 @@ function PublicLayout() {
     // Check if the current route is known (404)
     const normalizePath = (u) => {
       if (!u) return null;
-      let res = u.trim();
-      if (!res.startsWith('/')) res = '/' + res;
-      if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
-      return res;
+      try {
+        let res = decodeURIComponent(u.trim());
+        if (!res.startsWith('/')) res = '/' + res;
+        if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+        return res;
+      } catch (e) {
+        let res = u.trim();
+        if (!res.startsWith('/')) res = '/' + res;
+        if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+        return res;
+      }
     };
 
     const isKnownSeoPath = Object.values(currencyInfoMap).some(inf => {
@@ -1002,10 +1009,17 @@ function HomePage() {
   let pathCurrency = Object.values(currencyInfoMap || {}).find(info => {
     const normalize = (u) => {
       if (!u) return null;
-      let res = u.trim();
-      if (!res.startsWith('/')) res = '/' + res;
-      if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
-      return res;
+      try {
+        let res = decodeURIComponent(u.trim());
+        if (!res.startsWith('/')) res = '/' + res;
+        if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+        return res;
+      } catch (e) {
+        let res = u.trim();
+        if (!res.startsWith('/')) res = '/' + res;
+        if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+        return res;
+      }
     };
     const normBuy = normalize(info.buy_url);
     const normSell = normalize(info.sell_url);
