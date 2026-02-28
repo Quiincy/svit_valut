@@ -284,6 +284,19 @@ def startup_db_client():
     db = SessionLocal()
     try:
         init_db_data(db)
+        # Automatically generate sitemap on server restart
+        try:
+            from backend.generate_sitemap import generate_sitemap
+            generate_sitemap()
+        except ImportError:
+            # If running from inside app.main, backend prefix might not be needed
+            try:
+                from generate_sitemap import generate_sitemap
+                generate_sitemap()
+            except Exception as se:
+                print(f"Sitemap generation failed on startup: {se}")
+        except Exception as se:
+            print(f"Sitemap generation failed on startup: {se}")
     except Exception as e:
         print(f"Startup Error: {e}")
     finally:

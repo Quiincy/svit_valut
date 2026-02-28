@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 from datetime import datetime
 
 # Ensure the app directory is in the Python path
@@ -34,6 +35,13 @@ def generate_sitemap():
             # Remove trailing slash for consistency (except root)
             if clean.endswith('/') and len(clean) > 1:
                 clean = clean[:-1]
+            
+            # Global Filter: Remove default patterns like /buy-usd, /sell-eur, /buy-nok etc.
+            # Only blocks patterns where the code is exactly 3 letters (ISO standard codes)
+            low_path = clean.lower()
+            if re.match(r'^/(buy|sell)-[a-z]{3}$', low_path):
+                # print(f"🚫 Filtering default pattern: {clean}")
+                return
             
             # Avoid duplicates (case-insensitive)
             low = clean.lower()
