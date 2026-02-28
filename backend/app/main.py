@@ -29,7 +29,9 @@ app = FastAPI(title="Світ Валют API", version="2.0.0")
 
 # Create tables before router registration
 from app.core.database import engine as _engine
+from app.core.migrations import run_migrations
 models.Base.metadata.create_all(bind=_engine)
+run_migrations()
 
 # Register API router AFTER tables are created
 app.include_router(api_router, prefix="/api")
@@ -639,9 +641,10 @@ async def get_branch(branch_id: int, db: Session = Depends(get_db)):
 @app.post("/api/reservations", response_model=ReservationResponse)
 async def create_reservation(request: ReservationRequest, db: Session = Depends(get_db)):
     """Create a new currency reservation"""
-    # Fetch rates for specified branch or branch 1
     branch_id = request.branch_id or 1
-    
+    rate = 0.0
+    get_amount = 0.0
+
     if request.give_currency.upper() == "UAH":
         to_curr = db.query(models.BranchRate).filter(
             models.BranchRate.branch_id == branch_id,
@@ -656,8 +659,19 @@ async def create_reservation(request: ReservationRequest, db: Session = Depends(
             
         if not to_curr:
             raise HTTPException(status_code=404, detail="Currency not found")
-        get_amount = request.give_amount / to_curr.sell_rate
-        rate = to_curr.sell_rate
+            
+        # Determine effective rate
+        base_rate = to_curr.sell_rate
+        # For UAH -> Foreign, threshold is checked against Foreign amount
+        # We can calculate tentative amount first
+        tentative_get = request.give_amount / base_rate if base_rate > 0 else 0
+        
+        effective_rate = base_rate
+        if to_curr.wholesale_threshold > 0 and tentative_get >= to_curr.wholesale_threshold and to_curr.wholesale_sell_rate > 0:
+            effective_rate = to_curr.wholesale_sell_rate
+            
+        rate = effective_rate
+        get_amount = request.give_amount / rate if rate > 0 else 0
     else:
         from_curr = db.query(models.BranchRate).filter(
             models.BranchRate.branch_id == branch_id,
@@ -672,8 +686,25 @@ async def create_reservation(request: ReservationRequest, db: Session = Depends(
             
         if not from_curr:
             raise HTTPException(status_code=404, detail="Currency not found")
-        get_amount = request.give_amount * from_curr.buy_rate
-        rate = from_curr.buy_rate
+            
+        # Determine effective rate
+        base_rate = from_curr.buy_rate
+        # For Foreign -> UAH, threshold is checked against Foreign amount (give_amount)
+        effective_rate = base_rate
+        if from_curr.wholesale_threshold > 0 and request.give_amount >= from_curr.wholesale_threshold and from_curr.wholesale_buy_rate > 0:
+            effective_rate = from_curr.wholesale_buy_rate
+            
+        rate = effective_rate
+        get_amount = request.give_amount * rate
+
+    # If frontend provided its own calculated values, prefer them (after basic validation)
+    # This ensures consistency with what the user saw even if rates changed by a tiny fraction or rounding
+    if request.get_amount is not None:
+        # Simple safety check: ensure provided get_amount isn't wildly different from backend calculation (e.g. > 10% diff)
+        if get_amount > 0 and abs(request.get_amount - get_amount) / get_amount < 0.1:
+            get_amount = request.get_amount
+            if request.rate is not None:
+                rate = request.rate
     
     # Use Naive Kyiv Time to ensure correct string-based sorting with existing legacy data
     # and correct display on frontend (as local time).
@@ -721,6 +752,7 @@ async def create_reservation(request: ReservationRequest, db: Session = Depends(
         branch_id=db_res.branch_id,
         branch_address=branch.address if branch else None,
         created_at=db_res.created_at.isoformat(),
+        updated_at=db_res.updated_at.isoformat() if db_res.updated_at else None,
         expires_at=db_res.expires_at.isoformat()
     )
 
@@ -746,6 +778,7 @@ async def get_reservation(reservation_id: int, db: Session = Depends(get_db)):
         branch_id=db_res.branch_id,
         branch_address=branch.address if branch else None,
         created_at=db_res.created_at.isoformat(),
+        updated_at=db_res.updated_at.isoformat() if db_res.updated_at else None,
         expires_at=db_res.expires_at.isoformat(),
         completed_at=db_res.completed_at.isoformat() if db_res.completed_at else None,
         operator_note=db_res.operator_note
@@ -2143,6 +2176,7 @@ async def get_all_reservations(
             branch_id=r.branch_id,
             branch_address=branch.address if branch else None,
             created_at=r.created_at.isoformat(),
+            updated_at=r.updated_at.isoformat() if r.updated_at else None,
             expires_at=r.expires_at.isoformat(),
             completed_at=r.completed_at.isoformat() if r.completed_at else None,
             operator_note=r.operator_note
@@ -2219,6 +2253,7 @@ async def update_reservation(
         branch_id=res.branch_id,
         branch_address=branch.address if branch else None,
         created_at=res.created_at.isoformat(),
+        updated_at=res.updated_at.isoformat() if res.updated_at else None,
         expires_at=res.expires_at.isoformat(),
         completed_at=res.completed_at.isoformat() if res.completed_at else None,
         operator_note=res.operator_note
@@ -2261,6 +2296,7 @@ async def assign_reservation_to_operator(
         branch_id=res.branch_id,
         branch_address=branch.address if branch else None,
         created_at=res.created_at.isoformat(),
+        updated_at=res.updated_at.isoformat() if res.updated_at else None,
         expires_at=res.expires_at.isoformat(),
         completed_at=res.completed_at.isoformat() if res.completed_at else None,
         operator_note=res.operator_note
@@ -2363,6 +2399,7 @@ async def get_branch_reservations(
             branch_id=r.branch_id,
             branch_address=branch.address if branch else None,
             created_at=r.created_at.isoformat(),
+            updated_at=r.updated_at.isoformat() if r.updated_at else None,
             expires_at=r.expires_at.isoformat(),
             completed_at=r.completed_at.isoformat() if r.completed_at else None,
             operator_note=r.operator_note
@@ -2418,6 +2455,7 @@ async def update_reservation(
         branch_id=db_res.branch_id,
         branch_address=branch.address if branch else None,
         created_at=db_res.created_at.isoformat(),
+        updated_at=db_res.updated_at.isoformat() if db_res.updated_at else None,
         expires_at=db_res.expires_at.isoformat(),
         completed_at=db_res.completed_at.isoformat() if db_res.completed_at else None,
         operator_note=db_res.operator_note

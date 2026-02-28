@@ -9,6 +9,7 @@ import Footer from './components/Footer';
 import CurrencyModal from './components/CurrencyModal';
 import ScrollToTopButton from './components/ScrollToTopButton';
 import SeoTextBlock from './components/SeoTextBlock';
+import { updateCanonicalTag, updateSchemaMarkup } from './services/seoUtils';
 
 // Below-fold homepage sections — lazy loaded
 const BranchesSection = lazy(() => import('./components/BranchesSection'));
@@ -236,6 +237,10 @@ function PublicLayout() {
         metaDesc.setAttribute('content', 'Обмін валют в Києві. Найкращі курси, безпечно та швидко.');
       }
     }
+
+    // UPDATE CANONICAL & SCHEMA
+    updateCanonicalTag(pathname);
+    updateSchemaMarkup({ settings, activeBranch, currencies, giveCurrency, getCurrency });
 
     let targetCode = null;
     let mode = null;

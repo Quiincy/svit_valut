@@ -2,7 +2,7 @@ import sqlite3
 
 def migrate():
     try:
-        conn = sqlite3.connect('svit_valut.db')
+        conn = sqlite3.connect('app/core/svit_valut.db')
         cursor = conn.cursor()
         
         # Check if column exists

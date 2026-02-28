@@ -111,6 +111,7 @@ class Reservation(Base):
     branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True)
     operator_note = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
     completed_at = Column(DateTime, nullable=True)
     

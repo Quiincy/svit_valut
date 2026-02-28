@@ -59,10 +59,12 @@ export default function AdminDashboard({ user, onLogout }) {
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [viewNoteModal, setViewNoteModal] = useState(null);
   const [newReservationAlert, setNewReservationAlert] = useState(false);
   const playNotification = useAudioNotification();
 
   const [lastReservationTime, setLastReservationTime] = useState(null);
+  const prevReservationsRef = useRef([]);
   const fileInputRef = useRef(null);
 
   const [branches, setBranches] = useState([]);
@@ -111,18 +113,49 @@ export default function AdminDashboard({ user, onLogout }) {
       setCurrencies(currenciesRes.data);
       const items = reservationsRes.data.items || [];
 
-      // Check for new reservations
+      // Check for new or modified reservations
       if (items.length > 0) {
         const currentLatestTime = new Date(items[0].created_at).getTime();
-        if (lastReservationTime && currentLatestTime > lastReservationTime) {
+
+        // 1. Check for completely new reservations (existing logic)
+        const hasNew = lastReservationTime && currentLatestTime > lastReservationTime;
+
+        // 2. Check for modifications in existing reservations
+        let hasModified = false;
+        if (prevReservationsRef.current.length > 0) {
+          items.forEach(newItem => {
+            const prevItem = prevReservationsRef.current.find(p => p.id === newItem.id);
+            if (prevItem) {
+              // Compare status, note, or updated_at
+              const statusChanged = newItem.status !== prevItem.status;
+              const noteChanged = newItem.operator_note !== prevItem.operator_note;
+              const timeChanged = newItem.updated_at && prevItem.updated_at && newItem.updated_at !== prevItem.updated_at;
+
+              if (statusChanged || noteChanged || timeChanged) {
+                // Ignore actions initiated by admin:
+                // 1. "Assign" action (pending_admin -> pending)
+                // 2. "Restore" action (cancelled/expired -> pending)
+                const isAssignAction = prevItem.status === 'pending_admin' && newItem.status === 'pending';
+                const isRestoreAction = (prevItem.status === 'cancelled' || prevItem.status === 'expired') && newItem.status === 'pending';
+
+                if (!isAssignAction && !isRestoreAction) {
+                  hasModified = true;
+                }
+              }
+            }
+          });
+        }
+
+        if (hasNew || hasModified) {
           setNewReservationAlert(true);
-          // Play notification sound
           playNotification();
           setTimeout(() => setNewReservationAlert(false), 5000);
         }
+
         setLastReservationTime(currentLatestTime);
       }
       setReservations(items);
+      prevReservationsRef.current = items;
 
       try {
         const [allRatesRes, crossRatesRes] = await Promise.all([
@@ -1171,70 +1204,77 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* Reservations Tab */}
         {activeTab === 'reservations' && (
           <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
               <h3 className="text-lg font-bold">Всі бронювання</h3>
 
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 mr-2">
-                  <button
-                    onClick={() => {
-                      const today = new Date().toISOString().split('T')[0];
-                      setDateFrom(today);
-                      setDateTo(today);
-                    }}
-                    className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Сьогодні
-                  </button>
-                  <button
-                    onClick={() => {
-                      const yesterday = new Date();
-                      yesterday.setDate(yesterday.getDate() - 1);
-                      const yStr = yesterday.toISOString().split('T')[0];
-                      setDateFrom(yStr);
-                      setDateTo(yStr);
-                    }}
-                    className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Вчора
-                  </button>
-                  <div className="w-px h-8 bg-white/10 mx-1"></div>
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    aria-label="Початкова дата"
-                    className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
-                  />
-                  <span className="text-text-secondary">—</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    aria-label="Кінцева дата"
-                    className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
-                  />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const today = new Date().toISOString().split('T')[0];
+                        setDateFrom(today);
+                        setDateTo(today);
+                      }}
+                      className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+                    >
+                      Сьогодні
+                    </button>
+                    <button
+                      onClick={() => {
+                        const yesterday = new Date();
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        const yStr = yesterday.toISOString().split('T')[0];
+                        setDateFrom(yStr);
+                        setDateTo(yStr);
+                      }}
+                      className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap"
+                    >
+                      Вчора
+                    </button>
+                  </div>
+                  <div className="hidden sm:block w-px h-8 bg-white/10 mx-1"></div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      aria-label="Початкова дата"
+                      className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark] w-[130px] sm:w-auto"
+                    />
+                    <span className="text-text-secondary">—</span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      aria-label="Кінцева дата"
+                      className="px-3 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark] w-[130px] sm:w-auto"
+                    />
+                  </div>
                 </div>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-4 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
-                >
-                  <option value="">Всі статуси</option>
-                  <option value="pending_admin">Очікує адміна</option>
-                  <option value="pending">Очікує оператора</option>
-                  <option value="confirmed">Підтверджено</option>
-                  <option value="completed">Завершено</option>
-                  <option value="cancelled">Скасовано</option>
-                </select>
 
-                <button
-                  onClick={fetchData}
-                  className="p-2 text-text-secondary hover:text-white rounded-lg hover:bg-white/5 transition-colors"
-                  aria-label="Оновити бронювання"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="flex-1 sm:flex-none px-4 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
+                  >
+                    <option value="">Всі статуси</option>
+                    <option value="pending_admin">Очікує адміна</option>
+                    <option value="pending">Очікує оператора</option>
+                    <option value="confirmed">Підтверджено</option>
+                    <option value="completed">Завершено</option>
+                    <option value="cancelled">Скасовано</option>
+                  </select>
+
+                  <button
+                    onClick={fetchData}
+                    className="p-2 text-text-secondary hover:text-white rounded-lg hover:bg-white/5 transition-colors flex-shrink-0"
+                    aria-label="Оновити бронювання"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1244,109 +1284,221 @@ export default function AdminDashboard({ user, onLogout }) {
                 <p>Немає бронювань</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-left text-xs text-text-secondary border-b border-white/10">
-                      <th className="pb-3 pr-4">ID</th>
-                      <th className="pb-3 pr-4">Клієнт</th>
-                      <th className="pb-3 pr-4">Сума</th>
-                      <th className="pb-3 pr-4">Курс</th>
-                      <th className="pb-3 pr-4">Відділення</th>
-                      <th className="pb-3 pr-4">Статус</th>
-                      <th className="pb-3 pr-4">Створено</th>
-                      <th className="pb-3">Дії</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredReservations.map((res) => {
-                      const statusCfg = STATUS_CONFIG[res.status] || STATUS_CONFIG.pending;
-                      const StatusIcon = statusCfg.icon;
+              <>
+                {/* Mobile Card View */}
+                <div className="grid gap-4 lg:hidden">
+                  {filteredReservations.map((res) => {
+                    const statusCfg = STATUS_CONFIG[res.status] || STATUS_CONFIG.pending;
+                    const StatusIcon = statusCfg.icon;
 
-                      return (
-                        <tr
-                          key={res.id}
-                          className={`border-b border-white/5 transition-colors ${res.status === 'pending_admin'
-                            ? 'bg-accent-yellow/10 animate-pulse hover:bg-accent-yellow/20'
-                            : 'hover:bg-white/5'
-                            }`}
-                        >
-                          <td className="py-4 pr-4 font-mono text-sm">#{res.id}</td>
-                          <td className="py-4 pr-4">
-                            <div className="text-sm font-medium">{res.customer_name || '—'}</div>
-                            <div className="flex items-center gap-1 mt-1 text-xs text-text-secondary">
-                              <Phone className="w-3 h-3" />
-                              <a href={`tel:${res.phone}`} className="hover:text-white hover:underline transition-colors">
+                    return (
+                      <div
+                        key={res.id}
+                        className={`p-4 rounded-xl border border-white/10 transition-colors ${(res.status === 'pending_admin' || res.status === 'cancelled')
+                          ? 'bg-accent-yellow/10 animate-pulse outline outline-1 outline-accent-yellow/30'
+                          : 'bg-white/5'
+                          }`}
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-mono text-[10px] text-text-secondary tracking-wider">#{res.id}</span>
+                            <div className="text-xs text-text-secondary">
+                              {new Date(res.created_at).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusCfg.color}`}>
+                            <StatusIcon className="w-3 h-3" />
+                            {statusCfg.label}
+                          </span>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <div className="text-base font-bold text-white mb-0.5">{res.customer_name || '—'}</div>
+                            <div className="flex items-center gap-2 text-sm text-text-secondary">
+                              <Phone className="w-3.5 h-3.5" />
+                              <a href={`tel:${res.phone}`} className="hover:text-accent-yellow transition-colors underline decoration-white/20 underline-offset-4">
                                 {res.phone}
                               </a>
                             </div>
-                            {res.operator_note && (
-                              <div className="mt-1 text-xs text-accent-yellow/80 italic truncate max-w-[200px]" title={res.operator_note}>
-                                📝 {res.operator_note}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-4 pr-4">
-                            <div className="text-sm font-medium">
-                              {res.give_amount.toLocaleString()} {res.give_currency}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 py-3 border-y border-white/10">
+                            <div>
+                              <div className="text-[9px] uppercase text-text-secondary font-bold mb-1 tracking-wider">Віддає</div>
+                              <div className="text-sm font-bold text-white">{res.give_amount.toLocaleString()} {res.give_currency}</div>
                             </div>
-                            <div className="text-xs text-text-secondary">
-                              → {res.get_amount.toLocaleString()} {res.get_currency}
+                            <div>
+                              <div className="text-[9px] uppercase text-text-secondary font-bold mb-1 tracking-wider">Отримує</div>
+                              <div className="text-sm font-bold text-white">{res.get_amount.toLocaleString()} {res.get_currency}</div>
                             </div>
-                          </td>
-                          <td className="py-4 pr-4 text-sm">{res.rate}</td>
-                          <td className="py-4 pr-4 text-sm text-text-secondary">
-                            {res.branch_address || '—'}
-                          </td>
-                          <td className="py-4 pr-4">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${statusCfg.color}`}>
-                              <StatusIcon className="w-3 h-3" />
-                              {statusCfg.label}
-                            </span>
-                          </td>
-                          <td className="py-4 pr-4 text-xs text-text-secondary">
-                            {new Date(res.created_at).toLocaleString('uk-UA')}
-                          </td>
-                          <td className="py-4">
-                            <div className="flex gap-2">
-                              {/* Edit button always visible */}
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-0.5">
+                              <div className="text-[9px] uppercase text-text-secondary font-bold tracking-wider">Курс</div>
+                              <div className="text-sm font-bold text-accent-yellow">{res.rate}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[9px] uppercase text-text-secondary font-bold tracking-wider mb-0.5">Відділення</div>
+                              <div className="text-xs text-text-secondary max-w-[150px] truncate">{res.branch_address || '—'}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
+                            <button
+                              onClick={() => openResModal(res)}
+                              className="flex-1 flex items-center justify-center gap-2 p-2.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-xs font-medium"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-text-secondary" />
+                              <span>Редагувати</span>
+                            </button>
+
+                            <button
+                              onClick={() => setViewNoteModal(res.operator_note || 'Нотаток в оператора немає')}
+                              className="p-2.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors relative"
+                            >
+                              <MessageSquare className="w-4 h-4 text-text-secondary" />
+                              {res.operator_note && (
+                                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-primary-light pulse"></span>
+                              )}
+                            </button>
+
+                            {res.status === 'pending_admin' && (
                               <button
-                                onClick={() => openResModal(res)}
-                                className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                                title="Редагувати"
+                                onClick={() => handleAssign(res.id)}
+                                className="p-2.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors"
                               >
-                                <Pencil className="w-4 h-4" />
+                                <Send className="w-4 h-4" />
                               </button>
+                            )}
 
-                              {/* Assign to operator – for pending_admin */}
-                              {res.status === 'pending_admin' && (
-                                <button
-                                  onClick={() => handleAssign(res.id)}
-                                  className="p-2 text-text-secondary hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
-                                  title="Надіслати оператору"
-                                >
-                                  <Send className="w-4 h-4" />
-                                </button>
-                              )}
+                            {(res.status === 'cancelled' || res.status === 'expired') && (
+                              <button
+                                onClick={() => handleRestoreReservation(res.id)}
+                                className="p-2.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors"
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                              {/* Restore button – for cancelled / expired */}
-                              {(res.status === 'cancelled' || res.status === 'expired') && (
+                {/* Desktop Table View */}
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left text-xs text-text-secondary border-b border-white/10">
+                        <th className="pb-3 pr-4">ID</th>
+                        <th className="pb-3 pr-4">Клієнт</th>
+                        <th className="pb-3 pr-4">Сума</th>
+                        <th className="pb-3 pr-4">Курс</th>
+                        <th className="pb-3 pr-4">Відділення</th>
+                        <th className="pb-3 pr-4">Статус</th>
+                        <th className="pb-3 pr-4">Створено</th>
+                        <th className="pb-3">Дії</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredReservations.map((res) => {
+                        const statusCfg = STATUS_CONFIG[res.status] || STATUS_CONFIG.pending;
+                        const StatusIcon = statusCfg.icon;
+
+                        return (
+                          <tr
+                            key={res.id}
+                            className={`border-b border-white/5 transition-colors ${(res.status === 'pending_admin' || res.status === 'cancelled')
+                              ? 'bg-accent-yellow/10 animate-pulse hover:bg-accent-yellow/20'
+                              : 'hover:bg-white/5'
+                              }`}
+                          >
+                            <td className="py-4 pr-4 font-mono text-sm">#{res.id}</td>
+                            <td className="py-4 pr-4">
+                              <div className="text-sm font-medium">{res.customer_name || '—'}</div>
+                              <div className="flex items-center gap-1 mt-1 text-xs text-text-secondary">
+                                <Phone className="w-3 h-3" />
+                                <a href={`tel:${res.phone}`} className="hover:text-white hover:underline transition-colors">
+                                  {res.phone}
+                                </a>
+                              </div>
+                            </td>
+                            <td className="py-4 pr-4">
+                              <div className="text-sm font-medium">
+                                {res.give_amount.toLocaleString()} {res.give_currency}
+                              </div>
+                              <div className="text-xs text-text-secondary">
+                                → {res.get_amount.toLocaleString()} {res.get_currency}
+                              </div>
+                            </td>
+                            <td className="py-4 pr-4 text-sm">{res.rate}</td>
+                            <td className="py-4 pr-4 text-sm text-text-secondary">
+                              {res.branch_address || '—'}
+                            </td>
+                            <td className="py-4 pr-4">
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${statusCfg.color}`}>
+                                <StatusIcon className="w-3 h-3" />
+                                {statusCfg.label}
+                              </span>
+                            </td>
+                            <td className="py-4 pr-4 text-xs text-text-secondary">
+                              {new Date(res.created_at).toLocaleString('uk-UA')}
+                            </td>
+                            <td className="py-4">
+                              <div className="flex gap-2">
+                                {/* Edit button always visible */}
                                 <button
-                                  onClick={() => handleRestoreReservation(res.id)}
-                                  className="p-2 text-text-secondary hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
-                                  title="Відновити"
+                                  onClick={() => openResModal(res)}
+                                  className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                                  title="Редагувати"
                                 >
-                                  <RefreshCw className="w-4 h-4" />
+                                  <Pencil className="w-4 h-4" />
                                 </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+
+                                <button
+                                  onClick={() => setViewNoteModal(res.operator_note || 'Нотаток в оператора немає')}
+                                  className="p-2 text-text-secondary hover:text-white hover:bg-white/5 rounded-lg transition-colors relative"
+                                  title="Нотатка оператора"
+                                >
+                                  <MessageSquare className="w-4 h-4" />
+                                  {res.operator_note && (
+                                    <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-400 rounded-full"></span>
+                                  )}
+                                </button>
+
+                                {/* Assign to operator – for pending_admin */}
+                                {res.status === 'pending_admin' && (
+                                  <button
+                                    onClick={() => handleAssign(res.id)}
+                                    className="p-2 text-text-secondary hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                                    title="Надіслати оператору"
+                                  >
+                                    <Send className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                {/* Restore button – for cancelled / expired */}
+                                {(res.status === 'cancelled' || res.status === 'expired') && (
+                                  <button
+                                    onClick={() => handleRestoreReservation(res.id)}
+                                    className="p-2 text-text-secondary hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                                    title="Відновити"
+                                  >
+                                    <RefreshCw className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -1693,6 +1845,37 @@ export default function AdminDashboard({ user, onLogout }) {
                   {resSaving ? 'Збереження...' : 'Зберегти'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* View Note Modal */}
+        {viewNoteModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setViewNoteModal(null)}>
+            <div
+              className="bg-primary-light rounded-2xl p-6 w-full max-w-sm border border-white/10"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-red-400">
+                  <Pencil className="w-5 h-5 flex-shrink-0" />
+                  Нотатка
+                </h3>
+                <button onClick={() => setViewNoteModal(null)} className="p-1 hover:bg-white/10 rounded-lg text-text-secondary hover:text-white transition-colors" aria-label="Закрити">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="bg-primary/50 p-4 rounded-xl border border-white/5">
+                <p className="text-sm whitespace-pre-wrap leading-relaxed break-words overflow-hidden">
+                  {viewNoteModal}
+                </p>
+              </div>
+              <button
+                onClick={() => setViewNoteModal(null)}
+                className="w-full mt-6 py-3 bg-white/5 rounded-xl text-white hover:bg-white/10 transition-colors font-medium"
+              >
+                Закрити
+              </button>
             </div>
           </div>
         )}

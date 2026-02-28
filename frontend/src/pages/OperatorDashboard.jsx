@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   LogOut, RefreshCw, CheckCircle, XCircle, Clock,
   DollarSign, TrendingUp, Phone, MapPin, MessageSquare,
@@ -43,6 +43,8 @@ export default function OperatorDashboard({ user, onLogout }) {
   const [copiedId, setCopiedId] = useState(null);
   const playNotification = useAudioNotification();
 
+  const prevReservationsRef = useRef([]);
+
   // Update time every minute (Kyiv time)
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
@@ -63,17 +65,43 @@ export default function OperatorDashboard({ user, onLogout }) {
       setDashboard(dashboardRes.data);
       const items = reservationsRes.data.items || [];
 
-      // Check for new reservations
-      if (items.length > 0) {
-        const currentLatestTime = new Date(items[0].created_at).getTime();
-        if (lastReservationTime && currentLatestTime > lastReservationTime) {
-          setNewReservationAlert(true);
-          // Play notification sound
-          playNotification();
-          setTimeout(() => setNewReservationAlert(false), 5000);
+      // Check for new or modified reservations
+      let shouldNotify = false;
+
+      // Only check for notifications if it's not the first load
+      if (lastReservationTime !== null) {
+        const prevIds = new Set(prevReservationsRef.current.map(i => i.id));
+
+        // 1. New items for this specific view (status filter)
+        for (const item of items) {
+          if (!prevIds.has(item.id)) {
+            shouldNotify = true;
+            break;
+          }
         }
-        setLastReservationTime(currentLatestTime);
+
+        // 2. Status changes or note changes on existing items
+        if (!shouldNotify) {
+          for (const item of items) {
+            const prev = prevReservationsRef.current.find(p => p.id === item.id);
+            if (prev && (prev.status !== item.status || prev.operator_note !== item.operator_note)) {
+              shouldNotify = true;
+              break;
+            }
+          }
+        }
       }
+
+      if (shouldNotify) {
+        setNewReservationAlert(true);
+        playNotification();
+        setTimeout(() => setNewReservationAlert(false), 5000);
+      }
+
+      // Update trackers
+      const latestTime = items.length > 0 ? new Date(items[0].created_at).getTime() : Date.now();
+      setLastReservationTime(latestTime);
+      prevReservationsRef.current = items;
       setReservations(items);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -201,6 +229,16 @@ export default function OperatorDashboard({ user, onLogout }) {
               <div>Київ</div>
               <div className="font-mono">{currentTime.toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit' })}</div>
             </div>
+
+            {/* Test Sound Button */}
+            <button
+              onClick={playNotification}
+              className="p-2 bg-accent-yellow/20 text-accent-yellow hover:bg-accent-yellow hover:text-primary rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              title="Перевірити звук"
+            >
+              <Bell className="w-4 h-4" />
+              <span className="hidden sm:inline">Тест звуку</span>
+            </button>
 
             {/* Download Rates Button */}
             <button
@@ -455,26 +493,17 @@ export default function OperatorDashboard({ user, onLogout }) {
                           setNoteModal(res.id);
                           setNote(res.operator_note || '');
                         }}
-                        className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-text-secondary hover:text-white transition-colors"
-                        title="Додати нотатку"
+                        className={`p-2 rounded-xl transition-colors ${res.operator_note
+                          ? 'bg-accent-yellow text-primary hover:bg-accent-yellow/90'
+                          : 'bg-white/5 text-text-secondary hover:text-white hover:bg-white/10'
+                          }`}
+                        title={res.operator_note ? "Редагувати нотатку" : "Додати нотатку"}
                       >
                         <MessageSquare className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Note */}
-                  {res.operator_note && (
-                    <div className="mt-4 pt-4 border-t border-white/10">
-                      <div className="flex items-start gap-2">
-                        <MessageSquare className="w-4 h-4 text-text-secondary mt-0.5" />
-                        <div>
-                          <div className="text-xs text-text-secondary mb-1">Нотатка оператора</div>
-                          <p className="text-sm">{res.operator_note}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {/* Time info */}
                   <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-text-secondary">

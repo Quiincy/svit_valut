@@ -129,6 +129,7 @@ class ReservationResponse(BaseModel):
     branch_id: Optional[int]
     branch_address: Optional[str]
     created_at: str
+    updated_at: Optional[str] = None
     expires_at: str
     completed_at: Optional[str] = None
     operator_note: Optional[str] = None
@@ -351,6 +352,8 @@ class ReservationRequest(BaseModel):
     phone: str
     customer_name: Optional[str] = None  # New: customer name
     branch_id: Optional[int] = None
+    get_amount: Optional[float] = None
+    rate: Optional[float] = None
 
 class ReservationResponse(BaseModel):
     id: int
@@ -365,6 +368,7 @@ class ReservationResponse(BaseModel):
     branch_id: Optional[int]
     branch_address: Optional[str]
     created_at: str
+    updated_at: Optional[str] = None
     expires_at: str
     completed_at: Optional[str] = None
     operator_note: Optional[str] = None
@@ -507,4 +511,3 @@ class ChatSession(ChatSessionBase):
 
     class Config:
         from_attributes = True
-

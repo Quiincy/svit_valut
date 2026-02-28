@@ -210,6 +210,9 @@ export default function HeroSection({
       let finalGiveCurrency = giveCurrency.code;
       let finalGetCurrency = getCurrency.code;
 
+      let finalGetAmount = 0;
+      let usedRate = 0;
+
       if (!isSellMode) {
         // User is buying foreign currency with UAH.
         // The user gives UAH, gets Foreign Currency.
@@ -219,8 +222,9 @@ export default function HeroSection({
         // Calculate the UAH amount needed USING THE SELECTED BRANCH RATE
         const foreignAmount = Number(buyInputValue.replace(/[^\d.]/g, '')) || 0;
         const branchCurr = selectedBranch ? getBranchRate(selectedBranch.id) : null;
-        const rateToUse = branchCurr ? getEffectiveRate(branchCurr, foreignAmount, 'sell') : getEffectiveRate(buyCurrency, foreignAmount, 'sell');
-        finalGiveAmount = foreignAmount * rateToUse;
+        usedRate = branchCurr ? getEffectiveRate(branchCurr, foreignAmount, 'sell') : getEffectiveRate(buyCurrency, foreignAmount, 'sell');
+        finalGiveAmount = foreignAmount * usedRate;
+        finalGetAmount = foreignAmount;
       } else {
         // User is selling foreign currency for UAH.
         // The user gives foreign currency, gets UAH.
@@ -228,6 +232,10 @@ export default function HeroSection({
         finalGiveAmount = foreignAmount;
         finalGiveCurrency = sellCurrency.code;
         finalGetCurrency = 'UAH';
+
+        const branchCurr = selectedBranch ? getBranchRate(selectedBranch.id) : null;
+        usedRate = branchCurr ? getEffectiveRate(branchCurr, foreignAmount, 'buy') : getEffectiveRate(sellCurrency, foreignAmount, 'buy');
+        finalGetAmount = foreignAmount * usedRate;
       }
 
       await onReserve({
@@ -237,6 +245,8 @@ export default function HeroSection({
         phone: '+' + phoneDigits,
         customer_name: customerName.trim(),
         branch_id: selectedBranch.id,
+        get_amount: Number(finalGetAmount.toFixed(2)),
+        rate: usedRate
       });
       // Reset form
       setPhone('');
