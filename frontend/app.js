@@ -28,16 +28,9 @@ const MIME_TYPES = {
     '.webp': 'image/webp',
 };
 
-// Known static SPA routes (no trailing slashes)
+// Known static SPA routes
 const KNOWN_STATIC_ROUTES = new Set([
-    '/',
-    '/rates',
-    '/contacts',
-    '/faq',
-    '/login',
-    '/panel',
-    '/admin',
-    '/operator',
+    '/', '/rates', '/contacts', '/faq', '/login', '/panel', '/admin', '/operator'
 ]);
 
 // Dynamic valid paths fetched from the backend (SEO URLs, currency info URLs, service URLs, etc.)
@@ -70,15 +63,16 @@ function fetchValidPaths() {
     const normalize = (p) => {
         if (!p) return null;
         try {
-            let res = decodeURIComponent(p.trim());
+            let res = decodeURIComponent(p.trim()).toLowerCase();
             if (!res.startsWith('/')) res = '/' + res;
             if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
             return res;
         } catch (e) {
-            return p.trim();
+            return p.trim().toLowerCase();
         }
     };
 
+    log('Fetching valid paths from backend...');
     Promise.allSettled([
         fetchJSON('/api/seo/'),
         fetchJSON('/api/settings'),
@@ -87,47 +81,38 @@ function fetchValidPaths() {
     ]).then(([seoResult, settingsResult, currInfoResult, servicesResult]) => {
         const paths = new Set();
 
-        // SEO paths
-        if (seoResult.status === 'fulfilled' && Array.isArray(seoResult.value)) {
-            seoResult.value.forEach(item => {
-                const p = normalize(item.url_path);
-                if (p) paths.add(p.toLowerCase());
-            });
-        }
+        const processPaths = (result) => {
+            if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+                result.value.forEach(item => {
+                    const p = normalize(item.url_path || item.link_url);
+                    if (p) paths.add(p);
+                });
+            } else if (result.status === 'fulfilled' && typeof result.value === 'object') {
+                // For settings or currency info maps
+                Object.values(result.value).forEach(val => {
+                    if (typeof val === 'string') {
+                        const p = normalize(val);
+                        if (p) paths.add(p);
+                    } else if (val && typeof val === 'object') {
+                        ['buy_url', 'sell_url'].forEach(k => {
+                            const p = normalize(val[k]);
+                            if (p) paths.add(p);
+                        });
+                    }
+                });
+            }
+        };
 
-        // Settings-based custom URLs
-        if (settingsResult.status === 'fulfilled' && settingsResult.value) {
-            const s = settingsResult.value;
-            ['contacts_url', 'faq_url', 'rates_url'].forEach(key => {
-                const p = normalize(s[key]);
-                if (p) paths.add(p.toLowerCase());
-            });
-        }
-
-        // Currency info URLs (buy/sell pages)
-        if (currInfoResult.status === 'fulfilled' && currInfoResult.value) {
-            const info = currInfoResult.value;
-            Object.values(info).forEach(ci => {
-                const pBuy = normalize(ci.buy_url);
-                const pSell = normalize(ci.sell_url);
-                if (pBuy) paths.add(pBuy.toLowerCase());
-                if (pSell) paths.add(pSell.toLowerCase());
-            });
-        }
-
-        // Service link URLs
-        if (servicesResult.status === 'fulfilled' && Array.isArray(servicesResult.value)) {
-            servicesResult.value.forEach(svc => {
-                const p = normalize(svc.link_url);
-                if (p) paths.add(p.toLowerCase());
-            });
-        }
+        processPaths(seoResult);
+        processPaths(settingsResult);
+        processPaths(currInfoResult);
+        processPaths(servicesResult);
 
         validDynamicPaths = paths;
         firstFetchDone = true;
-        console.log(`[Routes] Loaded ${paths.size} dynamic valid paths`);
+        log(`Loaded ${paths.size} dynamic paths`);
     }).catch(err => {
-        console.error('[Routes] Failed to fetch valid paths:', err.message);
+        log(`Failed to fetch paths: ${err.message}`);
     });
 }
 
@@ -149,17 +134,18 @@ function isKnownRoute(urlPath) {
         if (validDynamicPaths.has(p)) return true;
 
         // Check pattern-based currency routes: /buy-xxx, /sell-xxx
-        if (/^\/(buy|sell)-[a-zA-Z]{3,}$/i.test(p)) return true;
+        if (/^\/(buy|sell)-[a-zA-Z]{3,}$/.test(p)) return true;
 
         // Check pattern-based routes: /articles/:id, /services/:slug
-        if (/^\/articles\/[^/]+$/.test(p)) return true;
-        if (/^\/services\/[^/]+$/.test(p)) return true;
+        if (/^\/(articles|services)\/[^/]+$/.test(p)) return true;
 
         // Common Cyrillic exchange patterns (buy/sell in UKR/RUS)
-        if (p.includes('/купити-') || p.includes('/продати-') || p.includes('/купить-') || p.includes('/продать-')) return true;
+        if (p.includes('/купити-') || p.includes('/продати-') ||
+            p.includes('/купить-') || p.includes('/продать-')) return true;
 
         return false;
     } catch (e) {
+        log(`Error in isKnownRoute: ${e.message}`);
         return false;
     }
 }
@@ -175,18 +161,18 @@ const server = http.createServer((req, res) => {
             headers: { ...req.headers, host: API_HOST },
         };
 
-        const proxy = https.request(options, (proxyRes) => {
+        const proxyReq = http.request(options, (proxyRes) => {
             res.writeHead(proxyRes.statusCode, proxyRes.headers);
             proxyRes.pipe(res);
         });
 
-        proxy.on('error', (err) => {
-            console.error('Proxy Error:', err);
+        proxyReq.on('error', (err) => {
+            log(`Proxy error: ${err.message}`);
             res.writeHead(502);
             res.end('Backend unavailable');
         });
 
-        req.pipe(proxy);
+        req.pipe(proxyReq);
         return;
     }
 
@@ -205,6 +191,7 @@ const server = http.createServer((req, res) => {
 
         fs.readFile(filePath, (readErr, data) => {
             if (readErr) {
+                log(`Read error: ${filePath} - ${readErr.message}`);
                 res.writeHead(500);
                 res.end('Server Error');
                 return;
@@ -215,17 +202,24 @@ const server = http.createServer((req, res) => {
             // For SPA fallback routes, check if the route is known
             // If not, serve index.html with 404 status for proper SEO
             // We only return 404 if the FIRST fetch of valid paths from backend is completed
-            if (isSpaFallback && firstFetchDone && !isKnownRoute(urlPath)) {
-                res.writeHead(404, { 'Content-Type': mimeType });
+            if (isSpaFallback) {
+                const known = isKnownRoute(urlPath);
+                // Return 404 status only if we are SURE it's a bad route
+                // If fetching isn't done yet, we play safe and return 200
+                if (firstFetchDone && !known) {
+                    log(`404: ${urlPath}`);
+                    res.writeHead(404, { 'Content-Type': mimeType });
+                } else {
+                    res.writeHead(200, { 'Content-Type': mimeType });
+                }
             } else {
                 res.writeHead(200, { 'Content-Type': mimeType });
             }
-
             res.end(data);
         });
     });
 });
 
 server.listen(PORT, HOST, () => {
-    console.log(`Svit Valut frontend running on ${HOST}:${PORT}`);
+    log(`Frontend server running on ${HOST}:${PORT}`);
 });
