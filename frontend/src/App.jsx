@@ -85,6 +85,13 @@ function PublicLayout() {
   // Preset action from header dropdowns: { type: 'buy'|'sell', currency, timestamp }
   const [presetAction, setPresetAction] = useState(null);
 
+  // Track previous currency/mode state to detect REAL state changes
+  const prevStateRef = useRef({
+    give: giveCurrency.code,
+    get: getCurrency.code,
+    mode: (giveCurrency.code === 'UAH' && getCurrency.code !== 'UAH') ? 'buy' : 'sell'
+  });
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -285,8 +292,18 @@ function PublicLayout() {
       return;
     }
 
+
     if (targetCode && mode && currencyInfoMap[targetCode]) {
       const info = currencyInfoMap[targetCode];
+
+      // Detect if the state actually changed compared to previous render
+      const stateChanged =
+        prevStateRef.current.give !== giveCurrency.code ||
+        prevStateRef.current.get !== getCurrency.code ||
+        prevStateRef.current.mode !== mode;
+
+      // Update ref for next render
+      prevStateRef.current = { give: giveCurrency.code, get: getCurrency.code, mode };
 
       // 2. Update URL if needed
       const targetUrl = mode === 'buy' ? (info.buy_url || `buy-${targetCode.toLowerCase()}`) : (info.sell_url || `sell-${targetCode.toLowerCase()}`);
@@ -310,16 +327,17 @@ function PublicLayout() {
         const normalizedCurrent = cleanPathname;
 
         if (normalizedCurrent !== normalizedExpected) {
-          // Only redirect if this isn't the initial load or a recent navigation to this specific SEO path
-          // If pathname hasn't changed, it means the state changed, so we should sync to URL
-          if (!pathChanged) {
+          // IMPORTANT FIX: Only redirect if the STATE changed (user action)
+          // or IF the path changed AND it doesn't match the state (not the case here usually)
+          if (stateChanged && !pathChanged) {
             navigate(expectedPath, { replace: true });
           }
         }
       } else if (targetUrl && pathname !== targetUrl && pathname !== '/' + targetUrl) {
-        // ... (existing logic for non-SEO paths)
+        // For non-SEO paths (like home), redirect to formal SEO path IF state changed
         const isDefaultUSDOnRoot = pathname === '/' && mode === 'sell' && targetCode === 'USD';
-        if (!isDefaultUSDOnRoot) {
+
+        if (!isDefaultUSDOnRoot && stateChanged && !pathChanged) {
           const expectedPath = targetUrl.startsWith('/') ? targetUrl : '/' + targetUrl;
           navigate(expectedPath, { replace: true });
         }
