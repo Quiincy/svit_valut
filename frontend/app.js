@@ -100,13 +100,20 @@ function fetchValidPaths() {
         if (currInfoResult.status === 'fulfilled' && currInfoResult.value) {
             const info = currInfoResult.value;
             Object.values(info).forEach(ci => {
+                const normalize = (u) => {
+                    if (!u) return null;
+                    let res = u.trim();
+                    if (!res.startsWith('/')) res = '/' + res;
+                    if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+                    return decodeURIComponent(res);
+                };
                 if (ci.buy_url) {
-                    let p = ci.buy_url.startsWith('/') ? ci.buy_url : '/' + ci.buy_url;
-                    paths.add(decodeURIComponent(p));
+                    const p = normalize(ci.buy_url);
+                    if (p) paths.add(p);
                 }
                 if (ci.sell_url) {
-                    let p = ci.sell_url.startsWith('/') ? ci.sell_url : '/' + ci.sell_url;
-                    paths.add(decodeURIComponent(p));
+                    const p = normalize(ci.sell_url);
+                    if (p) paths.add(p);
                 }
             });
         }
@@ -115,7 +122,8 @@ function fetchValidPaths() {
         if (servicesResult.status === 'fulfilled' && Array.isArray(servicesResult.value)) {
             servicesResult.value.forEach(svc => {
                 if (svc.link_url) {
-                    let p = svc.link_url.startsWith('/') ? svc.link_url : '/' + svc.link_url;
+                    let p = svc.link_url.trim();
+                    if (!p.startsWith('/')) p = '/' + p;
                     if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
                     paths.add(decodeURIComponent(p));
                 }
@@ -134,21 +142,32 @@ fetchValidPaths();
 setInterval(fetchValidPaths, 5 * 60 * 1000);
 
 function isKnownRoute(urlPath) {
-    // Normalize: decode URI, strip trailing slash, lowercase for comparison
-    let p = decodeURIComponent(urlPath.split('?')[0].split('#')[0]);
-    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+    try {
+        // Normalize: decode URI, strip trailing slash, handle queries
+        let p = decodeURIComponent(urlPath.split('?')[0].split('#')[0]);
+        if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+        if (!p.startsWith('/')) p = '/' + p;
 
-    // Check static routes
-    if (KNOWN_STATIC_ROUTES.has(p)) return true;
+        // Check static routes
+        if (KNOWN_STATIC_ROUTES.has(p)) return true;
 
-    // Check dynamic routes (exact match)
-    if (validDynamicPaths.has(p)) return true;
+        // Check dynamic routes (exact match)
+        if (validDynamicPaths.has(p)) return true;
 
-    // Check pattern-based routes: /articles/:id, /services/:slug
-    if (/^\/articles\/[^/]+$/.test(p)) return true;
-    if (/^\/services\/[^/]+$/.test(p)) return true;
+        // Check pattern-based currency routes: /buy-xxx, /sell-xxx
+        if (/^\/(buy|sell)-[a-zA-Z]{3,}$/i.test(p)) return true;
 
-    return false;
+        // Check pattern-based routes: /articles/:id, /services/:slug
+        if (/^\/articles\/[^/]+$/.test(p)) return true;
+        if (/^\/services\/[^/]+$/.test(p)) return true;
+
+        // Check cyrillic patterns if any (though these should be in validDynamicPaths)
+        if (p.includes('/купити-') || p.includes('/продати-')) return true;
+
+        return false;
+    } catch (e) {
+        return false;
+    }
 }
 
 const server = http.createServer((req, res) => {
