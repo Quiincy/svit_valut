@@ -261,7 +261,7 @@ function PublicLayout() {
 
     // UPDATE CANONICAL & SCHEMA
     updateCanonicalTag(pathname);
-    updateSchemaMarkup({ settings, activeBranch, currencies, giveCurrency, getCurrency });
+    updateSchemaMarkup({ settings, activeBranch, branches, currencies, giveCurrency, getCurrency });
 
     let targetCode = null;
     let mode = null;

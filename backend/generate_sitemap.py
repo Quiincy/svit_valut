@@ -6,7 +6,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.core.database import SessionLocal
-from app.models.models import Currency, SeoMetadata
+from app.models.models import Currency, SeoMetadata, ServiceItem, ArticleItem
 
 BASE_DOMAIN = "https://mirvalut.com"
 SITEMAP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend/public/sitemap.xml")
@@ -17,73 +17,84 @@ def generate_sitemap():
         today = datetime.now().strftime("%Y-%m-%d")
         
         urls = []
-        
-        # 1. Static Core Pages
-        core_pages = [
-            ("", "1.0", "daily"),
-            ("/rates", "0.8", "daily"),
-            ("/services", "0.8", "daily"),
-            ("/contacts", "0.8", "daily"),
-            ("/faq", "0.8", "daily"),
-            ("/services/old-currency", "0.7", "weekly"),
-            ("/services/damaged-currency", "0.7", "weekly"),
-            ("/services/old-francs", "0.7", "weekly"),
-            ("/articles/1", "0.6", "monthly"),
-        ]
-        
-        for path, priority, freq in core_pages:
+        added_paths = set()
+
+        def add_url(path, priority="0.5", freq="weekly"):
+            if not path: return
+            
+            # Normalize path
+            # Remove domain if present in path (rare but possible)
+            path = path.replace(BASE_DOMAIN, "")
+            
+            # Trim and ensure leading slash
+            clean = path.strip()
+            if not clean.startswith('/'):
+                clean = '/' + clean
+            
+            # Remove trailing slash for consistency (except root)
+            if clean.endswith('/') and len(clean) > 1:
+                clean = clean[:-1]
+            
+            # Avoid duplicates (case-insensitive)
+            low = clean.lower()
+            if low in added_paths:
+                return
+            added_paths.add(low)
+
             urls.append(f"""  <url>
-    <loc>{BASE_DOMAIN}{path}</loc>
+    <loc>{BASE_DOMAIN}{clean}</loc>
     <lastmod>{today}</lastmod>
     <changefreq>{freq}</changefreq>
     <priority>{priority}</priority>
   </url>""")
 
-        # 2. Currency SEO Pages
+        print("🚀 Generating sitemap...")
+
+        # 1. Static Core Pages
+        add_url("/", "1.0", "daily")
+        add_url("/rates", "0.8", "daily")
+        add_url("/services", "0.8", "daily")
+        add_url("/contacts", "0.8", "daily")
+        add_url("/faq", "0.8", "daily")
+
+        # 2. Dynamic Services
+        services = db.query(ServiceItem).filter(ServiceItem.is_active == True).all()
+        for svc in services:
+            add_url(svc.link_url, "0.7", "weekly")
+
+        # 3. Dynamic Articles
+        articles = db.query(ArticleItem).filter(ArticleItem.is_published == True).all()
+        for art in articles:
+            add_url(f"/articles/{art.id}", "0.6", "monthly")
+
+        # 4. Currency SEO Pages
         currencies = db.query(Currency).filter(Currency.is_active == True).all()
         for curr in currencies:
             priority = "0.9" if curr.is_popular else "0.7"
             
             # Buy Page
-            buy_path = curr.buy_url if curr.buy_url else f"/buy-{curr.code.lower()}"
-            if not buy_path.startswith('/'): buy_path = f"/{buy_path}"
-            
-            urls.append(f"""  <url>
-    <loc>{BASE_DOMAIN}{buy_path}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>{priority}</priority>
-  </url>""")
+            buy_path = curr.buy_url or f"/buy-{curr.code.lower()}"
+            add_url(buy_path, priority, "daily")
             
             # Sell Page
-            sell_path = curr.sell_url if curr.sell_url else f"/sell-{curr.code.lower()}"
-            if not sell_path.startswith('/'): sell_path = f"/{sell_path}"
-            
-            urls.append(f"""  <url>
-    <loc>{BASE_DOMAIN}{sell_path}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>{priority}</priority>
-  </url>""")
+            sell_path = curr.sell_url or f"/sell-{curr.code.lower()}"
+            add_url(sell_path, priority, "daily")
 
-        # 3. Additional SEO Metadata Paths
+        # 5. Additional SEO Metadata Paths
         seo_paths = db.query(SeoMetadata).all()
-        existing_paths = {p[0] for p in core_pages}
-        # Add paths from seo_metadata if not already in sitemap
         for seo in seo_paths:
-            if seo.url_path not in existing_paths and seo.url_path != "/":
-                urls.append(f"""  <url>
-    <loc>{BASE_DOMAIN}{seo.url_path}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>""")
+            # Skip root as it's added first
+            if seo.url_path != "/":
+                add_url(seo.url_path, "0.6", "weekly")
 
         # Combine into XML
         xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 {"".join(urls)}
 </urlset>"""
+
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(SITEMAP_PATH), exist_ok=True)
 
         with open(SITEMAP_PATH, "w", encoding="utf-8") as f:
             f.write(xml_content)

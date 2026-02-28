@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://mirvalut.com</loc>
+    <loc>https://mirvalut.com/</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
@@ -26,17 +26,17 @@
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/services/old-currency</loc>
+    <loc>https://mirvalut.com/old-currency</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/services/damaged-currency</loc>
+    <loc>https://mirvalut.com/damaged-currency</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/services/old-francs</loc>
+    <loc>https://mirvalut.com/old-francs</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -66,32 +66,32 @@
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/buy-pln</loc>
+    <loc>https://mirvalut.com/купити-злотий</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/sell-pln</loc>
+    <loc>https://mirvalut.com/продати-злотий</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/buy-gbp</loc>
+    <loc>https://mirvalut.com/купити-фунт</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/sell-gbp</loc>
+    <loc>https://mirvalut.com/продати-фунт</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/buy-chf</loc>
+    <loc>https://mirvalut.com/купити-франк</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/sell-chf</loc>
+    <loc>https://mirvalut.com/продати-франк</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
@@ -156,12 +156,12 @@
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/buy-ils</loc>
+    <loc>https://mirvalut.com/купити-шекель</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/sell-ils</loc>
+    <loc>https://mirvalut.com/продати-шекель</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
@@ -226,12 +226,12 @@
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/buy-aed</loc>
+    <loc>https://mirvalut.com/купить-дирхам-оаэ</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/sell-aed</loc>
+    <loc>https://mirvalut.com/продать-дирхам-оаэ</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
@@ -356,44 +356,34 @@
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/buy-cad</loc>
+    <loc>https://mirvalut.com/купити-канадський-долар</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/sell-cad</loc>
+    <loc>https://mirvalut.com/продати-канадський-долар</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/buy-czk</loc>
+    <loc>https://mirvalut.com/купити-чеську-крону</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/sell-czk</loc>
+    <loc>https://mirvalut.com/продати-чеську-крону</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/buy-try</loc>
+    <loc>https://mirvalut.com/купити-ліру</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>  <url>
-    <loc>https://mirvalut.com/sell-try</loc>
+    <loc>https://mirvalut.com/продати-ліру</loc>
     <lastmod>2026-02-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
-  </url>  <url>
-    <loc>https://mirvalut.com/купити-долар</loc>
-    <lastmod>2026-02-28</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>  <url>
-    <loc>https://mirvalut.com/купити-євро</loc>
-    <lastmod>2026-02-28</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
   </url>
 </urlset>

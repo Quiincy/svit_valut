@@ -29,7 +29,7 @@ export const updateCanonicalTag = (path) => {
  * Generates and updates the JSON-LD schema in the document head.
  * @param {Object} options - Data to populate the schema
  */
-export const updateSchemaMarkup = ({ settings, activeBranch, currencies, giveCurrency, getCurrency }) => {
+export const updateSchemaMarkup = ({ settings, activeBranch, branches, currencies, giveCurrency, getCurrency }) => {
     let script = document.querySelector('script[type="application/ld+json"]#seo-schema');
     if (!script) {
         script = document.createElement('script');
@@ -39,32 +39,70 @@ export const updateSchemaMarkup = ({ settings, activeBranch, currencies, giveCur
     }
 
     const companyName = settings?.company_name || 'Світ Валют';
-    const phone = settings?.phone || '(096) 048-88-84';
+    const mainPhone = settings?.phone || '(096) 048-88-84';
+    const logoUrl = `${BASE_DOMAIN}/logo.png`;
 
-    // 1. LocalBusiness / FinancialService Schema
+    // Social links for sameAs
+    const sameAs = [];
+    if (settings?.telegram_url) sameAs.push(settings.telegram_url);
+    if (settings?.viber_url) sameAs.push(settings.viber_url);
+    if (settings?.facebook_url) sameAs.push(settings.facebook_url);
+    if (settings?.instagram_url) sameAs.push(settings.instagram_url);
+
+    // 1. Core Organization & WebSite
     const schema = {
         "@context": "https://schema.org",
         "@graph": [
             {
-                "@type": "FinancialService",
+                "@type": "Organization",
                 "@id": `${BASE_DOMAIN}/#organization`,
                 "name": companyName,
                 "url": BASE_DOMAIN,
-                "telephone": phone,
-                "address": {
-                    "@type": "PostalAddress",
-                    "streetAddress": activeBranch?.address_uk || activeBranch?.address || "м. Київ",
-                    "addressLocality": "Київ",
-                    "addressCountry": "UA"
+                "logo": {
+                    "@type": "ImageObject",
+                    "url": logoUrl
                 },
-                "openingHours": "Mo-Su 08:00-20:00",
-                "image": `${BASE_DOMAIN}/logo.png`,
-                "priceRange": "$$"
+                "telephone": mainPhone,
+                "sameAs": sameAs
+            },
+            {
+                "@type": "WebSite",
+                "@id": `${BASE_DOMAIN}/#website`,
+                "url": BASE_DOMAIN,
+                "name": companyName,
+                "publisher": { "@id": `${BASE_DOMAIN}/#organization` }
             }
         ]
     };
 
-    // 2. CurrencyExchange Service (if we have active currencies)
+    // 2. Locations (Branches)
+    const branchList = Array.isArray(branches) && branches.length > 0 ? branches : (activeBranch ? [activeBranch] : []);
+    branchList.forEach((branch, index) => {
+        schema["@graph"].push({
+            "@type": "FinancialService",
+            "@id": `${BASE_DOMAIN}/#branch-${branch.id || index}`,
+            "name": `${companyName} - Відділення №${branch.number || index + 1}`,
+            "description": `Обмін валют у Києві за адресою: ${branch.address}`,
+            "image": logoUrl,
+            "telephone": branch.phone || mainPhone,
+            "url": `${BASE_DOMAIN}/contacts`,
+            "address": {
+                "@type": "PostalAddress",
+                "streetAddress": branch.address,
+                "addressLocality": "Київ",
+                "addressCountry": "UA"
+            },
+            "geo": {
+                "@type": "GeoCoordinates",
+                "latitude": branch.lat,
+                "longitude": branch.lng
+            },
+            "openingHours": branch.hours || "Mo-Su 08:00-20:00",
+            "priceRange": "$$"
+        });
+    });
+
+    // 3. CurrencyExchange Service (Contextual based on selected currency pair)
     if (giveCurrency && getCurrency) {
         const isBuying = giveCurrency.code === 'UAH';
         const targetCurrency = isBuying ? getCurrency : giveCurrency;
@@ -75,7 +113,11 @@ export const updateSchemaMarkup = ({ settings, activeBranch, currencies, giveCur
                 "name": `Обмін ${targetCurrency.name_uk || targetCurrency.code}`,
                 "serviceType": "Currency Exchange",
                 "provider": { "@id": `${BASE_DOMAIN}/#organization` },
-                "description": `Вигідний курс ${targetCurrency.code} у Києві. Оптовий та роздрібний обмін.`
+                "description": `Вигідний курс ${targetCurrency.code} у Києві. Оптовий та роздрібний обмін.`,
+                "areaServed": {
+                    "@type": "City",
+                    "name": "Kyiv"
+                }
             });
         }
     }
