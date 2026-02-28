@@ -67,18 +67,18 @@ def generate_sitemap():
         for art in articles:
             add_url(f"/articles/{art.id}", "0.6", "monthly")
 
-        # 4. Currency SEO Pages
+        # 4. Currency SEO Pages (Only those with explicitly defined URLs)
         currencies = db.query(Currency).filter(Currency.is_active == True).all()
         for curr in currencies:
             priority = "0.9" if curr.is_popular else "0.7"
             
             # Buy Page
-            buy_path = curr.buy_url or f"/buy-{curr.code.lower()}"
-            add_url(buy_path, priority, "daily")
+            if curr.buy_url and curr.buy_url.strip():
+                add_url(curr.buy_url, priority, "daily")
             
             # Sell Page
-            sell_path = curr.sell_url or f"/sell-{curr.code.lower()}"
-            add_url(sell_path, priority, "daily")
+            if curr.sell_url and curr.sell_url.strip():
+                add_url(curr.sell_url, priority, "daily")
 
         # 5. Additional SEO Metadata Paths
         seo_paths = db.query(SeoMetadata).all()
