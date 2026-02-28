@@ -4,4 +4,4 @@ Disallow: /admin
 Disallow: /operator
 Disallow: /login
 
-Sitemap: https://svitvalut.ua/sitemap.xml
+Sitemap: https://mirvalut.com/sitemap.xml
