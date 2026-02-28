@@ -275,12 +275,16 @@ function PublicLayout() {
     }
 
     // Check if the current route is known (404)
+    const normalizePath = (u) => {
+      if (!u) return null;
+      let res = u.trim();
+      if (!res.startsWith('/')) res = '/' + res;
+      if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+      return res;
+    };
+
     const isKnownSeoPath = Object.values(currencyInfoMap).some(inf => {
-      const buyUrl = inf.buy_url ? (inf.buy_url.startsWith('/') ? inf.buy_url : '/' + inf.buy_url) : null;
-      const sellUrl = inf.sell_url ? (inf.sell_url.startsWith('/') ? inf.sell_url : '/' + inf.sell_url) : null;
-      const cleanBuy = buyUrl && buyUrl.endsWith('/') && buyUrl.length > 1 ? buyUrl.slice(0, -1) : buyUrl;
-      const cleanSell = sellUrl && sellUrl.endsWith('/') && sellUrl.length > 1 ? sellUrl.slice(0, -1) : sellUrl;
-      return cleanBuy === cleanPathname || cleanSell === cleanPathname;
+      return normalizePath(inf.buy_url) === cleanPathname || normalizePath(inf.sell_url) === cleanPathname;
     }) || !!cleanPathname.match(/^\/(buy|sell)-[a-zA-Z]{3,}$/i);
     const ratesUrl = settings?.rates_url || '/rates';
     const contactsUrl = settings?.contacts_url || '/contacts';
@@ -343,7 +347,10 @@ function PublicLayout() {
         }
       }
     } else {
-      if (pathname !== '/' && !pathname.startsWith('/services') && !pathname.startsWith('/rates') && !pathname.startsWith(ratesUrl) && !pathname.startsWith('/contacts') && !pathname.startsWith(contactsUrl) && !pathname.startsWith('/faq') && !pathname.startsWith(faqUrl)) {
+      const isOnStaticPage = pathname === '/' || pathname.startsWith('/services') || pathname.startsWith('/rates') || pathname.startsWith(ratesUrl) || pathname.startsWith('/contacts') || pathname.startsWith(contactsUrl) || pathname.startsWith('/faq') || pathname.startsWith(faqUrl) || pathname.startsWith('/admin') || pathname.startsWith('/panel') || pathname.startsWith('/operator') || pathname.startsWith('/login');
+
+      // ONLY redirect to home if it's NOT a static page AND NOT a known SEO path
+      if (!isOnStaticPage && !isKnownSeoPath) {
         navigate('/', { replace: true });
       }
     }
