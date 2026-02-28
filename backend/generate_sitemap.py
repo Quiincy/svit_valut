@@ -1,6 +1,5 @@
 import sys
 import os
-import re
 from datetime import datetime
 
 # Ensure the app directory is in the Python path
@@ -68,27 +67,18 @@ def generate_sitemap():
         for art in articles:
             add_url(f"/articles/{art.id}", "0.6", "monthly")
 
-        # 4. Currency SEO Pages (Only those with explicitly defined URLs, filtering out defaults)
+        # 4. Currency SEO Pages (Only those with explicitly defined URLs)
         currencies = db.query(Currency).filter(Currency.is_active == True).all()
         for curr in currencies:
             priority = "0.9" if curr.is_popular else "0.7"
             
             # Buy Page
             if curr.buy_url and curr.buy_url.strip():
-                # Filter out default patterns like /buy-usd, /buy-nok etc. (buy- + 3 chars)
-                path = curr.buy_url.strip().lower()
-                # Matches /buy-usd, buy-usd, /BUY-USD etc where the code part is 3 chars
-                is_default = re.match(r'^/?buy-[a-z]{3}$', path)
-                if not is_default:
-                    add_url(curr.buy_url, priority, "daily")
+                add_url(curr.buy_url, priority, "daily")
             
             # Sell Page
             if curr.sell_url and curr.sell_url.strip():
-                # Filter out default patterns like /sell-usd, /sell-nok etc. (sell- + 3 chars)
-                path = curr.sell_url.strip().lower()
-                is_default = re.match(r'^/?sell-[a-z]{3}$', path)
-                if not is_default:
-                    add_url(curr.sell_url, priority, "daily")
+                add_url(curr.sell_url, priority, "daily")
 
         # 5. Additional SEO Metadata Paths
         seo_paths = db.query(SeoMetadata).all()
