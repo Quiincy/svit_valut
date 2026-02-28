@@ -120,6 +120,8 @@ export const branchService = {
   create: (data) => api.post('/admin/branches', data),
   delete: (id) => api.delete(`/admin/branches/${id}`),
   getMyLocation: () => api.get('/my-location'),
+  getBalances: (id) => api.get(`/branches/${id}/balances`),
+  updateBalances: (id, balances) => api.put(`/branches/${id}/balances`, { balances }),
 };
 
 export const reservationService = {

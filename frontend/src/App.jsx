@@ -169,7 +169,11 @@ function PublicLayout() {
       }
 
       // 2. Handle Specific SEO URLs
-      const match = pathname.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
+      // Decode pathname for matching with human-readable URLs in DB
+      const decodedPathname = decodeURIComponent(pathname);
+      const normalizedPath = decodedPathname.endsWith('/') && decodedPathname.length > 1 ? decodedPathname.slice(0, -1) : decodedPathname;
+
+      const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
       if (match) {
         const routeMode = match[1].toLowerCase();
         const routeCode = match[2].toUpperCase();
@@ -187,12 +191,24 @@ function PublicLayout() {
       }
 
       for (const [code, info] of Object.entries(currencyInfoMap)) {
-        if (info.buy_url && (pathname === info.buy_url || pathname === '/' + info.buy_url)) {
+        // Normalize DB URLs for comparison
+        const normalize = (u) => {
+          if (!u) return null;
+          let res = u.trim();
+          if (!res.startsWith('/')) res = '/' + res;
+          if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+          return res;
+        };
+
+        const normBuy = normalize(info.buy_url);
+        const normSell = normalize(info.sell_url);
+
+        if (normBuy && normalizedPath === normBuy) {
           if (getCurrency.code === code && giveCurrency.code === 'UAH') return;
           handlePresetExchange('buy', code);
           return;
         }
-        if (info.sell_url && (pathname === info.sell_url || pathname === '/' + info.sell_url)) {
+        if (normSell && normalizedPath === normSell) {
           if (giveCurrency.code === code && getCurrency.code === 'UAH') return;
           handlePresetExchange('sell', code);
           return;
@@ -206,12 +222,16 @@ function PublicLayout() {
     if (loading || !currencies.length) return;
 
     // 1. UPDATE METADATA (Title & Description) globally based on URL
-    const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+    const decodedPathname = decodeURIComponent(pathname);
+    const cleanPathname = decodedPathname.endsWith('/') && decodedPathname.length > 1 ? decodedPathname.slice(0, -1) : decodedPathname;
     const reqPath = cleanPathname.toLowerCase();
     const activeSeo = seoList.find(s => {
       if (!s.url_path) return false;
       const dbPath = s.url_path.toLowerCase();
-      return dbPath === reqPath || dbPath === reqPath + '/';
+      // Normalize dbPath for comparison
+      const normalizedDbPath = dbPath.startsWith('/') ? dbPath : '/' + dbPath;
+      const cleanDbPath = normalizedDbPath.endsWith('/') && normalizedDbPath.length > 1 ? normalizedDbPath.slice(0, -1) : normalizedDbPath;
+      return cleanDbPath === reqPath;
     });
 
     if (activeSeo) {
@@ -247,11 +267,14 @@ function PublicLayout() {
       targetCode = giveCurrency.code;
     }
 
-    // Check if the current route is unknown (404)
-    const isKnownSeoPath = Object.values(currencyInfoMap).some(inf =>
-      (inf.buy_url && inf.buy_url === pathname.replace(/^\//, '')) ||
-      (inf.sell_url && inf.sell_url === pathname.replace(/^\//, ''))
-    ) || !!pathname.match(/^\/(buy|sell)-[a-zA-Z]{3,}$/i);
+    // Check if the current route is known (404)
+    const isKnownSeoPath = Object.values(currencyInfoMap).some(inf => {
+      const buyUrl = inf.buy_url ? (inf.buy_url.startsWith('/') ? inf.buy_url : '/' + inf.buy_url) : null;
+      const sellUrl = inf.sell_url ? (inf.sell_url.startsWith('/') ? inf.sell_url : '/' + inf.sell_url) : null;
+      const cleanBuy = buyUrl && buyUrl.endsWith('/') && buyUrl.length > 1 ? buyUrl.slice(0, -1) : buyUrl;
+      const cleanSell = sellUrl && sellUrl.endsWith('/') && sellUrl.length > 1 ? sellUrl.slice(0, -1) : sellUrl;
+      return cleanBuy === cleanPathname || cleanSell === cleanPathname;
+    }) || !!cleanPathname.match(/^\/(buy|sell)-[a-zA-Z]{3,}$/i);
     const ratesUrl = settings?.rates_url || '/rates';
     const contactsUrl = settings?.contacts_url || '/contacts';
     const faqUrl = settings?.faq_url || '/faq';
@@ -277,10 +300,24 @@ function PublicLayout() {
 
       if (isOnDedicatedPage) {
         // Don't redirect when on dedicated pages
+      } else if (isKnownSeoPath) {
+        // If we are on a valid SEO path, we trust the URL and let the URL -> State effect handle the rest.
+        // We ONLY redirect if the state has definitively changed to a DIFFERENT mode/currency 
+        // AND we are not on one of the valid URL options for that new state.
+
+        const expectedPath = targetUrl.startsWith('/') ? targetUrl : '/' + targetUrl;
+        const normalizedExpected = expectedPath.endsWith('/') && expectedPath.length > 1 ? expectedPath.slice(0, -1) : expectedPath;
+        const normalizedCurrent = cleanPathname;
+
+        if (normalizedCurrent !== normalizedExpected) {
+          // Only redirect if this isn't the initial load or a recent navigation to this specific SEO path
+          // If pathname hasn't changed, it means the state changed, so we should sync to URL
+          if (!pathChanged) {
+            navigate(expectedPath, { replace: true });
+          }
+        }
       } else if (targetUrl && pathname !== targetUrl && pathname !== '/' + targetUrl) {
-        // Redirect to the correct SEO URL for the current form state
-        // This includes if they explicitly change the form away from default on the homepage
-        // However, we want to prevent a redirect on load of '/' or when returning to '/' via logo if it defaults to USD
+        // ... (existing logic for non-SEO paths)
         const isDefaultUSDOnRoot = pathname === '/' && mode === 'sell' && targetCode === 'USD';
         if (!isDefaultUSDOnRoot) {
           const expectedPath = targetUrl.startsWith('/') ? targetUrl : '/' + targetUrl;
@@ -735,11 +772,19 @@ function PublicLayout() {
 
     // Check if current path is already the correct SEO URL for this currency/mode
     // If so, do NOT navigate to /
+    const decodedPathname = decodeURIComponent(pathname);
+    const normalizedPath = decodedPathname.endsWith('/') && decodedPathname.length > 1 ? decodedPathname.slice(0, -1) : decodedPathname;
+
     let isCorrectUrl = false;
     const info = currencyInfoMap[targetCurrency.code];
     if (info) {
-      if (type === 'buy' && pathname === info.buy_url) isCorrectUrl = true;
-      if (type === 'sell' && pathname === info.sell_url) isCorrectUrl = true;
+      const buyUrl = info.buy_url ? (info.buy_url.startsWith('/') ? info.buy_url : '/' + info.buy_url) : null;
+      const sellUrl = info.sell_url ? (info.sell_url.startsWith('/') ? info.sell_url : '/' + info.sell_url) : null;
+      const cleanBuy = buyUrl && buyUrl.endsWith('/') && buyUrl.length > 1 ? buyUrl.slice(0, -1) : buyUrl;
+      const cleanSell = sellUrl && sellUrl.endsWith('/') && sellUrl.length > 1 ? sellUrl.slice(0, -1) : sellUrl;
+
+      if (type === 'buy' && normalizedPath === cleanBuy) isCorrectUrl = true;
+      if (type === 'sell' && normalizedPath === cleanSell) isCorrectUrl = true;
     }
 
     // Ensure we are on home page (or the correct SEO page)
@@ -926,11 +971,21 @@ function HomePage() {
   // Detect current currency SEO info ONLY from URL
   const pathname = decodeURIComponent(location.pathname);
   const slug = pathname.replace(/^\//, '');
-  const urlIsSellMode = pathname.includes('/продати-') || pathname.startsWith('/sell-');
-  let pathCurrency = Object.values(currencyInfoMap || {}).find(info =>
-    (info.buy_url && (pathname === info.buy_url || pathname === '/' + info.buy_url)) ||
-    (info.sell_url && (pathname === info.sell_url || pathname === '/' + info.sell_url))
-  ) || null;
+  const normalizedPath = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+
+  const urlIsSellMode = normalizedPath.includes('/продати-') || normalizedPath.startsWith('/sell-');
+  let pathCurrency = Object.values(currencyInfoMap || {}).find(info => {
+    const normalize = (u) => {
+      if (!u) return null;
+      let res = u.trim();
+      if (!res.startsWith('/')) res = '/' + res;
+      if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+      return res;
+    };
+    const normBuy = normalize(info.buy_url);
+    const normSell = normalize(info.sell_url);
+    return (normBuy && normalizedPath === normBuy) || (normSell && normalizedPath === normSell);
+  }) || null;
 
   if (!pathCurrency) {
     const match = pathname.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);

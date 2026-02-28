@@ -511,3 +511,25 @@ class ChatSession(ChatSessionBase):
 
     class Config:
         from_attributes = True
+
+# ============== BRANCH BALANCES ==============
+class BranchBalanceBase(BaseModel):
+    currency_code: str
+    category: str
+    amount: float
+
+class BranchBalanceUpdate(BaseModel):
+    currency_code: str
+    category: str
+    amount: float
+
+class BranchBalance(BranchBalanceBase):
+    id: int
+    branch_id: int
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class BranchBalanceBatchUpdate(BaseModel):
+    balances: List[BranchBalanceUpdate]

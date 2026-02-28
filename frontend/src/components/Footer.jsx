@@ -44,14 +44,20 @@ export default function Footer({ settings }) {
 
           {/* Quick Links - Mobile */}
           <div className="space-y-4 lg:hidden">
-            <Link to="/#branches" className="block py-3 text-center border-b border-white/10 hover:text-accent-yellow transition-colors">
-              Адреси відділень
+            <Link to="/#branches" className="block py-3 text-center border-b border-white/10 hover:text-accent-yellow transition-colors font-medium">
+              Відділення
             </Link>
-            <Link to={settings?.rates_url || '/rates'} className="block py-3 text-center border-b border-white/10 hover:text-accent-yellow transition-colors">
+            <Link to={settings?.rates_url || '/rates'} className="block py-3 text-center border-b border-white/10 hover:text-accent-yellow transition-colors font-medium">
               Курс валют
             </Link>
-            <Link to="/services/damaged-currency" className="block py-3 text-center border-b border-white/10 hover:text-accent-yellow transition-colors">
-              Зношена валюта
+            <a href="/#services" className="block py-3 text-center border-b border-white/10 hover:text-accent-yellow transition-colors font-medium">
+              Послуги
+            </a>
+            <Link to={settings?.contacts_url || '/contacts'} className="block py-3 text-center border-b border-white/10 hover:text-accent-yellow transition-colors font-medium">
+              Контакти
+            </Link>
+            <Link to={settings?.faq_url || '/faq'} className="block py-3 text-center border-b border-white/10 hover:text-accent-yellow transition-colors font-medium">
+              FAQ
             </Link>
           </div>
 

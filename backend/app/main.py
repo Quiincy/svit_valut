@@ -630,13 +630,38 @@ async def get_orders_count():
         "sell": len([o for o in orders_data if o.type == "sell"])
     }
 
-@app.get("/api/branches/{branch_id}", response_model=Branch)
-async def get_branch(branch_id: int, db: Session = Depends(get_db)):
-    """Get specific branch"""
-    branch = db.query(models.Branch).filter(models.Branch.id == branch_id).first()
-    if not branch:
-        raise HTTPException(status_code=404, detail="Branch not found")
-    return branch
+@app.get("/api/branches/{branch_id}/balances", response_model=List[BranchBalance])
+async def get_branch_balances(branch_id: int, db: Session = Depends(get_db)):
+    """Get all balances for a specific branch"""
+    return db.query(models.BranchBalance).filter(models.BranchBalance.branch_id == branch_id).all()
+
+@app.put("/api/branches/{branch_id}/balances")
+async def update_branch_balances(
+    branch_id: int, 
+    request: BranchBalanceBatchUpdate, 
+    db: Session = Depends(get_db)
+):
+    """Batch update balances for a branch"""
+    for entry in request.balances:
+        db_balance = db.query(models.BranchBalance).filter(
+            models.BranchBalance.branch_id == branch_id,
+            models.BranchBalance.currency_code == entry.currency_code,
+            models.BranchBalance.category == entry.category
+        ).first()
+        
+        if db_balance:
+            db_balance.amount = entry.amount
+        else:
+            db_balance = models.BranchBalance(
+                branch_id=branch_id,
+                currency_code=entry.currency_code,
+                category=entry.category,
+                amount=entry.amount
+            )
+            db.add(db_balance)
+            
+    db.commit()
+    return {"message": "Balances updated successfully"}
 
 @app.post("/api/reservations", response_model=ReservationResponse)
 async def create_reservation(request: ReservationRequest, db: Session = Depends(get_db)):

@@ -87,6 +87,7 @@ class Branch(Base):
     
     reservations = relationship("Reservation", back_populates="branch")
     rates = relationship("BranchRate", back_populates="branch")
+    balances = relationship("BranchBalance", back_populates="branch")
 
 class User(Base):
     __tablename__ = "users"
@@ -216,3 +217,14 @@ class CrossRate(Base):
     sell_rate = Column(Float, default=0.0)
     is_active = Column(Boolean, default=True)
     order = Column(Integer, default=0)
+
+class BranchBalance(Base):
+    __tablename__ = "branch_balances"
+    id = Column(Integer, primary_key=True, index=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=False)
+    currency_code = Column(String, nullable=False)
+    category = Column(String, nullable=False) # e.g. "blue", "01-06", "average_rate"
+    amount = Column(Float, default=0.0)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    branch = relationship("Branch", back_populates="balances")

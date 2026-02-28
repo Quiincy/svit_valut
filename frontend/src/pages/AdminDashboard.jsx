@@ -6,6 +6,7 @@ import {
   MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X, Globe, Save, MessageCircle, MessageSquare, Trash2
 } from 'lucide-react';
 import BranchRateCard from '../components/admin/BranchRateCard';
+import BranchBalancesTab from '../components/admin/BranchBalancesTab';
 import SeoEditRow from '../components/admin/SeoEditRow';
 
 import { adminService, currencyService } from '../services/api';
@@ -48,6 +49,7 @@ const DEFAULT_BRANCHES = [
 
 export default function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('rates');
+  const [balancesBranchId, setBalancesBranchId] = useState(null);
   const [ratesSubTab, setRatesSubTab] = useState('base');
   const [dashboard, setDashboard] = useState(null);
   const [currencies, setCurrencies] = useState([]);
@@ -100,7 +102,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
   const fetchData = useCallback(async () => {
     try {
-      const [dashboardRes, currenciesRes, reservationsRes] = await Promise.all([
+      const [dashboardRes, currenciesRes, reservationsRes, branchesRes] = await Promise.all([
         adminService.getDashboard(),
         adminService.getCurrencies(),
         adminService.getReservations({
@@ -108,9 +110,11 @@ export default function AdminDashboard({ user, onLogout }) {
           date_from: dateFrom || undefined,
           date_to: dateTo || undefined
         }),
+        adminService.getBranches(),
       ]);
       setDashboard(dashboardRes.data);
       setCurrencies(currenciesRes.data);
+      setBranches(branchesRes.data || []);
       const items = reservationsRes.data.items || [];
 
       // Check for new or modified reservations
@@ -352,15 +356,6 @@ export default function AdminDashboard({ user, onLogout }) {
 
   // Reservation handlers
   const openResModal = async (res) => {
-    // Fetch branches if not loaded
-    if (branches.length === 0) {
-      try {
-        const branchesRes = await adminService.getBranches();
-        setBranches(branchesRes.data);
-      } catch (e) {
-        console.error('Error fetching branches:', e);
-      }
-    }
     setEditingReservation(res);
     setResForm({
       give_amount: res.give_amount,
@@ -664,8 +659,55 @@ export default function AdminDashboard({ user, onLogout }) {
             <AlertCircle className="w-4 h-4 inline mr-2" />
             Налаштування
           </button>
+          <button
+            onClick={() => setActiveTab('balances')}
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${activeTab === 'balances'
+              ? 'bg-accent-yellow text-primary'
+              : 'bg-primary-light text-text-secondary hover:text-white'
+              }`}
+          >
+            <TrendingUp className="w-4 h-4 inline mr-2" />
+            Залишки
+          </button>
 
         </div>
+
+        {activeTab === 'balances' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-primary-light p-6 rounded-2xl border border-white/10 mb-6 shadow-xl">
+              <label className="block text-sm font-medium text-text-secondary mb-3">Виберіть відділення для перегляду залишків:</label>
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <select
+                  value={balancesBranchId || ''}
+                  onChange={(e) => setBalancesBranchId(e.target.value ? parseInt(e.target.value) : null)}
+                  className="w-full sm:w-80 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-accent-yellow transition-all shadow-inner"
+                >
+                  <option value="">-- Оберіть відділення --</option>
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>{b.address}</option>
+                  ))}
+                </select>
+                {balancesBranchId && (
+                  <span className="text-xs text-accent-yellow font-medium bg-accent-yellow/10 px-3 py-1.5 rounded-full border border-accent-yellow/20">
+                    Вибрано ID: {balancesBranchId}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {balancesBranchId ? (
+              <BranchBalancesTab branchId={balancesBranchId} readOnly={true} />
+            ) : (
+              <div className="bg-primary-light rounded-3xl p-20 border border-dashed border-white/10 text-center flex flex-col items-center justify-center space-y-4">
+                <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-2">
+                  <Building2 className="w-10 h-10 text-text-secondary opacity-30" />
+                </div>
+                <h4 className="text-xl font-bold text-white/50">Відділення не вибрано</h4>
+                <p className="text-text-secondary max-w-sm">Будь ласка, оберіть відділення зі списку вище, щоб переглянути та редагувати поточні залишки валют.</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Settings Tab */}
         {activeTab === 'settings' && <SettingsPage />}

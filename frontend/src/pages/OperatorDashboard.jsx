@@ -4,7 +4,8 @@ import {
   DollarSign, TrendingUp, Phone, MapPin, MessageSquare,
   Check, X, AlertCircle, Download, Bell, Copy
 } from 'lucide-react';
-import { operatorService } from '../services/api';
+import { operatorService, branchService } from '../services/api';
+import BranchBalancesTab from '../components/admin/BranchBalancesTab';
 import { useAudioNotification } from '../hooks/useAudioNotification';
 
 const STATUS_CONFIG = {
@@ -28,6 +29,7 @@ const formatKyivTime = (isoString) => {
 };
 
 export default function OperatorDashboard({ user, onLogout }) {
+  const [activeTab, setActiveTab] = useState('reservations');
   const [dashboard, setDashboard] = useState(null);
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -301,222 +303,254 @@ export default function OperatorDashboard({ user, onLogout }) {
           </div>
         )}
 
-        {/* Filters */}
-        <div className="flex flex-col gap-4 mb-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex gap-2 flex-wrap">
-              {[
-                { value: 'pending', label: 'Очікують' },
-                { value: 'confirmed', label: 'Підтверджені' },
-                { value: 'completed', label: 'Завершені' },
-                { value: '', label: 'Всі' },
-              ].map((tab) => (
-                <button
-                  key={tab.value}
-                  onClick={() => setStatusFilter(tab.value)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all relative ${statusFilter === tab.value
-                    ? 'bg-accent-yellow text-primary'
-                    : tab.value === 'pending' && dashboard?.pending_reservations > 0
-                      ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 animate-pulse'
-                      : 'bg-primary-light text-text-secondary hover:text-white'
-                    }`}
-                >
-                  {tab.label}
-                  {tab.value === 'pending' && dashboard?.pending_reservations > 0 && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full animate-ping"></span>
-                  )}
-                </button>
-              ))}
+        {/* Main Tabs */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab('reservations')}
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${activeTab === 'reservations'
+              ? 'bg-accent-yellow text-primary'
+              : 'bg-primary-light text-text-secondary hover:text-white'
+              }`}
+          >
+            Бронювання
+          </button>
+          <button
+            onClick={() => setActiveTab('balances')}
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${activeTab === 'balances'
+              ? 'bg-accent-yellow text-primary'
+              : 'bg-primary-light text-text-secondary hover:text-white'
+              }`}
+          >
+            Залишки
+          </button>
+        </div>
+
+        {activeTab === 'reservations' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Filters */}
+            <div className="flex flex-col gap-4 mb-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { value: 'pending', label: 'Очікують' },
+                    { value: 'confirmed', label: 'Підтверджені' },
+                    { value: 'completed', label: 'Завершені' },
+                    { value: '', label: 'Всі' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.value}
+                      onClick={() => setStatusFilter(tab.value)}
+                      className={`px-4 py-2 rounded-xl text-sm font-medium transition-all relative ${statusFilter === tab.value
+                        ? 'bg-accent-yellow text-primary'
+                        : tab.value === 'pending' && dashboard?.pending_reservations > 0
+                          ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 animate-pulse'
+                          : 'bg-primary-light text-text-secondary hover:text-white'
+                        }`}
+                    >
+                      {tab.label}
+                      {tab.value === 'pending' && dashboard?.pending_reservations > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full animate-ping"></span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const today = new Date().toISOString().split('T')[0];
+                        setDateFrom(today);
+                        setDateTo(today);
+                      }}
+                      className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      Сьогодні
+                    </button>
+                    <button
+                      onClick={() => {
+                        const yesterday = new Date();
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        const yStr = yesterday.toISOString().split('T')[0];
+                        setDateFrom(yStr);
+                        setDateTo(yStr);
+                      }}
+                      className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      Вчора
+                    </button>
+                    <div className="w-px h-8 bg-white/10 mx-1"></div>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      aria-label="Початкова дата"
+                      className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
+                    />
+                    <span className="text-text-secondary">—</span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      aria-label="Кінцева дата"
+                      className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
+                    />
+                  </div>
+                  <button
+                    onClick={fetchData}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary-light rounded-xl text-text-secondary hover:text-white transition-colors"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">Оновити</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const today = new Date().toISOString().split('T')[0];
-                    setDateFrom(today);
-                    setDateTo(today);
-                  }}
-                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
-                >
-                  Сьогодні
-                </button>
-                <button
-                  onClick={() => {
-                    const yesterday = new Date();
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    const yStr = yesterday.toISOString().split('T')[0];
-                    setDateFrom(yStr);
-                    setDateTo(yStr);
-                  }}
-                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
-                >
-                  Вчора
-                </button>
-                <div className="w-px h-8 bg-white/10 mx-1"></div>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  aria-label="Початкова дата"
-                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
-                />
-                <span className="text-text-secondary">—</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  aria-label="Кінцева дата"
-                  className="px-3 py-2 bg-primary-light rounded-xl border border-white/10 text-sm focus:outline-none focus:border-accent-yellow text-white [color-scheme:dark]"
-                />
-              </div>
-              <button
-                onClick={fetchData}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-light rounded-xl text-text-secondary hover:text-white transition-colors"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Оновити</span>
-              </button>
+            {/* Reservations List */}
+            <div className="space-y-4">
+              {reservations.length === 0 ? (
+                <div className="bg-primary-light rounded-2xl p-12 border border-white/10 text-center">
+                  <Clock className="w-16 h-16 mx-auto mb-4 text-text-secondary opacity-50" />
+                  <p className="text-text-secondary">Немає бронювань</p>
+                </div>
+              ) : (
+                reservations.map((res) => {
+                  const statusCfg = STATUS_CONFIG[res.status] || STATUS_CONFIG.pending;
+                  const StatusIcon = statusCfg.icon;
+                  const isLoading = actionLoading === res.id;
+
+                  return (
+                    <div
+                      key={res.id}
+                      className={`rounded-2xl p-5 border transition-all ${res.status === 'pending'
+                        ? 'border-yellow-500/50 bg-accent-yellow/10 animate-pulse'
+                        : 'border-white/10 bg-primary-light'
+                        }`}
+                    >
+                      <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                        {/* Main Info */}
+                        <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                          {/* ID & Name & Phone */}
+                          <div>
+                            <div className="text-xs text-text-secondary mb-1">Бронювання</div>
+                            <div className="font-mono font-bold">#{res.id}</div>
+                            <div className="text-sm font-medium mt-1">{res.customer_name || '—'}</div>
+                            <div className="flex items-center gap-1 mt-1 text-sm text-text-secondary">
+                              <Phone className="w-3 h-3" />
+                              <span>••••••••••</span>
+                            </div>
+                          </div>
+
+                          {/* Amount */}
+                          <div>
+                            <div className="text-xs text-text-secondary mb-1">Сума обміну</div>
+                            <div className="font-bold text-lg">
+                              {res.give_amount.toLocaleString()} {res.give_currency}
+                            </div>
+                            <div className="text-sm text-accent-yellow">
+                              → {res.get_amount.toLocaleString()} {res.get_currency}
+                            </div>
+                          </div>
+
+                          {/* Rate */}
+                          <div>
+                            <div className="text-xs text-text-secondary mb-1">Курс</div>
+                            <div className="font-bold">{res.rate}</div>
+                            <div className="text-xs text-text-secondary">
+                              Залишилось: {getTimeLeft(res.expires_at)}
+                            </div>
+                          </div>
+
+                          {/* Status */}
+                          <div>
+                            <div className="text-xs text-text-secondary mb-1">Статус</div>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${statusCfg.color}`}>
+                              <StatusIcon className="w-4 h-4" />
+                              {statusCfg.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 lg:ml-4">
+                          {res.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => handleConfirm(res.id)}
+                                disabled={isLoading}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
+                              >
+                                <Check className="w-4 h-4" />
+                                Підтвердити
+                              </button>
+                              <button
+                                onClick={() => handleCancel(res.id)}
+                                disabled={isLoading}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-xl text-red-400 text-sm font-medium transition-colors disabled:opacity-50"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+
+                          {res.status === 'confirmed' && (
+                            <>
+                              <button
+                                onClick={() => handleComplete(res.id)}
+                                disabled={isLoading}
+                                className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                Завершити
+                              </button>
+                              <button
+                                onClick={() => handleCancel(res.id)}
+                                disabled={isLoading}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-xl text-red-400 text-sm font-medium transition-colors disabled:opacity-50"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              setNoteModal(res.id);
+                              setNote(res.operator_note || '');
+                            }}
+                            className={`p-2 rounded-xl transition-colors ${res.operator_note
+                              ? 'bg-accent-yellow text-primary hover:bg-accent-yellow/90'
+                              : 'bg-white/5 text-text-secondary hover:text-white hover:bg-white/10'
+                              }`}
+                            title={res.operator_note ? "Редагувати нотатку" : "Додати нотатку"}
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+
+                      {/* Time info */}
+                      <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-text-secondary">
+                        <span>Створено: {new Date(res.created_at).toLocaleString('uk-UA')}</span>
+                        {res.completed_at && (
+                          <span>Завершено: {new Date(res.completed_at).toLocaleString('uk-UA')}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Reservations List */}
-        <div className="space-y-4">
-          {reservations.length === 0 ? (
-            <div className="bg-primary-light rounded-2xl p-12 border border-white/10 text-center">
-              <Clock className="w-16 h-16 mx-auto mb-4 text-text-secondary opacity-50" />
-              <p className="text-text-secondary">Немає бронювань</p>
-            </div>
-          ) : (
-            reservations.map((res) => {
-              const statusCfg = STATUS_CONFIG[res.status] || STATUS_CONFIG.pending;
-              const StatusIcon = statusCfg.icon;
-              const isLoading = actionLoading === res.id;
-
-              return (
-                <div
-                  key={res.id}
-                  className={`rounded-2xl p-5 border transition-all ${res.status === 'pending'
-                    ? 'border-yellow-500/50 bg-accent-yellow/10 animate-pulse'
-                    : 'border-white/10 bg-primary-light'
-                    }`}
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                    {/* Main Info */}
-                    <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      {/* ID & Name & Phone */}
-                      <div>
-                        <div className="text-xs text-text-secondary mb-1">Бронювання</div>
-                        <div className="font-mono font-bold">#{res.id}</div>
-                        <div className="text-sm font-medium mt-1">{res.customer_name || '—'}</div>
-                        <div className="flex items-center gap-1 mt-1 text-sm text-text-secondary">
-                          <Phone className="w-3 h-3" />
-                          <span>••••••••••</span>
-                        </div>
-                      </div>
-
-                      {/* Amount */}
-                      <div>
-                        <div className="text-xs text-text-secondary mb-1">Сума обміну</div>
-                        <div className="font-bold text-lg">
-                          {res.give_amount.toLocaleString()} {res.give_currency}
-                        </div>
-                        <div className="text-sm text-accent-yellow">
-                          → {res.get_amount.toLocaleString()} {res.get_currency}
-                        </div>
-                      </div>
-
-                      {/* Rate */}
-                      <div>
-                        <div className="text-xs text-text-secondary mb-1">Курс</div>
-                        <div className="font-bold">{res.rate}</div>
-                        <div className="text-xs text-text-secondary">
-                          Залишилось: {getTimeLeft(res.expires_at)}
-                        </div>
-                      </div>
-
-                      {/* Status */}
-                      <div>
-                        <div className="text-xs text-text-secondary mb-1">Статус</div>
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${statusCfg.color}`}>
-                          <StatusIcon className="w-4 h-4" />
-                          {statusCfg.label}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 lg:ml-4">
-                      {res.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => handleConfirm(res.id)}
-                            disabled={isLoading}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
-                          >
-                            <Check className="w-4 h-4" />
-                            Підтвердити
-                          </button>
-                          <button
-                            onClick={() => handleCancel(res.id)}
-                            disabled={isLoading}
-                            className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-xl text-red-400 text-sm font-medium transition-colors disabled:opacity-50"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
-
-                      {res.status === 'confirmed' && (
-                        <>
-                          <button
-                            onClick={() => handleComplete(res.id)}
-                            disabled={isLoading}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                            Завершити
-                          </button>
-                          <button
-                            onClick={() => handleCancel(res.id)}
-                            disabled={isLoading}
-                            className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-xl text-red-400 text-sm font-medium transition-colors disabled:opacity-50"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
-
-                      <button
-                        onClick={() => {
-                          setNoteModal(res.id);
-                          setNote(res.operator_note || '');
-                        }}
-                        className={`p-2 rounded-xl transition-colors ${res.operator_note
-                          ? 'bg-accent-yellow text-primary hover:bg-accent-yellow/90'
-                          : 'bg-white/5 text-text-secondary hover:text-white hover:bg-white/10'
-                          }`}
-                        title={res.operator_note ? "Редагувати нотатку" : "Додати нотатку"}
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-
-                  {/* Time info */}
-                  <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-text-secondary">
-                    <span>Створено: {new Date(res.created_at).toLocaleString('uk-UA')}</span>
-                    {res.completed_at && (
-                      <span>Завершено: {new Date(res.completed_at).toLocaleString('uk-UA')}</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+        {activeTab === 'balances' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <BranchBalancesTab branchId={user.branch_id} readOnly={false} />
+          </div>
+        )}
       </div>
 
       {/* Note Modal */}
