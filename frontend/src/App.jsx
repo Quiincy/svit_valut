@@ -87,9 +87,9 @@ function PublicLayout() {
 
   // Track previous currency/mode state to detect REAL state changes
   const prevStateRef = useRef({
-    give: giveCurrency.code,
-    get: getCurrency.code,
-    mode: (giveCurrency.code === 'UAH' && getCurrency.code !== 'UAH') ? 'buy' : 'sell'
+    give: giveCurrency?.code,
+    get: getCurrency?.code,
+    mode: (giveCurrency?.code === 'UAH' && getCurrency?.code !== 'UAH') ? 'buy' : 'sell'
   });
 
   useEffect(() => {
@@ -988,8 +988,8 @@ function HomePage() {
 
   // Detect current currency SEO info ONLY from URL
   const pathname = decodeURIComponent(location.pathname);
-  const slug = pathname.replace(/^\//, '');
   const normalizedPath = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const slug = normalizedPath.replace(/^\//, '');
 
   const urlIsSellMode = normalizedPath.includes('/продати-') || normalizedPath.startsWith('/sell-');
   let pathCurrency = Object.values(currencyInfoMap || {}).find(info => {
