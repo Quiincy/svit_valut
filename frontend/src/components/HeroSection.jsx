@@ -164,6 +164,27 @@ export default function HeroSection({
     }
     setError('');
 
+    // --- Enforce 400,000 UAH Limit ---
+    let totalUAH = 0;
+
+    if (isSellMode) {
+      // User is SELLING foreign currency, so they GET UAH
+      // currentAmount here is the foreign amount
+      const rate = getEffectiveRate(sellCurrency, currentAmount, 'buy');
+      totalUAH = currentAmount * rate;
+    } else {
+      // User is BUYING foreign currency, so they GIVE UAH
+      // currentAmount here is already the calculated UAH amount from:
+      // currentAmount = buyVal * rate; (in the block above) or it's giveAmount
+      totalUAH = currentAmount;
+    }
+
+    if (totalUAH > 400000) {
+      setError('Вибачте, але по закону сума операції не може перевищувати 400 000 грн.');
+      return;
+    }
+
+
     // Pre-select branch: branch with best rate, then activeBranch, then first
     const { available } = getAvailableBranches();
     setSelectedBranch(available[0] || activeBranch || branches[0] || null);
@@ -439,7 +460,7 @@ export default function HeroSection({
   const heroBestBranchCurrency = heroBestBranch ? getBranchRate(heroBestBranch.id) : null;
 
   return (
-    <section className="pt-20 lg:pt-24">
+    <section className="pt-16 lg:pt-20">
       {/* Desktop Layout */}
       <div className="hidden lg:block relative overflow-hidden">
         {/* Background image on right half - Removed to show global pattern */}
@@ -447,9 +468,9 @@ export default function HeroSection({
         {/* Gradient overlay removed for transparency */}
         {/* <div className="absolute inset-0 bg-gradient-to-r from-primary via-primary/80 to-transparent"></div> */}
         <div className="relative z-10 max-w-7xl mx-auto px-8 py-16">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="grid lg:grid-cols-2 gap-16 items-start">
             {/* Left Content — Always homepage content on desktop */}
-            <div className="flex flex-col gap-8 min-h-[400px]">
+            <div className="flex flex-col gap-8 min-h-[400px] mt-8 lg:mt-12">
               {/* Hidden semantic h1 for currency SEO pages */}
               {hasCurrencyInfo && (
                 <h1
@@ -487,16 +508,13 @@ export default function HeroSection({
                   </>
                 ) : (
                   <>
-                    {chatOnline && (
-                      <>
-                        <p className="text-gray-400 mb-2 text-xl font-light">
-                          Маєте питання?
-                        </p>
-                        <p className="text-gray-300 mb-8 text-xl font-light">
-                          Напишіть нам або зателефонуйте — відповімо за кілька хвилин.
-                        </p>
-                      </>
-                    )}
+                    <p className="text-gray-400 mb-2 text-xl font-light">
+                      Маєте питання?
+                    </p>
+                    <p className="text-gray-300 mb-8 text-xl font-light">
+                      Напишіть нам або зателефонуйте — відповімо за кілька хвилин.
+                    </p>
+                    <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">НАПИШІТЬ НАМ АБО ЗАТЕЛЕФОНУЙТЕ:</p>
                   </>
                 )}
                 <div className="flex items-center gap-6">
@@ -522,22 +540,27 @@ export default function HeroSection({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 relative z-20">
                     {/* Chat Button */}
                     <button
                       onClick={onOpenChat}
-                      className="w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center text-primary hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:-translate-y-0.5"
+                      className="relative z-20 w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center text-primary hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:-translate-y-0.5"
                     >
                       <MessageSquare className="w-6 h-6" />
                     </button>
                     {/* Phone Button */}
                     {settings?.phone && (
-                      <a
-                        href={`tel:${settings.phone.replace(/[^\d+]/g, '')}`}
-                        className="px-8 py-4 bg-sky-500 rounded-full text-white font-bold text-lg hover:bg-sky-400 hover:shadow-lg hover:shadow-sky-500/20 transition-all transform hover:-translate-y-0.5"
-                      >
-                        {settings.phone}
-                      </a>
+                      <div className="relative group flex items-center justify-center">
+                        <div className="absolute inset-0 bg-[#4488FF] rounded-full animate-ping opacity-20 group-hover:opacity-40 transition-opacity duration-300"></div>
+                        <a
+                          href={`tel:${settings.phone.replace(/[^\d+]/g, '')}`}
+                          className="relative flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-[#4488FF] to-[#2668eb] shadow-lg shadow-[#4488FF]/30 rounded-full text-white font-bold text-lg hover:shadow-[#4488FF]/50 transition-all duration-300 transform hover:-translate-y-1 hover:scale-105 overflow-hidden"
+                        >
+                          <div className="absolute inset-0 -translate-x-full group-hover:animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12"></div>
+                          <Phone className="w-5 h-5 group-hover:animate-ring" />
+                          <span className="relative z-10">{settings.phone}</span>
+                        </a>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -678,16 +701,13 @@ export default function HeroSection({
                 </>
               ) : (
                 <>
-                  {chatOnline && (
-                    <>
-                      <p className="text-gray-400 text-sm mb-2">
-                        Маєте питання?
-                      </p>
-                      <p className="text-gray-500 text-sm mb-4">
-                        Напишіть нам або зателефонуйте — відповімо за кілька хвилин.
-                      </p>
-                    </>
-                  )}
+                  <p className="text-gray-400 text-sm mb-2">
+                    Маєте питання?
+                  </p>
+                  <p className="text-gray-500 text-sm mb-4">
+                    Напишіть нам або зателефонуйте — відповімо за кілька хвилин.
+                  </p>
+                  <p className="text-gray-500 text-sm mb-3 uppercase tracking-wider font-semibold">НАПИШІТЬ НАМ АБО ЗАТЕЛЕФОНУЙТЕ:</p>
                 </>
               )}
 
@@ -713,20 +733,25 @@ export default function HeroSection({
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 relative z-20">
                   <button
                     onClick={onOpenChat}
-                    className="w-10 h-10 bg-accent-yellow rounded-full flex items-center justify-center text-primary hover:shadow-lg transition-all"
+                    className="relative z-20 w-10 h-10 bg-accent-yellow rounded-full flex items-center justify-center text-primary hover:shadow-lg transition-all"
                   >
                     <MessageSquare className="w-5 h-5" />
                   </button>
                   {settings?.phone && (
-                    <a
-                      href={`tel:${settings.phone.replace(/[^\d+]/g, '')}`}
-                      className="px-5 py-2.5 bg-sky-500 rounded-full text-white font-bold text-sm hover:bg-sky-400 hover:shadow-lg transition-all"
-                    >
-                      {settings.phone}
-                    </a>
+                    <div className="relative group flex items-center justify-center">
+                      <div className="absolute inset-0 bg-[#4488FF] rounded-full animate-ping opacity-20"></div>
+                      <a
+                        href={`tel:${settings.phone.replace(/[^\d+]/g, '')}`}
+                        className="relative flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#4488FF] to-[#2668eb] rounded-full text-white font-bold text-sm shadow-lg shadow-[#4488FF]/30 hover:shadow-[#4488FF]/50 transition-all overflow-hidden"
+                      >
+                        <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12"></div>
+                        <Phone className="w-4 h-4 animate-ring" />
+                        <span className="relative z-10">{settings.phone}</span>
+                      </a>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1174,12 +1199,47 @@ function ExchangeCard({
   const showSellRow = !isCurrencyRoute || isSellMode;
   const showBuyRow = !isCurrencyRoute || !isSellMode;
 
+  // Determine alternate URL for the opposite mode
+  const activeCurrObj = isSellMode ? sellCurrency : buyCurrency;
+  let oppositeUrl = '/';
+  if (activeCurrObj) {
+    const info = currencyInfoMap[activeCurrObj.code];
+    if (info) {
+      oppositeUrl = isSellMode ? (info.buy_url || `/buy-${activeCurrObj.code.toLowerCase()}`) : (info.sell_url || `/sell-${activeCurrObj.code.toLowerCase()}`);
+      if (!oppositeUrl.startsWith('/')) oppositeUrl = '/' + oppositeUrl;
+    }
+  }
+
   return (
     <div className={`rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'bg-transparent px-4 py-6 mt-4' : 'backdrop-blur-md bg-primary-card/80 p-6 lg:p-8 max-w-xl w-full'}`}>
       <h2 className={`${isMobile ? 'text-2xl' : 'text-lg lg:text-xl'} font-bold text-center mb-1 text-white`}>Забронювати валюту</h2>
       <p className={`${isMobile ? 'text-sm' : 'text-[10px] lg:text-sm'} text-text-secondary text-center mb-6`}>
         Фіксація курсу на {reservationTime} хвилин
       </p>
+
+      {/* Mode Switcher for Currency Pages */}
+      {isCurrencyRoute && (
+        <div className="flex bg-white/5 rounded-xl p-1 mb-4 border border-white/10">
+          <Link
+            to={isSellMode ? oppositeUrl : '#'}
+            className={`flex-1 text-center py-2 rounded-lg text-sm font-bold transition-all ${!isSellMode ? 'bg-[#4488FF] text-white shadow-lg' : 'text-white/70 hover:text-white hover:bg-white/5'}`}
+            onClick={(e) => {
+              if (!isSellMode) e.preventDefault();
+            }}
+          >
+            Купити
+          </Link>
+          <Link
+            to={!isSellMode ? oppositeUrl : '#'}
+            className={`flex-1 text-center py-2 rounded-lg text-sm font-bold transition-all ${isSellMode ? 'bg-[#4488FF] text-white shadow-lg' : 'text-white/70 hover:text-white hover:bg-white/5'}`}
+            onClick={(e) => {
+              if (isSellMode) e.preventDefault();
+            }}
+          >
+            Продати
+          </Link>
+        </div>
+      )}
 
       {/* Row 1: I SELL */}
       {showSellRow && (

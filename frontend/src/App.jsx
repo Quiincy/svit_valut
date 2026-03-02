@@ -521,8 +521,8 @@ function PublicLayout() {
         const allBranchCurrencies = Array.from(currencyMap.values());
         if (allBranchCurrencies.length > 0) {
           // Remove UAH (if unwanted) but user asked for "ALL". I'll apply sort order anyway.
-          // Priority Currencies: USD, EUR, PLN, GBP, CZK
-          const PRIORITY = ['USD', 'EUR', 'PLN', 'GBP', 'CZK'];
+          // Priority Currencies: USD, EUR, PLN, GBP, CHF
+          const PRIORITY = ['USD', 'EUR', 'PLN', 'GBP', 'CHF'];
           const sorted = [...allBranchCurrencies].sort((a, b) => {
             const idxA = PRIORITY.indexOf(a.code);
             const idxB = PRIORITY.indexOf(b.code);
@@ -1118,7 +1118,8 @@ function HomePage() {
   const normalizedPath = (pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname).toLowerCase();
   const slug = normalizedPath.replace(/^\//, '');
 
-  const urlIsSellMode = normalizedPath.includes('/продати-') || normalizedPath.startsWith('/sell-') || normalizedPath.includes('/продать-') || normalizedPath.startsWith('/sell-');
+  let urlIsSellMode = false;
+
   let pathCurrency = Object.values(currencyInfoMap || {}).find(info => {
     const normalize = (u) => {
       if (!u) return null;
@@ -1136,13 +1137,22 @@ function HomePage() {
     };
     const normBuy = normalize(info.buy_url);
     const normSell = normalize(info.sell_url);
-    return (normBuy && normalizedPath === normBuy) || (normSell && normalizedPath === normSell);
+    if (normSell && normalizedPath === normSell) {
+      urlIsSellMode = true;
+      return true;
+    }
+    if (normBuy && normalizedPath === normBuy) {
+      urlIsSellMode = false;
+      return true;
+    }
+    return false;
   }) || null;
 
   let isFallbackCurrencyRoute = false;
   if (!pathCurrency) {
     const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
     if (match) {
+      urlIsSellMode = match[1].toLowerCase() === 'sell';
       const code = match[2].toUpperCase();
       if (currencyInfoMap && currencyInfoMap[code]) {
         pathCurrency = currencyInfoMap[code];
@@ -1152,6 +1162,9 @@ function HomePage() {
           isFallbackCurrencyRoute = true;
         }
       }
+    } else {
+      // Fallback for missing path currencies but matching old static pattern
+      urlIsSellMode = normalizedPath.includes('/продати-') || normalizedPath.startsWith('/sell-') || normalizedPath.includes('/продать-');
     }
   }
 
@@ -1183,8 +1196,15 @@ function HomePage() {
     return <ServicePage />;
   }
 
-  // If a slug is present but it's not a recognized currency URL, render the 404 page.
-  if (slug && !loading && !pathCurrency && !isFallbackCurrencyRoute) {
+  // White-list dedicated React Router paths so they don't get intercepted by the catch-all /:slug 404
+  const dedicatedSPA_Routes = [
+    'login', 'admin', 'operator', 'panel',
+    'rates', 'services', 'contact', 'faq', 'articles',
+    contactsPath, faqPath, ratesPath
+  ];
+
+  // If a slug is present but it's not a recognized currency URL and not a dedicated SPA route, render the 404 page.
+  if (slug && !dedicatedSPA_Routes.includes(slug) && !loading && !pathCurrency && !isFallbackCurrencyRoute) {
     return <NotFoundPage />;
   }
 

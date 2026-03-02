@@ -373,3 +373,27 @@ input:-webkit-autofill:focus {
 .hero-bg-premium::before {
   display: none;
 }
+
+/* ===== Modern Button Animations ===== */
+@keyframes shimmer {
+  0% { transform: translateX(-150%) skewX(-15deg); }
+  100% { transform: translateX(250%) skewX(-15deg); }
+}
+.animate-shimmer {
+  animation: shimmer 3s infinite;
+}
+
+@keyframes ring {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(15deg) scale(1.1); }
+  20% { transform: rotate(-10deg) scale(1.1); }
+  30% { transform: rotate(15deg) scale(1.1); }
+  40% { transform: rotate(-10deg) scale(1.1); }
+  50% { transform: rotate(0deg) scale(1); }
+}
+.animate-[ring] {
+  animation: ring 2.5s ease-in-out infinite;
+}
+.animate-ring {
+  animation: ring 2.5s ease-in-out infinite;
+}

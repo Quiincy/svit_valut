@@ -6,8 +6,8 @@ const path = require('path');
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = process.env.PORT || 3000;
 const STATIC_DIR = __dirname;
-const API_HOST = 'src.mirvalut.com';
-const API_PORT = 443;
+const API_HOST = '127.0.0.1';
+const API_PORT = 8000;
 
 const MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
