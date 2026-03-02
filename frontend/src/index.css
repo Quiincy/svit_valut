@@ -337,3 +337,39 @@ input:-webkit-autofill:focus {
   text-decoration: line-through;
   opacity: 0.6;
 }
+
+/* ===== Premium Hero Styling ===== */
+.hero-glass-card {
+  background: rgba(26, 29, 46, 0.08);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+
+  border: none;
+  box-shadow: 0 40px 100px -10px rgba(0, 0, 0, 0.7),
+    0 0 40px rgba(245, 197, 66, 0.03);
+}
+
+.hero-bg-premium {
+  background-image: url('/tg_image_689107444.png');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+@media (max-width: 1024px) {
+  .hero-bg-premium {
+    background-size: cover;
+    background-position: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-bg-premium {
+    background-size: cover;
+    background-position: center;
+  }
+}
+
+.hero-bg-premium::before {
+  display: none;
+}

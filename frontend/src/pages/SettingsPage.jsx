@@ -374,7 +374,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <h4 className="text-md font-bold mt-8 mb-4">Соціальні мережі</h4>
+          <h4 className="text-md font-bold mt-8 mb-4">Чат з менеджером (Окремий блок на сайті)</h4>
 
           <div className="grid md:grid-cols-2 gap-6">
             <div>
@@ -407,6 +407,21 @@ export default function SettingsPage() {
                 className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
               />
             </div>
+          </div>
+
+          <h4 className="text-md font-bold mt-8 mb-4">Соціальні мережі (Футер)</h4>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="footer_telegram_url" className="block text-sm text-text-secondary mb-2">Telegram (Футер)</label>
+              <input id="footer_telegram_url"
+                type="text"
+                value={settings.footer_telegram_url || ''}
+                onChange={(e) => setSettings({ ...settings, footer_telegram_url: e.target.value })}
+                placeholder="https://t.me/svitvalut_channel"
+                className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+              />
+            </div>
 
             <div>
               <label htmlFor="instagram_url_8" className="block text-sm text-text-secondary mb-2">Instagram URL</label>
@@ -414,6 +429,29 @@ export default function SettingsPage() {
                 type="text"
                 value={settings.instagram_url || ''}
                 onChange={(e) => setSettings({ ...settings, instagram_url: e.target.value })}
+                placeholder="https://instagram.com/svitvalut"
+                className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="facebook_url" className="block text-sm text-text-secondary mb-2">Facebook URL</label>
+              <input id="facebook_url"
+                type="text"
+                value={settings.facebook_url || ''}
+                onChange={(e) => setSettings({ ...settings, facebook_url: e.target.value })}
+                placeholder="https://facebook.com/svitvalut"
+                className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="tiktok_url" className="block text-sm text-text-secondary mb-2">TikTok URL</label>
+              <input id="tiktok_url"
+                type="text"
+                value={settings.tiktok_url || ''}
+                onChange={(e) => setSettings({ ...settings, tiktok_url: e.target.value })}
+                placeholder="https://tiktok.com/@svitvalut"
                 className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
               />
             </div>
@@ -471,29 +509,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <h4 className="text-md font-bold mt-8 mb-4">SEO-текст для головної сторінки</h4>
-          <div>
-            <label className="block text-sm text-text-secondary mb-2">
-              SEO-текст (відображається перед футером на головній сторінці)
-            </label>
-            <div className="seo-quill-editor bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-              <ReactQuill
-                theme="snow"
-                value={settings.homepage_seo_text || ''}
-                onChange={(val) => setSettings({ ...settings, homepage_seo_text: val })}
-                modules={{
-                  toolbar: [
-                    [{ header: [2, 3, false] }],
-                    ['bold', 'italic', 'underline'],
-                    [{ list: 'ordered' }, { list: 'bullet' }],
-                    ['link'],
-                    ['clean']
-                  ]
-                }}
-                className="text-white min-h-[200px]"
-              />
-            </div>
-          </div>
+
 
           <button
             onClick={handleSaveSettings}

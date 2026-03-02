@@ -10,7 +10,7 @@ export default function RatesPage() {
   return (
     <div className="bg-primary pb-12">
       {/* Content */}
-      <main className="max-w-4xl mx-auto px-4 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto px-4 lg:px-8 py-8 pt-24 lg:pt-32">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl lg:text-3xl font-bold">Актуальні курси валют</h1>
           <p className="text-sm text-text-secondary">
@@ -36,25 +36,30 @@ export default function RatesPage() {
           </div>
 
           {/* Rows */}
-          {currencies.filter(c => c.code !== 'UAH').map((currency, index, filtered) => (
-            <div
-              key={currency.code}
-              className={`grid grid-cols-4 px-4 lg:px-6 py-4 items-center hover:bg-white/5 transition-colors ${index !== filtered.length - 1 ? 'border-b border-white/5' : ''
-                }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{currency.flag}</span>
-                <span className="font-bold">{currency.code}</span>
-              </div>
-              <div className="text-text-secondary text-sm lg:block">{currency.name_uk}</div>
-              <div className="text-right">
-                <span className="font-bold text-lg text-green-400">{currency.buy_rate?.toFixed(2)}</span>
-              </div>
-              <div className="text-right">
-                <span className="font-bold text-lg text-red-400">{currency.sell_rate?.toFixed(2)}</span>
-              </div>
-            </div>
-          ))}
+          {currencies.filter(c => c.code !== 'UAH').map((currency, index, filtered) => {
+            // Determine link URL (prefer sell_url, fallback to buy_url or auto-generated)
+            const linkUrl = currency.sell_url || currency.buy_url || `/buy-${currency.code.toLowerCase()}`;
+            return (
+              <Link
+                to={linkUrl}
+                key={currency.code}
+                className={`grid grid-cols-4 px-4 lg:px-6 py-4 items-center hover:bg-white/5 transition-colors cursor-pointer group ${index !== filtered.length - 1 ? 'border-b border-white/5' : ''
+                  }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{currency.flag}</span>
+                  <span className="font-bold group-hover:text-accent-yellow transition-colors">{currency.code}</span>
+                </div>
+                <div className="text-text-secondary text-sm lg:block">{currency.name_uk}</div>
+                <div className="text-right">
+                  <span className="font-bold text-lg text-green-400">{currency.buy_rate?.toFixed(2)}</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-bold text-lg text-red-400">{currency.sell_rate?.toFixed(2)}</span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
 
         {/* Cross Rates */}

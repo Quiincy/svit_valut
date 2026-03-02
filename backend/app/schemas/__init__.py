@@ -55,6 +55,8 @@ class SiteSettingsBase(BaseModel):
     whatsapp_url: Optional[str] = "https://wa.me/380960488884"
     instagram_url: Optional[str] = None
     facebook_url: Optional[str] = None
+    tiktok_url: Optional[str] = None
+    footer_telegram_url: Optional[str] = None
     address: str = "м. Київ"
     min_wholesale_amount: int = 1000
     reservation_time_minutes: int = 60
@@ -155,6 +157,9 @@ class Currency(BaseModel):
     wholesale_buy_rate: float = 0.0
     wholesale_sell_rate: float = 0.0
     wholesale_threshold: int = 1000
+    wholesale2_buy_rate: float = 0.0
+    wholesale2_sell_rate: float = 0.0
+    wholesale2_threshold: int = 5000
     is_popular: bool = False
     is_active: bool = True
     
@@ -205,6 +210,9 @@ class CurrencyUpdate(BaseModel):
     seo_sell_text: Optional[str] = None
     seo_sell_image: Optional[str] = None
     wholesale_threshold: Optional[int] = None
+    wholesale2_buy_rate: Optional[float] = None
+    wholesale2_sell_rate: Optional[float] = None
+    wholesale2_threshold: Optional[int] = None
 
 class BranchRate(BaseModel):
     branch_id: int
@@ -214,6 +222,10 @@ class BranchRate(BaseModel):
     sell_rate: float
     wholesale_buy_rate: float = 0.0
     wholesale_sell_rate: float = 0.0
+    wholesale_threshold: int = 1000
+    wholesale2_buy_rate: float = 0.0
+    wholesale2_sell_rate: float = 0.0
+    wholesale2_threshold: int = 5000
 
 class BranchRateUpdate(BaseModel):
     buy_rate: Optional[float] = None
@@ -221,6 +233,9 @@ class BranchRateUpdate(BaseModel):
     wholesale_buy_rate: Optional[float] = None
     wholesale_sell_rate: Optional[float] = None
     wholesale_threshold: Optional[int] = None
+    wholesale2_buy_rate: Optional[float] = None
+    wholesale2_sell_rate: Optional[float] = None
+    wholesale2_threshold: Optional[int] = None
     is_active: Optional[bool] = None
 
 class CrossRate(BaseModel):
@@ -387,6 +402,9 @@ class Currency(BaseModel):
     wholesale_buy_rate: float = 0.0
     wholesale_sell_rate: float = 0.0
     wholesale_threshold: int = 1000
+    wholesale2_buy_rate: float = 0.0
+    wholesale2_sell_rate: float = 0.0
+    wholesale2_threshold: int = 5000
     is_popular: bool = False
     is_active: bool = True  # New: ability to enable/disable currency
     
@@ -464,6 +482,10 @@ class BranchRate(BaseModel):
     sell_rate: float
     wholesale_buy_rate: float = 0.0
     wholesale_sell_rate: float = 0.0
+    wholesale_threshold: int = 1000
+    wholesale2_buy_rate: float = 0.0
+    wholesale2_sell_rate: float = 0.0
+    wholesale2_threshold: int = 5000
 
 class CrossRate(BaseModel):
     pair: str  # e.g., "EUR/USD"

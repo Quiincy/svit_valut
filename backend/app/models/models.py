@@ -31,6 +31,8 @@ class SiteSettings(Base):
     whatsapp_url = Column(String, nullable=True)
     facebook_url = Column(String, nullable=True)
     instagram_url = Column(String, nullable=True)
+    tiktok_url = Column(String, nullable=True)
+    footer_telegram_url = Column(String, nullable=True)
     min_wholesale_amount = Column(Integer, default=1000)
     reservation_time_minutes = Column(Integer, default=60)
     google_maps_embed = Column(String, nullable=True)
@@ -128,6 +130,11 @@ class BranchRate(Base):
     wholesale_buy_rate = Column(Float, default=0.0)
     wholesale_sell_rate = Column(Float, default=0.0)
     wholesale_threshold = Column(Integer, default=1000)
+    
+    wholesale2_buy_rate = Column(Float, default=0.0)
+    wholesale2_sell_rate = Column(Float, default=0.0)
+    wholesale2_threshold = Column(Integer, default=5000)
+    
     is_active = Column(Boolean, default=True)
     
 
@@ -143,6 +150,10 @@ class Currency(Base):
     sell_rate = Column(Float, default=0.0)
     wholesale_buy_rate = Column(Float, default=0.0)
     wholesale_sell_rate = Column(Float, default=0.0)
+    wholesale_threshold = Column(Integer, default=1000)
+    wholesale2_buy_rate = Column(Float, default=0.0)
+    wholesale2_sell_rate = Column(Float, default=0.0)
+    wholesale2_threshold = Column(Integer, default=5000)
     is_active = Column(Boolean, default=True)
     is_popular = Column(Boolean, default=False)
     flag = Column(String, default="🏳️")

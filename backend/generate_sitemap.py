@@ -32,14 +32,14 @@ def generate_sitemap():
             if not clean.startswith('/'):
                 clean = '/' + clean
             
-            # Remove trailing slash for consistency (except root)
-            if clean.endswith('/') and len(clean) > 1:
-                clean = clean[:-1]
+            # FORCE trailing slash for all non-root paths
+            if not clean.endswith('/') and len(clean) > 1:
+                clean = clean + '/'
             
-            # Global Filter: Remove default patterns like /buy-usd, /sell-eur, /buy-nok etc.
+            # Global Filter: Remove default patterns like /buy-usd/, /sell-eur/, /buy-nok/ etc.
             # Only blocks patterns where the code is exactly 3 letters (ISO standard codes)
             low_path = clean.lower()
-            if re.match(r'^/(buy|sell)-[a-z]{3}$', low_path):
+            if re.match(r'^/(buy|sell)-[a-z]{3}/$', low_path):
                 # print(f"🚫 Filtering default pattern: {clean}")
                 return
             
@@ -60,10 +60,10 @@ def generate_sitemap():
 
         # 1. Static Core Pages
         add_url("/", "1.0", "daily")
-        add_url("/rates", "0.8", "daily")
-        add_url("/services", "0.8", "daily")
-        add_url("/contacts", "0.8", "daily")
-        add_url("/faq", "0.8", "daily")
+        add_url("/rates/", "0.8", "daily")
+        add_url("/services/", "0.8", "daily")
+        add_url("/contact/", "0.8", "daily")
+        add_url("/faq/", "0.8", "daily")
 
         # 2. Dynamic Services
         services = db.query(ServiceItem).filter(ServiceItem.is_active == True).all()

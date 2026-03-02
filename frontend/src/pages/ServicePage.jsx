@@ -22,20 +22,46 @@ export default function ServicePage() {
   }
 
   return (
-    <div className="bg-primary pb-12 pt-24">
-      {/* Content */}
-      <main className="max-w-4xl mx-auto px-4 lg:px-8 py-8">
-        {service.image_url && (
+    <div className="bg-primary pb-12 pt-20 lg:pt-24">
+      {/* Hero Image - Full width on mobile, constrained on desktop */}
+      {service.image_url && (
+        <div className="w-full lg:max-w-6xl lg:mx-auto lg:px-8 mb-6 lg:mb-10">
           <img
             src={getStaticUrl(service.image_url)}
             alt={service.title}
-            className="w-full h-64 lg:h-96 object-cover rounded-2xl mb-8"
+            className="w-full h-[250px] sm:h-[350px] lg:h-[450px] object-cover lg:rounded-3xl shadow-xl"
           />
-        )}
+        </div>
+      )}
 
-        <h1 className="text-3xl lg:text-4xl font-bold mb-4">{service.title}</h1>
+      <main className="max-w-4xl mx-auto px-4 lg:px-8 bg-primary">
+
+        <h1 className="text-3xl lg:text-5xl font-bold mb-6 text-white leading-tight">
+          {service.title}
+        </h1>
+
+        {/* Manager Contact Banner - Prominent in first screen */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 mb-8 bg-primary-light/50 border border-white/10 rounded-2xl gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-accent-yellow/20 flex items-center justify-center shrink-0">
+              <span className="text-accent-yellow font-bold text-xl">М</span>
+            </div>
+            <div>
+              <p className="text-white font-bold text-lg">Зв'язок з менеджером</p>
+              <p className="text-[#d1d1d1] text-sm">Швидка консультація та замовлення</p>
+            </div>
+          </div>
+          <a
+            href={`tel:${settings?.phone?.replace(/[^\d+]/g, '')}`}
+            className="flex items-center justify-center gap-2 px-6 py-3 w-full sm:w-auto bg-accent-yellow rounded-xl text-primary font-bold hover:bg-yellow-400 transition-colors"
+          >
+            <Phone className="w-5 h-5" />
+            {settings?.phone || '(096) 048-88-84'}
+          </a>
+        </div>
+
         <div
-          className="text-lg text-text-secondary mb-8 prose prose-invert max-w-none"
+          className="text-lg mb-8 prose prose-invert max-w-none prose-p:text-[#d1d1d1] prose-li:text-[#d1d1d1] prose-strong:text-white"
           dangerouslySetInnerHTML={{ __html: service.description }}
         />
 

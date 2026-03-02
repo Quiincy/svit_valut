@@ -1,8 +1,14 @@
 
 export default function ChatSection({ settings }) {
-    const telegramUrl = settings?.telegram_url || 'https://t.me/svitvalut';
-    const viberUrl = settings?.viber_url || 'viber://chat?number=+380960488884';
-    const whatsappUrl = settings?.whatsapp_url || 'https://wa.me/380960488884';
+    // If settings are not loaded yet, or the URLs are explicitly cleared, they will be falsy.
+    const telegramUrl = settings?.telegram_url;
+    const viberUrl = settings?.viber_url;
+    const whatsappUrl = settings?.whatsapp_url;
+
+    // If all are disabled, we hide the section or just hide the buttons.
+    const hasAnyContact = telegramUrl || viberUrl || whatsappUrl;
+
+    if (!hasAnyContact) return null;
 
     return (
         <section className="py-16 lg:py-24 px-4 bg-[#0a0e14]">
@@ -16,37 +22,43 @@ export default function ChatSection({ settings }) {
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 lg:gap-6">
                     {/* Telegram Button */}
-                    <a
-                        href={telegramUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-3 w-full sm:w-auto px-8 lg:px-12 py-5 bg-accent-yellow rounded-2xl text-primary font-bold text-lg hover:shadow-[0_0_20px_rgba(245,213,71,0.3)] transition-all active:scale-95 group"
-                    >
-                        <TelegramIcon className="w-6 h-6" />
-                        <span className="leading-none">Telegram</span>
-                    </a>
+                    {telegramUrl && (
+                        <a
+                            href={telegramUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-3 w-full sm:w-auto px-8 lg:px-12 py-5 bg-accent-yellow rounded-2xl text-primary font-bold text-lg hover:shadow-[0_0_20px_rgba(245,213,71,0.3)] transition-all active:scale-95 group"
+                        >
+                            <TelegramIcon className="w-6 h-6" />
+                            <span className="leading-none">Telegram</span>
+                        </a>
+                    )}
 
                     {/* Viber Button */}
-                    <a
-                        href={viberUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-3 w-full sm:w-auto px-8 lg:px-12 py-5 border-2 border-accent-yellow/50 rounded-2xl text-accent-yellow font-bold text-lg hover:bg-accent-yellow/5 transition-all active:scale-95"
-                    >
-                        <ViberIcon className="w-6 h-6" />
-                        <span className="leading-none">Viber</span>
-                    </a>
+                    {viberUrl && (
+                        <a
+                            href={viberUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-3 w-full sm:w-auto px-8 lg:px-12 py-5 border-2 border-accent-yellow/50 rounded-2xl text-accent-yellow font-bold text-lg hover:bg-accent-yellow/5 transition-all active:scale-95"
+                        >
+                            <ViberIcon className="w-6 h-6" />
+                            <span className="leading-none">Viber</span>
+                        </a>
+                    )}
 
                     {/* WhatsApp Button */}
-                    <a
-                        href={whatsappUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-3 w-full sm:w-auto px-8 lg:px-12 py-5 border-2 border-accent-yellow/50 rounded-2xl text-accent-yellow font-bold text-lg hover:bg-accent-yellow/5 transition-all active:scale-95"
-                    >
-                        <WhatsAppIcon className="w-6 h-6" />
-                        <span className="leading-none">WhatsApp</span>
-                    </a>
+                    {whatsappUrl && (
+                        <a
+                            href={whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-3 w-full sm:w-auto px-8 lg:px-12 py-5 border-2 border-accent-yellow/50 rounded-2xl text-accent-yellow font-bold text-lg hover:bg-accent-yellow/5 transition-all active:scale-95"
+                        >
+                            <WhatsAppIcon className="w-6 h-6" />
+                            <span className="leading-none">WhatsApp</span>
+                        </a>
+                    )}
                 </div>
             </div>
         </section>

@@ -98,9 +98,9 @@ export default function Footer({ settings }) {
             <div>
               <h4 className="font-semibold mb-4">Слідкуйте за нами</h4>
               <div className="flex gap-3">
-                {settings?.telegram_url && (
+                {settings?.footer_telegram_url && (
                   <a
-                    href={settings.telegram_url}
+                    href={settings.footer_telegram_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-10 h-10 bg-[#0088cc] rounded-lg flex items-center justify-center hover:opacity-80 transition-opacity"
@@ -129,6 +129,18 @@ export default function Footer({ settings }) {
                     aria-label="Facebook">
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                    </svg>
+                  </a>
+                )}
+                {settings?.tiktok_url && (
+                  <a
+                    href={settings.tiktok_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 bg-black rounded-lg flex items-center justify-center hover:opacity-80 transition-opacity border border-white/20"
+                    aria-label="TikTok">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12.525.02c1.31-.02 2.61-.014 3.91-.014.195 1.492 1.053 2.768 2.228 3.518.01.298.02.596.03.896-.867-.09-1.725-.26-2.545-.596-.01 1.722.02 3.447-.02 5.168-.14 3.435-2.072 6.44-5.26 7.62-3.14 1.15-6.67.43-9.15-1.77-2.48-2.22-3.53-5.64-2.73-8.81.76-3.03 3.19-5.46 6.27-6.04 1.5-.28 3.03-.23 4.5-.02v2.89c-2.41-.33-4.94 1.14-5.61 3.51-.62 2.2 1.36 4.37 3.5 4.14 1.59-.16 2.87-1.4 3.03-3.01.07-1.09.04-2.18.04-3.26V.03h1.31z" />
                     </svg>
                   </a>
                 )}

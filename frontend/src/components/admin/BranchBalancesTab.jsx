@@ -20,7 +20,10 @@ export default function BranchBalancesTab({ branchId, readOnly = false }) {
     const [message, setMessage] = useState(null);
 
     const fetchData = useCallback(async () => {
-        if (!branchId) return;
+        if (!branchId) {
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const [balancesRes, ratesRes] = await Promise.all([

@@ -16,11 +16,20 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
     const initialWholesaleSell = isOverride ? (branchData.wholesale_sell || 0) : currency.wholesale_sell_rate;
     const initialThreshold = isOverride ? (branchData.wholesale_threshold || 1000) : (currency.wholesale_threshold || 1000);
 
+    const initialWholesale2Buy = isOverride ? (branchData.wholesale2_buy || 0) : (currency.wholesale2_buy_rate || 0);
+    const initialWholesale2Sell = isOverride ? (branchData.wholesale2_sell || 0) : (currency.wholesale2_sell_rate || 0);
+    const initialThreshold2 = isOverride ? (branchData.wholesale2_threshold || 5000) : (currency.wholesale2_threshold || 5000);
+
     const [buy, setBuy] = useState(initialBuy || 0);
     const [sell, setSell] = useState(initialSell || 0);
     const [wholesaleBuy, setWholesaleBuy] = useState(initialWholesaleBuy || 0);
     const [wholesaleSell, setWholesaleSell] = useState(initialWholesaleSell || 0);
     const [threshold, setThreshold] = useState(initialThreshold || 1000);
+
+    const [wholesale2Buy, setWholesale2Buy] = useState(initialWholesale2Buy || 0);
+    const [wholesale2Sell, setWholesale2Sell] = useState(initialWholesale2Sell || 0);
+    const [threshold2, setThreshold2] = useState(initialThreshold2 || 5000);
+
     const [saving, setSaving] = useState(false);
 
     // Update local state if props change (e.g. refresh from backend)
@@ -30,13 +39,18 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
         setWholesaleBuy(initialWholesaleBuy || 0);
         setWholesaleSell(initialWholesaleSell || 0);
         setThreshold(initialThreshold || 1000);
-    }, [initialBuy, initialSell, initialWholesaleBuy, initialWholesaleSell, initialThreshold]);
+        setWholesale2Buy(initialWholesale2Buy || 0);
+        setWholesale2Sell(initialWholesale2Sell || 0);
+        setThreshold2(initialThreshold2 || 5000);
+    }, [initialBuy, initialSell, initialWholesaleBuy, initialWholesaleSell, initialThreshold, initialWholesale2Buy, initialWholesale2Sell, initialThreshold2]);
 
     const handleBlur = async () => {
         // Determine if values changed
         if (buy === initialBuy && sell === initialSell &&
             wholesaleBuy === initialWholesaleBuy && wholesaleSell === initialWholesaleSell &&
-            threshold == initialThreshold) return;
+            threshold == initialThreshold &&
+            wholesale2Buy === initialWholesale2Buy && wholesale2Sell === initialWholesale2Sell &&
+            threshold2 == initialThreshold2) return;
 
         setSaving(true);
         try {
@@ -46,6 +60,9 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                 wholesale_buy_rate: parseFloat(wholesaleBuy),
                 wholesale_sell_rate: parseFloat(wholesaleSell),
                 wholesale_threshold: parseInt(threshold) || 1000,
+                wholesale2_buy_rate: parseFloat(wholesale2Buy),
+                wholesale2_sell_rate: parseFloat(wholesale2Sell),
+                wholesale2_threshold: parseInt(threshold2) || 5000,
                 is_active: isActive // Keep current active status
             });
         } catch (err) {
@@ -167,6 +184,59 @@ const BranchRateCard = ({ branchId, currency, branchData, onUpdate, onToggle }) 
                         placeholder="1000"
                     />
                 </div>
+
+                {/* Wholesale 2 Rates */}
+                {['USD', 'EUR'].includes(currency.code) && (
+                    <>
+                        <div className="flex gap-2 text-xs pt-2 border-t border-white/5 mt-2">
+                            <div className="flex-1">
+                                <label className="text-[9px] text-orange-400/80 block mb-0.5">Опт 2</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={wholesale2Buy}
+                                    onChange={(e) => setWholesale2Buy(e.target.value)}
+                                    aria-label="Опт 2 купівля"
+                                    onBlur={handleBlur}
+                                    onKeyDown={handleKeyDown}
+                                    disabled={isActive === false}
+                                    className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-orange-400 focus:outline-none focus:border-orange-400/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
+                                    placeholder="Опт2 Куп"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-[9px] text-text-secondary block mb-0.5">&nbsp;</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={wholesale2Sell}
+                                    onChange={(e) => setWholesale2Sell(e.target.value)}
+                                    aria-label="Опт 2 продаж"
+                                    onBlur={handleBlur}
+                                    onKeyDown={handleKeyDown}
+                                    disabled={isActive === false}
+                                    className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-orange-400 focus:outline-none focus:border-orange-400/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
+                                    placeholder="Опт2 Прод"
+                                />
+                            </div>
+                        </div>
+                        {/* Wholesale 2 Threshold */}
+                        <div className="text-xs pb-1">
+                            <label className="text-[9px] text-orange-400/70 block mb-0.5">Поріг опту 2</label>
+                            <input
+                                type="number"
+                                value={threshold2}
+                                onChange={(e) => setThreshold2(e.target.value)}
+                                aria-label="Поріг опту 2"
+                                onBlur={handleBlur}
+                                onKeyDown={handleKeyDown}
+                                disabled={isActive === false}
+                                className={`w-full bg-black/20 border border-white/10 rounded px-1 py-1 text-white/70 focus:outline-none focus:border-orange-400/50 ${saving ? 'opacity-50' : ''} ${isActive === false ? 'cursor-not-allowed' : ''}`}
+                                placeholder="5000"
+                            />
+                        </div>
+                    </>
+                )}
             </div>
 
             {saving && <div className="text-[9px] text-accent-yellow mt-1 text-right">Зберігаю...</div>}

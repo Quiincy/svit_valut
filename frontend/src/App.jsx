@@ -67,20 +67,24 @@ function PublicLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [offlineModalOpen, setOfflineModalOpen] = useState(false);
+  const lastProcessedPathname = useRef(null);
 
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
   const [currencyModalType, setCurrencyModalType] = useState('give');
   const [successModalOpen, setSuccessModalOpen] = useState(false);
 
   const [giveAmount, setGiveAmount] = useState(100);
-  const [giveCurrency, setGiveCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 42.10 });
+  const [giveCurrency, setGiveCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 1, sell_rate: 1 });
   const [getCurrency, setGetCurrency] = useState({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦' });
   const [getAmount, setGetAmount] = useState(0);
   const [activeBranch, setActiveBranch] = useState(null);
 
+  // Track if user has interacted with form (prevents geo branch override)
+  const isUserInteracted = useRef(false);
+
   // Independent Selection States
-  const [sellCurrency, setSellCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 42.10 });
-  const [buyCurrency, setBuyCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 42.10 });
+  const [sellCurrency, setSellCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 1, sell_rate: 1 });
+  const [buyCurrency, setBuyCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 1, sell_rate: 1 });
 
   // Preset action from header dropdowns: { type: 'buy'|'sell', currency, timestamp }
   const [presetAction, setPresetAction] = useState(null);
@@ -110,10 +114,13 @@ function PublicLayout() {
 
   // IP-based Geo Auto-Selection (Avoids browser prompt)
   useEffect(() => {
-    // Only run if branches are loaded and we haven't selected a branch yet
-    if (branches.length > 0 && !activeBranch && !loading) {
+    // Only run if branches are loaded, no branch selected, and user hasn't interacted yet
+    if (branches.length > 0 && !activeBranch && !loading && !isUserInteracted.current) {
       branchService.getMyLocation()
         .then(response => {
+          // Double-check user hasn't interacted while request was in flight
+          if (isUserInteracted.current) return;
+
           const { lat, lng } = response.data;
           let nearest = null;
           let minDistance = Infinity;
@@ -169,15 +176,25 @@ function PublicLayout() {
 
   // Handle SEO URL routing (URL -> State)
   useEffect(() => {
+    const decodedPathname = decodeURIComponent(pathname);
+    if (decodedPathname !== '/' && !decodedPathname.endsWith('/')) {
+      console.log('Redirecting to slashed version:', decodedPathname + '/');
+      navigate(decodedPathname + '/', { replace: true });
+      return;
+    }
+
     if (!loading && Object.keys(currencyInfoMap).length > 0) {
+      if (lastProcessedPathname.current === pathname) {
+        return;
+      }
+
       // 1. Root Path - Do not force reset anymore to allow manual currency selection
       if (pathname === '/') {
+        lastProcessedPathname.current = pathname;
         return;
       }
 
       // 2. Handle Specific SEO URLs
-      // Decode pathname for matching with human-readable URLs in DB
-      const decodedPathname = decodeURIComponent(pathname);
       const normalizedPath = decodedPathname.endsWith('/') && decodedPathname.length > 1 ? decodedPathname.slice(0, -1) : decodedPathname;
 
       const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
@@ -186,6 +203,7 @@ function PublicLayout() {
         const routeCode = match[2].toUpperCase();
 
         if (currencyInfoMap[routeCode]) {
+          lastProcessedPathname.current = pathname;
           if (routeMode === 'buy') {
             if (getCurrency.code === routeCode && giveCurrency.code === 'UAH') return;
             handlePresetExchange('buy', routeCode);
@@ -211,16 +229,21 @@ function PublicLayout() {
         const normSell = normalize(info.sell_url);
 
         if (normBuy && normalizedPath === normBuy) {
+          lastProcessedPathname.current = pathname;
           if (getCurrency.code === code && giveCurrency.code === 'UAH') return;
           handlePresetExchange('buy', code);
           return;
         }
         if (normSell && normalizedPath === normSell) {
+          lastProcessedPathname.current = pathname;
           if (giveCurrency.code === code && getCurrency.code === 'UAH') return;
           handlePresetExchange('sell', code);
           return;
         }
       }
+
+      // If we got here and didn't match any currency path, just record it
+      lastProcessedPathname.current = pathname;
     }
   }, [pathname, loading, currencyInfoMap, giveCurrency, getCurrency, currencies]);
 
@@ -230,15 +253,14 @@ function PublicLayout() {
 
     // 1. UPDATE METADATA (Title & Description) globally based on URL
     const decodedPathname = decodeURIComponent(pathname);
-    const cleanPathname = (decodedPathname.endsWith('/') && decodedPathname.length > 1 ? decodedPathname.slice(0, -1) : decodedPathname).toLowerCase();
-    const reqPath = cleanPathname.toLowerCase();
+    const reqPath = decodedPathname.toLowerCase();
+
     const activeSeo = seoList.find(s => {
       if (!s.url_path) return false;
-      const dbPath = s.url_path.toLowerCase();
-      // Normalize dbPath for comparison
-      const normalizedDbPath = dbPath.startsWith('/') ? dbPath : '/' + dbPath;
-      const cleanDbPath = normalizedDbPath.endsWith('/') && normalizedDbPath.length > 1 ? normalizedDbPath.slice(0, -1) : normalizedDbPath;
-      return cleanDbPath === reqPath;
+      let dbPath = s.url_path.toLowerCase();
+      if (!dbPath.startsWith('/')) dbPath = '/' + dbPath;
+      if (!dbPath.endsWith('/') && dbPath.length > 1) dbPath = dbPath + '/';
+      return dbPath === reqPath;
     });
 
     if (activeSeo) {
@@ -293,12 +315,14 @@ function PublicLayout() {
     // cleanPathname is already defined and normalized above
 
     const isKnownSeoPath = Object.values(currencyInfoMap).some(inf => {
-      return normalizePath(inf.buy_url) === cleanPathname || normalizePath(inf.sell_url) === cleanPathname;
-    }) || !!cleanPathname.match(/^\/(buy|sell)-[a-zA-Z]{3,}$/i);
+      const bUrl = inf.buy_url ? (inf.buy_url.endsWith('/') ? inf.buy_url : inf.buy_url + '/') : null;
+      const sUrl = inf.sell_url ? (inf.sell_url.endsWith('/') ? inf.sell_url : inf.sell_url + '/') : null;
+      return normalizePath(bUrl) === decodedPathname || normalizePath(sUrl) === decodedPathname;
+    }) || !!decodedPathname.match(/^\/(buy|sell)-[a-zA-Z]{3,}\/$/i);
     const ratesUrl = settings?.rates_url || '/rates';
-    const contactsUrl = settings?.contacts_url || '/contacts';
-    const faqUrl = settings?.faq_url || '/faq';
-    const isKnownPage = pathname === '/' || pathname.startsWith('/services') || pathname.startsWith(ratesUrl) || pathname.startsWith('/rates') || pathname.startsWith(contactsUrl) || pathname.startsWith('/contacts') || pathname.startsWith(faqUrl) || pathname.startsWith('/faq') || pathname.startsWith('/admin') || pathname.startsWith('/panel') || pathname.startsWith('/operator') || pathname.startsWith('/login');
+    const contactsUrl = settings?.contacts_url || '/contact/';
+    const faqUrl = settings?.faq_url || '/faq/';
+    const isKnownPage = pathname === '/' || pathname.startsWith('/services') || pathname.startsWith(ratesUrl) || pathname.startsWith('/rates') || pathname.startsWith(contactsUrl) || pathname.startsWith('/contact') || pathname.startsWith(faqUrl) || pathname.startsWith('/faq') || pathname.startsWith('/admin') || pathname.startsWith('/panel') || pathname.startsWith('/operator') || pathname.startsWith('/login');
 
     if (!isKnownPage && !isKnownSeoPath) {
       // It's a 404 path, let React Router handle it without syncing/redirecting
@@ -322,7 +346,7 @@ function PublicLayout() {
       const targetUrl = mode === 'buy' ? (info.buy_url || `buy-${targetCode.toLowerCase()}`) : (info.sell_url || `sell-${targetCode.toLowerCase()}`);
 
       // Prevent automatic redirect from homepage to the default currency SEO URL (Sell USD) ON MOUNT ONLY
-      const isOnDedicatedPage = pathname.startsWith(contactsUrl) || pathname.startsWith('/contacts') || pathname.startsWith(faqUrl) || pathname.startsWith('/faq') || pathname.startsWith('/services') || pathname.startsWith('/rates') || pathname.startsWith(ratesUrl);
+      const isOnDedicatedPage = pathname.startsWith(contactsUrl) || pathname.startsWith('/contact') || pathname.startsWith(faqUrl) || pathname.startsWith('/faq') || pathname.startsWith('/services') || pathname.startsWith('/rates') || pathname.startsWith(ratesUrl);
 
       // Check if path just changed (navigation event)
       const pathChanged = pathname !== prevPathRef.current;
@@ -366,8 +390,9 @@ function PublicLayout() {
   }, [giveCurrency, getCurrency, loading, currencyInfoMap, pathname, navigate, currencies, seoList]);
 
   useEffect(() => {
+    if (loading) return; // Don't calculate until all data is loaded
     calculateExchange();
-  }, [giveAmount, giveCurrency, getCurrency, crossRates]);
+  }, [giveAmount, giveCurrency, getCurrency, crossRates, loading]);
 
   const fetchData = async () => {
     try {
@@ -511,11 +536,63 @@ function PublicLayout() {
           setCurrencies(allBranchCurrencies); // Keep main currencies list raw? Or sorted? User said HEADER dropdowns.
           // Set header currencies to the unique list from all branches (user request)
           setHeaderCurrencies(sorted);
-          const usdOrFirst = allBranchCurrencies.find(c => c.code === 'USD') || allBranchCurrencies[0];
-          setGiveCurrency(usdOrFirst);
-          setGetCurrency(uah);
-          setSellCurrency(usdOrFirst);
-          setBuyCurrency(usdOrFirst);
+          // Determine initial currency based on URL OR fallback to USD
+          let initialCode = 'USD';
+          let initialMode = 'sell'; // default mode
+
+          const decodedPath = decodeURIComponent(pathname);
+          const normalizedPath = (decodedPath.endsWith('/') && decodedPath.length > 1 ? decodedPath.slice(0, -1) : decodedPath).toLowerCase();
+
+          // Check standard patterns (/sell-usd, /buy-eur)
+          const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
+          if (match) {
+            initialMode = match[1].toLowerCase();
+            initialCode = match[2].toUpperCase();
+          } else {
+            // Check SEO map with robust normalization
+            const normalize = (u) => {
+              if (!u) return null;
+              try {
+                let res = decodeURIComponent(u.trim());
+                if (!res.startsWith('/')) res = '/' + res;
+                if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+                return res.toLowerCase();
+              } catch (e) {
+                let res = u.trim();
+                if (!res.startsWith('/')) res = '/' + res;
+                if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+                return res.toLowerCase();
+              }
+            };
+
+            for (const [code, info] of Object.entries(currInfoRes.data || {})) {
+              const normBuy = normalize(info.buy_url);
+              const normSell = normalize(info.sell_url);
+
+              if (normBuy && normalizedPath === normBuy) {
+                initialCode = code;
+                initialMode = 'buy';
+                break;
+              }
+              if (normSell && normalizedPath === normSell) {
+                initialCode = code;
+                initialMode = 'sell';
+                break;
+              }
+            }
+          }
+
+          const targetCurrency = allBranchCurrencies.find(c => c.code === initialCode) || allBranchCurrencies.find(c => c.code === 'USD') || allBranchCurrencies[0];
+
+          if (initialMode === 'buy') {
+            setGiveCurrency(uah);
+            setGetCurrency(targetCurrency);
+          } else {
+            setGiveCurrency(targetCurrency);
+            setGetCurrency(uah);
+          }
+          setSellCurrency(targetCurrency);
+          setBuyCurrency(targetCurrency);
           currenciesResolved = true;
         }
       }
@@ -524,11 +601,30 @@ function PublicLayout() {
       if (!currenciesResolved) {
         setCurrencies(finalCurrencies);
         if (finalCurrencies.length > 0) {
-          const defaultCurrency = finalCurrencies.find(c => c.code === 'USD') || finalCurrencies[0];
-          setGiveCurrency(defaultCurrency);
-          setGetCurrency(uah);
-          setSellCurrency(defaultCurrency);
-          setBuyCurrency(defaultCurrency);
+          // Same logic: try to grab from URL
+          let initialCode = 'USD';
+          let initialMode = 'sell';
+
+          const decodedPath = decodeURIComponent(pathname);
+          const normalizedPath = decodedPath.endsWith('/') && decodedPath.length > 1 ? decodedPath.slice(0, -1) : decodedPath;
+
+          const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})/i);
+          if (match) {
+            initialMode = match[1].toLowerCase();
+            initialCode = match[2].toUpperCase();
+          }
+
+          const targetCurrency = finalCurrencies.find(c => c.code === initialCode) || finalCurrencies.find(c => c.code === 'USD') || finalCurrencies[0];
+
+          if (initialMode === 'buy') {
+            setGiveCurrency(uah);
+            setGetCurrency(targetCurrency);
+          } else {
+            setGiveCurrency(targetCurrency);
+            setGetCurrency(uah);
+          }
+          setSellCurrency(targetCurrency);
+          setBuyCurrency(targetCurrency);
         }
       }
     } catch (error) {
@@ -543,14 +639,15 @@ function PublicLayout() {
     if (giveCurrency.code === 'UAH') {
       // User BUYS Foreign Currency (gives UAH)
       // We SELL to user.
-      const threshold = getCurrency.wholesale_threshold || settings?.min_wholesale_amount || 1000;
+      const threshold = getCurrency.wholesale_threshold || 0;
+      const isWholesaleEnabled = threshold > 0;
       let rate = getCurrency.sell_rate || 0;
 
       // Calculate tentative amount
-      let amount = giveAmount / rate;
+      let amount = rate > 0 ? giveAmount / rate : 0;
 
       // Check threshold (Amount is in Foreign)
-      if (amount >= threshold && getCurrency.wholesale_sell_rate > 0) {
+      if (isWholesaleEnabled && amount >= threshold && getCurrency.wholesale_sell_rate > 0) {
         rate = getCurrency.wholesale_sell_rate;
         amount = giveAmount / rate;
       }
@@ -560,11 +657,12 @@ function PublicLayout() {
     } else if (getCurrency.code === 'UAH') {
       // User SELLS Foreign Currency (gets UAH)
       // We BUY from user.
-      const threshold = giveCurrency.wholesale_threshold || settings?.min_wholesale_amount || 1000;
+      const threshold = giveCurrency.wholesale_threshold || 0;
+      const isWholesaleEnabled = threshold > 0;
       let rate = giveCurrency.buy_rate || 0;
 
       // Check threshold (Amount is in Foreign - giveAmount)
-      if (giveAmount >= threshold && giveCurrency.wholesale_buy_rate > 0) {
+      if (isWholesaleEnabled && giveAmount >= threshold && giveCurrency.wholesale_buy_rate > 0) {
         rate = giveCurrency.wholesale_buy_rate;
       }
 
@@ -741,21 +839,12 @@ function PublicLayout() {
       setCurrencies(mergedCurrencies);
 
       if (mergedCurrencies.length > 0) {
-        // Preserve current selection, finding the new object in the merged list
-        const newSell = mergedCurrencies.find(c => c.code === sellCurrency.code) || mergedCurrencies[0];
-        const newBuy = mergedCurrencies.find(c => c.code === buyCurrency.code) || mergedCurrencies[0];
+        // Use functional state updates to prevent stale closures (e.g., from geo location overriding URL state)
+        setSellCurrency(prev => mergedCurrencies.find(c => c.code === prev?.code) || mergedCurrencies.find(c => c.code === 'USD') || mergedCurrencies[0]);
+        setBuyCurrency(prev => mergedCurrencies.find(c => c.code === prev?.code) || mergedCurrencies.find(c => c.code === 'USD') || mergedCurrencies[0]);
 
-        setSellCurrency(newSell);
-        setBuyCurrency(newBuy);
-
-        if (giveCurrency.code !== 'UAH') {
-          const newGive = mergedCurrencies.find(c => c.code === giveCurrency.code) || mergedCurrencies[0];
-          setGiveCurrency(newGive);
-        }
-        if (getCurrency.code !== 'UAH') {
-          const newGet = mergedCurrencies.find(c => c.code === getCurrency.code) || mergedCurrencies[0];
-          setGetCurrency(newGet);
-        }
+        setGiveCurrency(prev => prev?.code !== 'UAH' ? (mergedCurrencies.find(c => c.code === prev.code) || mergedCurrencies.find(c => c.code === 'USD') || mergedCurrencies[0]) : prev);
+        setGetCurrency(prev => prev?.code !== 'UAH' ? (mergedCurrencies.find(c => c.code === prev.code) || mergedCurrencies.find(c => c.code === 'USD') || mergedCurrencies[0]) : prev);
       }
     } catch (error) {
       console.error('Error fetching branch rates:', error);
@@ -795,12 +884,13 @@ function PublicLayout() {
     if (type === 'buy') {
       setGiveCurrency(uah);
       setGetCurrency(targetCurrency);
-      setBuyCurrency(targetCurrency);
     } else {
       setGiveCurrency(targetCurrency);
       setGetCurrency(uah);
-      setSellCurrency(targetCurrency);
     }
+
+    setBuyCurrency(targetCurrency);
+    setSellCurrency(targetCurrency);
 
     setPresetAction({ type, currency: targetCurrency, timestamp: Date.now() });
 
@@ -868,7 +958,8 @@ function PublicLayout() {
     buyCurrency, setBuyCurrency,
     presetAction,
     onOpenChat: handleOpenChatAction,
-    loading
+    loading,
+    isUserInteracted
   };
 
   return (
@@ -953,17 +1044,36 @@ function PublicLayout() {
         const totalMinutes = kyivTime.getHours() * 60 + kyivTime.getMinutes();
         const fabOnline = totalMinutes >= 480 && totalMinutes <= 1200;
         return (
-          <button
-            onClick={handleOpenChatAction}
-            aria-label="Відкрити чат"
-            className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
-          >
-            <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            {/* Status dot */}
-            <span className={`absolute top-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-primary ${fabOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
-          </button>
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3">
+            {/* Phone Button (Mobile Only) */}
+            <a
+              href="tel:0989998888"
+              className="md:hidden flex items-center gap-3 bg-[#4488FF] text-white rounded-full py-2 px-4 shadow-lg hover:bg-blue-600 transition-colors"
+            >
+              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+              </div>
+              <div className="flex flex-col pr-1">
+                <span className="text-sm font-bold leading-tight">098 999 88 88</span>
+                <span className="text-[10px] text-white/80 leading-tight">Щодня з 8:00 до 20:00</span>
+              </div>
+            </a>
+
+            {/* Chat Button */}
+            <button
+              onClick={handleOpenChatAction}
+              aria-label="Відкрити чат"
+              className="w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform relative shrink-0"
+            >
+              <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              {/* Status dot */}
+              <span className={`absolute top-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-primary ${fabOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+            </button>
+          </div>
         );
       })()}
 
@@ -999,7 +1109,8 @@ function HomePage() {
     seoList,
     services,
     faqItems,
-    loading
+    loading,
+    isUserInteracted
   } = useOutletContext();
 
   // Detect current currency SEO info ONLY from URL
@@ -1028,28 +1139,36 @@ function HomePage() {
     return (normBuy && normalizedPath === normBuy) || (normSell && normalizedPath === normSell);
   }) || null;
 
+  let isFallbackCurrencyRoute = false;
   if (!pathCurrency) {
-    const match = pathname.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
-    if (match && currencyInfoMap) {
+    const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
+    if (match) {
       const code = match[2].toUpperCase();
-      pathCurrency = currencyInfoMap[code] || null;
+      if (currencyInfoMap && currencyInfoMap[code]) {
+        pathCurrency = currencyInfoMap[code];
+      } else {
+        // Allow fallback rendering if the currency code simply exists in active branches
+        if (currencies?.some(c => c.code === code)) {
+          isFallbackCurrencyRoute = true;
+        }
+      }
     }
   }
 
   // Dynamic route resolution for custom contacts URL and service link URLs
-  const contactsPath = (settings?.contacts_url || '/contacts').replace(/^\//, '');
+  const contactsPath = (settings?.contacts_url || '/contact/').replace(/^\//, '').replace(/\/$/, '');
   if (slug && slug === contactsPath) {
     return <ContactsPage />;
   }
 
   // Check if slug matches custom FAQ URL
-  const faqPath = (settings?.faq_url || '/faq').replace(/^\//, '');
+  const faqPath = (settings?.faq_url || '/faq/').replace(/^\//, '').replace(/\/$/, '');
   if (slug && slug === faqPath) {
     return <FAQPage />;
   }
 
   // Check if slug matches custom Rates URL
-  const ratesPath = (settings?.rates_url || '/rates').replace(/^\//, '');
+  const ratesPath = (settings?.rates_url || '/rates/').replace(/^\//, '').replace(/\/$/, '');
   if (slug && slug === ratesPath) {
     return <RatesPage />;
   }
@@ -1065,7 +1184,7 @@ function HomePage() {
   }
 
   // If a slug is present but it's not a recognized currency URL, render the 404 page.
-  if (slug && !loading && !pathCurrency) {
+  if (slug && !loading && !pathCurrency && !isFallbackCurrencyRoute) {
     return <NotFoundPage />;
   }
 
@@ -1122,6 +1241,7 @@ function HomePage() {
         activeCurrencyInfo={activeCurrencyInfo}
         activeSeo={activeSeo}
         ratesUpdated={ratesUpdated}
+        isUserInteracted={isUserInteracted}
       />
       <FeaturesSection settings={settings} />
 
@@ -1250,7 +1370,7 @@ function App() {
             <Route index element={<HomePage />} />
             <Route path="rates" element={<RatesPage />} />
             <Route path="services/:slug" element={<ServicePage />} />
-            <Route path="contacts" element={<ContactsPage />} />
+            <Route path="contact" element={<ContactsPage />} />
             <Route path="faq" element={<FAQPage />} />
             <Route path="articles/:id" element={<FAQPage />} />
             <Route path=":slug" element={<HomePage />} />

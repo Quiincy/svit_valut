@@ -188,12 +188,12 @@ export default function BranchesSection({ branches = [], settings }) {
   };
 
   const handleCall = (branch) => {
-    const phone = branch.phone || settings?.phone || '(096) 048-88-84';
-    window.location.href = `tel:${phone.replace(/[^\d+]/g, '')}`;
+    if (!branch.phone) return;
+    window.location.href = `tel:${branch.phone.replace(/[^\d+]/g, '')}`;
   };
 
   const handleChat = (branch) => {
-    const telegramUrl = settings?.telegram_url || 'https://t.me/svitvalut';
+    const telegramUrl = branch.telegram_chat || settings?.telegram_url || 'https://t.me/svitvalut';
     window.open(telegramUrl, '_blank');
   };
 
@@ -282,7 +282,7 @@ export default function BranchesSection({ branches = [], settings }) {
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Map */}
-          <div id="branches-map" className="rounded-2xl overflow-hidden border border-white/10 h-[300px] lg:h-[500px] relative z-0">
+          <div id="branches-map" className="rounded-2xl overflow-hidden border border-white/10 h-[300px] lg:h-full lg:min-h-[400px] relative z-0">
             <BranchesMap
               branches={mapBranches}
               center={mapCenter}
@@ -410,10 +410,12 @@ export default function BranchesSection({ branches = [], settings }) {
 
                   {expandedBranch === branch.id && (
                     <div className="px-4 pb-4 pt-0 border-t border-white/10 mt-0">
-                      <div className="flex items-center gap-2 py-2 text-sm">
-                        <Phone className="w-4 h-4 text-text-secondary" />
-                        <span>{branch.phone || settings?.phone || '(096) 048-88-84'}</span>
-                      </div>
+                      {branch.phone && (
+                        <div className="flex items-center gap-2 py-2 text-sm">
+                          <Phone className="w-4 h-4 text-text-secondary" />
+                          <span>{branch.phone}</span>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-2 mt-3">
                         <button

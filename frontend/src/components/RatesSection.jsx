@@ -37,23 +37,27 @@ export default function RatesSection({ currencies, crossRates = {}, updatedAt, s
                 <div className="text-right">Продаж</div>
               </div>
 
-              {topCurrencies.map((currency) => (
-                <div
-                  key={currency.code}
-                  className="grid grid-cols-3 px-4 lg:px-6 py-4 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl lg:text-2xl">{currency.flag}</span>
-                    <span className="font-semibold">{currency.code} - UAH</span>
-                  </div>
-                  <div className="text-right font-semibold text-lg text-green-400">
-                    {currency.buy_rate?.toFixed(2)}
-                  </div>
-                  <div className="text-right font-semibold text-lg text-red-400">
-                    {currency.sell_rate?.toFixed(2)}
-                  </div>
-                </div>
-              ))}
+              {topCurrencies.map((currency) => {
+                const linkUrl = currency.sell_url || currency.buy_url || `/buy-${currency.code.toLowerCase()}`;
+                return (
+                  <Link
+                    to={linkUrl}
+                    key={currency.code}
+                    className="grid grid-cols-3 px-4 lg:px-6 py-4 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl lg:text-2xl">{currency.flag}</span>
+                      <span className="font-semibold group-hover:text-accent-yellow transition-colors">{currency.code} - UAH</span>
+                    </div>
+                    <div className="text-right font-semibold text-lg text-green-400">
+                      {currency.buy_rate?.toFixed(2)}
+                    </div>
+                    <div className="text-right font-semibold text-lg text-red-400">
+                      {currency.sell_rate?.toFixed(2)}
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
 

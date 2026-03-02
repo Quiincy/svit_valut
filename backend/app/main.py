@@ -57,6 +57,15 @@ app.add_middleware(
 os.makedirs("static/uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Prevent caching of API responses
+@app.middleware("http")
+async def add_no_cache_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
 # Global settings storage
 # These are now mostly for API documentation (Pydantic models)
 class SiteSettings(SiteSettingsBase):
@@ -155,7 +164,7 @@ currencies_data = [
     Currency(code="HUF", name="Hungarian Forint", name_uk="Форинт", flag="🇭🇺", buy_rate=0.11, sell_rate=0.12, is_popular=False),
     Currency(code="ILS", name="Israeli New Shekel", name_uk="Новий ізраїльський шекель", flag="🇮🇱", buy_rate=11.20, sell_rate=11.50, is_popular=False),
     Currency(code="KZT", name="Kazakhstani Tenge", name_uk="Теньге", flag="🇰🇿", buy_rate=0.09, sell_rate=0.10, is_popular=False),
-    Currency(code="MLD", name="Moldovan Leu (Alt)", name_uk="Молдовський лей", flag="🇲🇩", buy_rate=2.30, sell_rate=2.40, is_popular=False), # Duplicate as requested
+    Currency(code="JOD", name="Jordanian Dinar", name_uk="Йорданський динар", flag="🇯🇴", buy_rate=53.00, sell_rate=54.50, is_popular=False),
     Currency(code="RON", name="Romanian Leu", name_uk="Румунський лей", flag="🇷🇴", buy_rate=9.00, sell_rate=9.20, is_popular=False),
     Currency(code="SAR", name="Saudi Riyal", name_uk="Саудівський ріал", flag="🇸🇦", buy_rate=11.00, sell_rate=11.30, is_popular=False),
     Currency(code="SGD", name="Singapore Dollar", name_uk="Сінгапурський долар", flag="🇸🇬", buy_rate=30.50, sell_rate=31.00, is_popular=False),
@@ -371,12 +380,18 @@ async def get_currencies(branch_id: int = 1, db: Session = Depends(get_db)):
             w_buy = 0.0
             w_sell = 0.0
             w_threshold = base.wholesale_threshold
+            w2_buy = 0.0
+            w2_sell = 0.0
+            w2_threshold = base.wholesale2_threshold
         else:
             buy = ov.buy_rate if (ov and ov.buy_rate > 0) else base.buy_rate
             sell = ov.sell_rate if (ov and ov.sell_rate > 0) else base.sell_rate
             w_buy = ov.wholesale_buy_rate if (ov and ov.wholesale_buy_rate > 0) else base.wholesale_buy_rate
             w_sell = ov.wholesale_sell_rate if (ov and ov.wholesale_sell_rate > 0) else base.wholesale_sell_rate
             w_threshold = ov.wholesale_threshold if (ov and ov.wholesale_threshold and ov.wholesale_threshold != 1000) else base.wholesale_threshold
+            w2_buy = ov.wholesale2_buy_rate if (ov and ov.wholesale2_buy_rate > 0) else base.wholesale2_buy_rate
+            w2_sell = ov.wholesale2_sell_rate if (ov and ov.wholesale2_sell_rate > 0) else base.wholesale2_sell_rate
+            w2_threshold = ov.wholesale2_threshold if (ov and ov.wholesale2_threshold) else base.wholesale2_threshold
 
         result.append(Currency(
             code=base.code,
@@ -388,6 +403,9 @@ async def get_currencies(branch_id: int = 1, db: Session = Depends(get_db)):
             wholesale_buy_rate=w_buy,
             wholesale_sell_rate=w_sell,
             wholesale_threshold=w_threshold,
+            wholesale2_buy_rate=w2_buy,
+            wholesale2_sell_rate=w2_sell,
+            wholesale2_threshold=w2_threshold,
             is_popular=base.is_popular,
             is_active=is_active,
             buy_url=base.buy_url,
@@ -431,13 +449,12 @@ async def get_currency(code: str, db: Session = Depends(get_db)):
         flag=CURRENCY_FLAGS.get(r.currency_code, "🏳️"),
         buy_rate=r.buy_rate,
         sell_rate=r.sell_rate,
-        wholesale_buy_rate=r.buy_rate, # Warning: This is getting BranchRate not Currency base! BranchRate doesn't have threshold!
-        wholesale_sell_rate=r.sell_rate, # Wait, r is BranchRate.
-        # We need to fetch Currency base for threshold.
-        # But get_currency uses r.currency_code.
-        # Let's check get_currency implementation.
-        # It queries BranchRate.
-        # We need to query Currency to get threshold.
+        wholesale_buy_rate=r.wholesale_buy_rate,
+        wholesale_sell_rate=r.wholesale_sell_rate,
+        wholesale_threshold=r.wholesale_threshold,
+        wholesale2_buy_rate=r.wholesale2_buy_rate,
+        wholesale2_sell_rate=r.wholesale2_sell_rate,
+        wholesale2_threshold=r.wholesale2_threshold,
         is_popular=r.currency_code in POPULAR_CURRENCIES
     )
 
@@ -486,7 +503,10 @@ async def get_branch_rates(branch_id: int, db: Session = Depends(get_db)):
             sell_rate=rate.sell_rate,
             wholesale_buy_rate=rate.wholesale_buy_rate,
             wholesale_sell_rate=rate.wholesale_sell_rate,
-            wholesale_threshold=curr.wholesale_threshold,
+            wholesale_threshold=rate.wholesale_threshold if rate.wholesale_threshold else curr.wholesale_threshold,
+            wholesale2_buy_rate=rate.wholesale2_buy_rate,
+            wholesale2_sell_rate=rate.wholesale2_sell_rate,
+            wholesale2_threshold=rate.wholesale2_threshold if rate.wholesale2_threshold else curr.wholesale2_threshold,
             is_popular=curr.is_popular,
             is_active=curr.is_active,
             buy_url=curr.buy_url,
@@ -983,6 +1003,7 @@ async def upload_rates(
                     print(f"DEBUG BRANCH DETECT: row_addresses={row_addresses.tolist()}")
                     print(f"DEBUG BRANCH DETECT: row_headers={row_headers.tolist()}")
                     
+                    current_branch = None
                     for i in range(2, len(row_numbers)):
                         addr_val = str(row_addresses[i]).strip()
                         number_val = str(row_numbers[i]).strip()
@@ -1044,7 +1065,63 @@ async def upload_rates(
                             if branch:
                                 current_branch = branch
                                 print(f"DEBUG BRANCH: current_branch set to id={branch.id}, addr='{branch.address}'")
+                        
+                        # Map EVERY column (including those without an address) to its branch
+                        if current_branch:
+                            h_val = str(row_headers[i]).lower()
+                            rate_type = None
+                            if 'опт' in h_val:
+                                if 'куп' in h_val: rate_type = 'wholesale_buy'
+                                elif 'прод' in h_val: rate_type = 'wholesale_sell'
+                            else:
+                                if 'куп' in h_val: rate_type = 'buy'
+                                elif 'прод' in h_val: rate_type = 'sell'
                                 
+                            if rate_type:
+                                branch_col_definitions[i] = {'branch_id': current_branch.id, 'type': rate_type}
+                                print(f"DEBUG BRANCH: Mapped Col {i} ({rate_type}) to branch id={current_branch.id}")
+                                
+            elif header_row == 1:
+                # 2-Row format (could be Numbers or Addresses in header_row - 1)
+                row_identifiers = df_preview.iloc[0].astype(str).values
+                row_headers = df_preview.iloc[1].astype(str).values
+                order_counter = 1
+                current_branch = None
+                
+                for i in range(2, len(row_identifiers)):
+                    val = str(row_identifiers[i]).strip()
+                    if val and val.lower() != 'nan' and 'unnamed' not in val.lower():
+                        import re
+                        match = re.search(r'(\d+)', val)
+                        bid = int(match.group(1)) if match else None
+                        
+                        b = None
+                        if bid:
+                            b = db.query(models.Branch).filter(models.Branch.number == bid).first()
+                        if not b:
+                            b = db.query(models.Branch).filter(models.Branch.address == val).first()
+                        
+                        if not b:
+                            b = models.Branch(
+                                address=val if not bid or len(val) > 5 else f"Відділення {bid}",
+                                number=bid or (db.query(models.Branch).count() + 1),
+                                order=order_counter,
+                                is_open=True,
+                                hours="щодня: 8:00-20:00",
+                                lat=50.4501,
+                                lng=30.5234
+                            )
+                            db.add(b)
+                            db.commit()
+                            db.refresh(b)
+                            
+                        current_branch = b
+                        if b.order != order_counter:
+                            b.order = order_counter
+                            db.add(b)
+                            db.commit()
+                        order_counter += 1
+                        
                     if current_branch:
                         h_val = str(row_headers[i]).lower()
                         rate_type = None
@@ -1057,45 +1134,6 @@ async def upload_rates(
                             
                         if rate_type:
                             branch_col_definitions[i] = {'branch_id': current_branch.id, 'type': rate_type}
-                            print(f"DEBUG BRANCH: Mapped Col {i} ({rate_type}) to branch id={current_branch.id}")
-                                
-            elif header_row == 1:
-                # 2-Row old format (Numbers in header_row - 1)
-                row_numbers = df_preview.iloc[0].astype(str).values
-                order_counter = 1
-                for i in range(2, len(row_numbers)):
-                    val = str(row_numbers[i])
-                    if any(marker in val for marker in ['ID:', '№', 'Nr', 'No']) or (val.strip().isdigit()):
-                        try:
-                            import re
-                            match = re.search(r'(\d+)', val)
-                            if match:
-                                bid = int(match.group(1))
-                                b = db.query(models.Branch).filter(models.Branch.id == bid).first()
-                                if not b:
-                                    b = db.query(models.Branch).filter(models.Branch.number == bid).first()
-                                if not b:
-                                    b = models.Branch(
-                                        address=f"Відділення {bid}",
-                                        number=bid,
-                                        order=order_counter,
-                                        is_open=True,
-                                        hours="щодня: 8:00-20:00",
-                                        lat=50.4501,
-                                        lng=30.5234
-                                    )
-                                    db.add(b)
-                                    db.commit()
-                                    db.refresh(b)
-                                    
-                                branch_col_map[i] = b.id
-                                if b.order != order_counter:
-                                    b.order = order_counter
-                                    db.add(b)
-                                    db.commit()
-                                order_counter += 1
-                        except Exception as e:
-                            print(f"DEBUG: 2-Row Branch Logic error: {e}")
 
         # Read actual data
         df_base = pd.read_excel(xlsx, sheet_name=base_sheet, header=header_row)
@@ -1320,16 +1358,20 @@ async def upload_rates(
                             print(f"DEBUG: Branch Updates Row {idx}: {branch_updates}")
                         
                         for b_id, rates in branch_updates.items():
-                            # Continue even if local rates are empty, IF global fallback exists
-                            has_fallback = (wholesale_buy > 0 or wholesale_sell > 0)
-                            if not rates and not has_fallback: continue
+                            # Continue even if local rates are empty, because we should backfill with base rates
                             
                             br_rate = db.query(models.BranchRate).filter(
                                 models.BranchRate.branch_id == b_id,
                                 models.BranchRate.currency_code == code
                             ).first()
                             
-                            # Fallback to global wholesale if missing
+                            # Fallback to global values if missing
+                            r_buy = rates.get('buy', 0)
+                            if r_buy <= 0 and buy_rate > 0: r_buy = buy_rate
+                            
+                            r_sell = rates.get('sell', 0)
+                            if r_sell <= 0 and sell_rate > 0: r_sell = sell_rate
+
                             w_buy = rates.get('wholesale_buy', 0)
                             if w_buy <= 0 and wholesale_buy > 0: w_buy = wholesale_buy
                             
@@ -1340,70 +1382,22 @@ async def upload_rates(
                                 br_rate = models.BranchRate(
                                     branch_id=b_id,
                                     currency_code=code,
-                                    buy_rate=rates.get('buy', 0),
-                                    sell_rate=rates.get('sell', 0),
+                                    buy_rate=r_buy,
+                                    sell_rate=r_sell,
                                     wholesale_buy_rate=w_buy,
                                     wholesale_sell_rate=w_sell
                                 )
                                 db.add(br_rate)
                             else:
-                                if 'buy' in rates: br_rate.buy_rate = rates['buy']
-                                if 'sell' in rates: br_rate.sell_rate = rates['sell']
+                                if r_buy > 0: br_rate.buy_rate = r_buy
+                                if r_sell > 0: br_rate.sell_rate = r_sell
                                 if w_buy > 0: br_rate.wholesale_buy_rate = w_buy
                                 if w_sell > 0: br_rate.wholesale_sell_rate = w_sell
                             
                             explicitly_updated_branches.add((b_id, code))
                             branch_updated += 1
 
-                    elif branch_col_map:
-                        # Old key-based map fallback
-                         for col_idx, branch_id in branch_col_map.items():
-                             if col_idx + 1 >= len(df_base.columns): continue # Changed df to df_base
-                             
-                             try:
-                                 val_buy = row.iloc[col_idx]
-                                 val_sell = row.iloc[col_idx+1]
-                                 
-                                 if pd.isna(val_buy) or pd.isna(val_sell): continue
-                                 
-                                 b_buy = float(val_buy)
-                                 b_sell = float(val_sell)
-                                 
-                                 if b_buy <= 0 or b_sell <= 0: continue
-                                 
-                                 b_wh_buy = 0.0
-                                 b_wh_sell = 0.0
-                                 
-                                 # Try to read next 2 cols for wholesale
-                                 try: b_wh_buy = float(row.iloc[col_idx+2])
-                                 except: pass
-                                 try: b_wh_sell = float(row.iloc[col_idx+3])
-                                 except: pass
-                                 
-                                 br_rate = db.query(models.BranchRate).filter(
-                                     models.BranchRate.branch_id == branch_id,
-                                     models.BranchRate.currency_code == code
-                                 ).first()
-                                 
-                                 if br_rate:
-                                     br_rate.buy_rate = b_buy
-                                     br_rate.sell_rate = b_sell
-                                     br_rate.wholesale_buy_rate = b_wh_buy
-                                     br_rate.wholesale_sell_rate = b_wh_sell
-                                 else:
-                                      br_rate = models.BranchRate(
-                                          branch_id=branch_id,
-                                          currency_code=code,
-                                          buy_rate=b_buy,
-                                          sell_rate=b_sell,
-                                          wholesale_buy_rate=b_wh_buy,
-                                          wholesale_sell_rate=b_wh_sell
-                                      )
-                                      db.add(br_rate)
-                                 explicitly_updated_branches.add((branch_id, code))
-                                 branch_updated += 1
-                             except:
-                                  pass
+                        pass
             
                 except Exception:
                     pass
@@ -2006,6 +2000,9 @@ class BranchRateUpdate(BaseModel):
     wholesale_buy_rate: Optional[float] = None
     wholesale_sell_rate: Optional[float] = None
     wholesale_threshold: Optional[int] = None
+    wholesale2_buy_rate: Optional[float] = None
+    wholesale2_sell_rate: Optional[float] = None
+    wholesale2_threshold: Optional[int] = None
     is_active: Optional[bool] = None
 
 @app.put("/api/admin/rates/branch/{branch_id}/{currency_code}")
@@ -2052,6 +2049,9 @@ async def update_branch_rate(
             wholesale_buy_rate=data.wholesale_buy_rate if data.wholesale_buy_rate is not None else 0.0,
             wholesale_sell_rate=data.wholesale_sell_rate if data.wholesale_sell_rate is not None else 0.0,
             wholesale_threshold=data.wholesale_threshold if data.wholesale_threshold is not None else 1000,
+            wholesale2_buy_rate=data.wholesale2_buy_rate if data.wholesale2_buy_rate is not None else 0.0,
+            wholesale2_sell_rate=data.wholesale2_sell_rate if data.wholesale2_sell_rate is not None else 0.0,
+            wholesale2_threshold=data.wholesale2_threshold if data.wholesale2_threshold is not None else 5000,
             is_active=data.is_active if data.is_active is not None else True
         )
         db.add(rate)
@@ -2067,6 +2067,12 @@ async def update_branch_rate(
             rate.wholesale_sell_rate = data.wholesale_sell_rate
         if data.wholesale_threshold is not None:
             rate.wholesale_threshold = data.wholesale_threshold
+        if data.wholesale2_buy_rate is not None:
+            rate.wholesale2_buy_rate = data.wholesale2_buy_rate
+        if data.wholesale2_sell_rate is not None:
+            rate.wholesale2_sell_rate = data.wholesale2_sell_rate
+        if data.wholesale2_threshold is not None:
+            rate.wholesale2_threshold = data.wholesale2_threshold
         if data.is_active is not None:
             rate.is_active = data.is_active
         if data.sell_rate is not None:
@@ -2104,6 +2110,9 @@ async def get_all_rates_admin(user: models.User = Depends(require_admin), db: Se
             "wholesale_buy": br.wholesale_buy_rate,
             "wholesale_sell": br.wholesale_sell_rate,
             "wholesale_threshold": br.wholesale_threshold or 1000,
+            "wholesale2_buy": br.wholesale2_buy_rate or 0.0,
+            "wholesale2_sell": br.wholesale2_sell_rate or 0.0,
+            "wholesale2_threshold": br.wholesale2_threshold or 5000,
             "is_active": br.is_active
         }
         
@@ -2943,9 +2952,15 @@ async def delete_branch(branch_id: int, user: models.User = Depends(require_admi
     if users:
         raise HTTPException(status_code=400, detail="Cannot delete branch with assigned operators")
     
-    # Delete rates first
+    # Delete rates
     db.query(models.BranchRate).filter(models.BranchRate.branch_id == branch_id).delete()
+
+    # Delete balances
+    db.query(models.BranchBalance).filter(models.BranchBalance.branch_id == branch_id).delete()
     
+    # Nullify reservations' branch_id instead of deleting them to preserve history
+    db.query(models.Reservation).filter(models.Reservation.branch_id == branch_id).update({models.Reservation.branch_id: None})
+
     db.delete(branch)
     db.commit()
     return {"success": True}
@@ -3097,7 +3112,9 @@ async def admin_create_seo_metadata(item: SeoMetadataCreate, user: User = Depend
     path = item.url_path
     if not path.startswith('/'):
         path = f"/{path}"
-        item.url_path = path
+    if not path.endswith('/') and len(path) > 1:
+        path = f"{path}/"
+    item.url_path = path
 
     existing = db.query(models.SeoMetadata).filter_by(url_path=path).first()
     if existing:
@@ -3118,7 +3135,9 @@ async def admin_update_seo_metadata(seo_id: int, item: SeoMetadataUpdate, user: 
     path = item.url_path
     if not path.startswith('/'):
         path = f"/{path}"
-        item.url_path = path
+    if not path.endswith('/') and len(path) > 1:
+        path = f"{path}/"
+    item.url_path = path
 
     # Check for duplicate path on a different ID
     dup = db.query(models.SeoMetadata).filter(models.SeoMetadata.url_path == path, models.SeoMetadata.id != seo_id).first()
@@ -3259,9 +3278,17 @@ async def update_currency(code: str, update: CurrencyUpdate, user: models.User =
     if update.is_popular is not None:
         c.is_popular = update.is_popular
     if update.buy_url is not None:
-        c.buy_url = update.buy_url
+        url = update.buy_url.strip()
+        if url:
+            if not url.startswith('/'): url = '/' + url
+            if not url.endswith('/') and len(url) > 1: url = url + '/'
+        c.buy_url = url
     if update.sell_url is not None:
-        c.sell_url = update.sell_url
+        url = update.sell_url.strip()
+        if url:
+            if not url.startswith('/'): url = '/' + url
+            if not url.endswith('/') and len(url) > 1: url = url + '/'
+        c.sell_url = url
     if update.seo_h1 is not None:
         c.seo_h1 = update.seo_h1
     if update.seo_h2 is not None:
@@ -3448,11 +3475,11 @@ async def get_sitemap(db: Session = Depends(get_db)):
     frontend_url = os.environ.get("FRONTEND_URL", "https://mirvalut.com").rstrip("/")
     
     pages = [
-        "",
-        "/rates",
-        "/services",
-        "/contacts",
-        "/faq"
+        "/",
+        "/rates/",
+        "/services/",
+        "/contact/",
+        "/faq/"
     ]
     
     urls = []
@@ -3465,19 +3492,18 @@ async def get_sitemap(db: Session = Depends(get_db)):
     <loc>{frontend_url}{page}</loc>
     <lastmod>{today}</lastmod>
     <changefreq>daily</changefreq>
-    <priority>{1.0 if page == '' else 0.8}</priority>
+    <priority>{1.0 if page == '/' else 0.8}</priority>
   </url>""")
 
     # Dynamic services
     services = db.query(models.ServiceItem).filter(models.ServiceItem.is_active == True).all()
     for srv in services:
-        # Use link_url as slug if present, else id
-        slug = (srv.link_url or str(srv.id)).lstrip("/")
+        slug = (srv.link_url or str(srv.id)).strip("/")
         if not slug.startswith("services/"):
             slug = f"services/{slug}"
         urls.append(f"""
   <url>
-    <loc>{frontend_url}/{slug}</loc>
+    <loc>{frontend_url}/{slug}/</loc>
     <lastmod>{today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -3489,10 +3515,52 @@ async def get_sitemap(db: Session = Depends(get_db)):
         date_str = art.created_at.strftime("%Y-%m-%d") if art.created_at else today
         urls.append(f"""
   <url>
-    <loc>{frontend_url}/articles/{art.id}</loc>
+    <loc>{frontend_url}/articles/{art.id}/</loc>
     <lastmod>{date_str}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
+  </url>""")
+
+    # SEO Metadata URLs (Primary SEO paths)
+    seo_items = db.query(models.SeoMetadata).all()
+    for item in seo_items:
+        path = item.url_path
+        if not path.endswith('/') and len(path) > 1:
+            path += '/'
+        urls.append(f"""
+  <url>
+    <loc>{frontend_url}{path}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>""")
+
+    # All Active Currencies Buy/Sell URLs (from Currencies table)
+    # This ensures even if no manual SEO metadata exists, these formal URLs are indexed
+    currencies = db.query(models.Currency).filter(models.Currency.is_active == True).all()
+    for curr in currencies:
+        # Buy URL
+        b_url = curr.buy_url or f"/buy-{curr.code.lower()}/"
+        if not b_url.startswith('/'): b_url = f"/{b_url}"
+        if not b_url.endswith('/'): b_url += '/'
+        urls.append(f"""
+  <url>
+    <loc>{frontend_url}{b_url}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>""")
+        
+        # Sell URL
+        s_url = curr.sell_url or f"/sell-{curr.code.lower()}/"
+        if not s_url.startswith('/'): s_url = f"/{s_url}"
+        if not s_url.endswith('/'): s_url += '/'
+        urls.append(f"""
+  <url>
+    <loc>{frontend_url}{s_url}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
   </url>""")
 
     sitemap_xml = f"""<?xml version="1.0" encoding="UTF-8"?>

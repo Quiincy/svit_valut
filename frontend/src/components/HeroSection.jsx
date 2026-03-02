@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, RefreshCw, Loader2, X, MapPin, User, Phone, Check, ArrowRight, Clock, AlertCircle } from 'lucide-react';
+import { ChevronDown, RefreshCw, Loader2, X, MapPin, User, Phone, Check, ArrowRight, Clock, AlertCircle, MessageSquare } from 'lucide-react';
 import SeoTextBlock from './SeoTextBlock';
 
 export default function HeroSection({
@@ -26,7 +26,8 @@ export default function HeroSection({
   onOpenChat,
   activeCurrencyInfo,
   activeSeo,
-  ratesUpdated
+  ratesUpdated,
+  isUserInteracted
 }) {
   const location = useLocation();
   const [bookingStep, setBookingStep] = useState(null); // null, 'branch', 'name', 'phone'
@@ -57,11 +58,12 @@ export default function HeroSection({
       // User wants to BUY foreign currency
       setBuyInputValue(defaultAmount);
       setSellInputValue('');
-      const rate = (presetAction.currency?.sell_rate && presetAction.currency.sell_rate > 0)
-        ? presetAction.currency.sell_rate : 42.15;
+      // Use branch rate if available, else global rate
+      const branchCurr = activeBranch ? branchCurrencyMap[activeBranch.id]?.find(c => c.code === presetAction.currency?.code) : null;
+      const rate = getEffectiveRate(branchCurr || presetAction.currency, Number(defaultAmount), 'sell');
       setGiveAmount(Number(defaultAmount) * rate);
     }
-  }, [presetAction]);
+  }, [presetAction, activeBranch, branchCurrencyMap]);
 
   // Determine Active Mode "Officially" from Global State
   const isSellMode = giveCurrency && giveCurrency.code !== 'UAH';
@@ -117,8 +119,11 @@ export default function HeroSection({
       if (!aRate || !bRate) return 0;
 
       if (isSellMode) {
+        // User is selling foreign currency, so they want the HIGHEST buy_rate from the perspective of the exchange.
         return (bRate.buy_rate || 0) - (aRate.buy_rate || 0);
       } else {
+        // User is buying foreign currency, so they want the LOWEST sell_rate from the perspective of the exchange.
+        // For ascending order (lowest first):
         return (aRate.sell_rate || 0) - (bRate.sell_rate || 0);
       }
     });
@@ -270,43 +275,82 @@ export default function HeroSection({
   const getEffectiveRate = (currency, amount, type) => {
     if (!currency) return 0;
 
-    // Explicitly check for disabled wholesale (0 or null means disabled)
-    const threshold = currency.wholesale_threshold || 0;
+    const defaultRate = type === 'buy' ? (currency.buy_rate || 0) : (currency.sell_rate || 0);
+    const threshold1 = currency.wholesale_threshold || 0;
+    const threshold2 = currency.wholesale2_threshold || 0;
 
-    const isWholesaleEnabled = threshold > 0;
-    const isWholesale = isWholesaleEnabled && amount >= threshold;
+    let validTiers = [{ t: 0, r: defaultRate }];
 
-    if (type === 'buy') { // We BUY from user (User SELLS)
-      // If wholesale setup exists and amount > threshold
-      if (isWholesale && currency.wholesale_buy_rate > 0) {
-        return currency.wholesale_buy_rate;
-      }
-      return currency.buy_rate || 0;
-    } else { // We SELL to user (User BUYS)
-      if (isWholesale && currency.wholesale_sell_rate > 0) {
-        return currency.wholesale_sell_rate;
-      }
-      return currency.sell_rate || 0;
+    if (threshold1 > 0) {
+      const r1 = type === 'buy' ? currency.wholesale_buy_rate : currency.wholesale_sell_rate;
+      if (r1 > 0) validTiers.push({ t: threshold1, r: r1 });
     }
+
+    if (threshold2 > 0) {
+      const r2 = type === 'buy' ? currency.wholesale2_buy_rate : currency.wholesale2_sell_rate;
+      if (r2 > 0) validTiers.push({ t: threshold2, r: r2 });
+    }
+
+    validTiers.sort((a, b) => a.t - b.t);
+
+    for (let i = validTiers.length - 1; i >= 0; i--) {
+      if (amount >= validTiers[i].t) {
+        return validTiers[i].r;
+      }
+    }
+
+    return defaultRate;
   };
+
+  // Sync initial inputs with global state on first load or URL change
+  // Sync initial inputs with global state on first load or URL change
+  useEffect(() => {
+    // Detect mode mismatch and swap if needed (e.g., initial load race condition where URL sets buy mode after sell mode was assumed)
+    if (isSellMode && buyInputValue && !sellInputValue) {
+      setSellInputValue(buyInputValue);
+      setBuyInputValue('');
+    } else if (!isSellMode && sellInputValue && !buyInputValue) {
+      setBuyInputValue(sellInputValue);
+      setSellInputValue('');
+    } else if (!presetAction && giveAmount > 0 && !sellInputValue && !buyInputValue) {
+      // Very first initialization when both are empty
+      if (isSellMode) {
+        setSellInputValue(giveAmount.toString());
+      } else {
+        setBuyInputValue('100'); // Default buy amount
+      }
+    }
+  }, [giveAmount, isSellMode, presetAction, buyInputValue, sellInputValue]);
 
   // Sync Global giveAmount with Local Inputs when Currency/Mode Changes
   useEffect(() => {
+    // Determine the best rate currency object to use
+    // getAvailableBranches sorts them by best rate first!
+    const { available } = getAvailableBranches();
+    const bestBranch = available.length > 0 ? available[0] : null;
+    const bestBranchCurrency = bestBranch ? getBranchRate(bestBranch.id) : null;
+
+    // Fall back to the base currency if no branch has it
+    const activeCurrObj = bestBranchCurrency || (isSellMode ? sellCurrency : buyCurrency);
+
     if (isSellMode) {
       const num = Number(sellInputValue.replace?.(/[^\d.]/g, '') || sellInputValue) || 0;
       setGiveAmount(num);
     } else {
       const num = Number(buyInputValue.replace?.(/[^\d.]/g, '') || buyInputValue) || 0;
-      const rate = getEffectiveRate(buyCurrency, num, 'sell');
+      const rate = getEffectiveRate(activeCurrObj, num, 'sell');
       setGiveAmount(num * rate);
     }
-  }, [sellCurrency, buyCurrency, isSellMode, sellInputValue, buyInputValue, setGiveAmount]);
+  }, [sellCurrency, buyCurrency, isSellMode, sellInputValue, buyInputValue, setGiveAmount, branchCurrencyMap, branches]);
 
 
 
 
   // Handlers
   const handleSellChange = (val) => {
+    // Mark user interaction to prevent geo branch override
+    if (isUserInteracted) isUserInteracted.current = true;
+
     // Sanitize input to allow only digits (no dots)
     const sanitized = val.replace(/[^\d]/g, '');
 
@@ -328,6 +372,9 @@ export default function HeroSection({
 
 
   const handleBuyChange = (val) => {
+    // Mark user interaction to prevent geo branch override
+    if (isUserInteracted) isUserInteracted.current = true;
+
     // Sanitize input to allow only digits (no dots)
     const sanitized = val.replace(/[^\d]/g, '');
 
@@ -386,6 +433,11 @@ export default function HeroSection({
   const activeH2 = activeCurrencyInfo ? (isSellMode ? activeCurrencyInfo.seo_sell_h2 : activeCurrencyInfo.seo_buy_h2) || activeCurrencyInfo.seo_h2 : null;
   const activeImage = activeCurrencyInfo ? (isSellMode ? activeCurrencyInfo.seo_sell_image : activeCurrencyInfo.seo_buy_image) || activeCurrencyInfo.seo_image : null;
 
+  // Compute best branch currency for the ExchangeCard
+  const { available: heroAvailableBranches } = getAvailableBranches();
+  const heroBestBranch = heroAvailableBranches.length > 0 ? heroAvailableBranches[0] : null;
+  const heroBestBranchCurrency = heroBestBranch ? getBranchRate(heroBestBranch.id) : null;
+
   return (
     <section className="pt-20 lg:pt-24">
       {/* Desktop Layout */}
@@ -411,12 +463,6 @@ export default function HeroSection({
               {/* Default Title — always visible on desktop */}
               <h1 className={`${hasCurrencyInfo ? 'text-[3.5rem]' : 'text-5xl xl:text-7xl'} font-bold leading-tight`} aria-hidden={hasCurrencyInfo}>
                 <span className="text-accent-yellow">{activeSeo?.h1 || 'Обмін валют'}</span>
-                {!hasCurrencyInfo && (
-                  <>
-                    <br />
-                    <span className="text-white font-light text-4xl xl:text-6xl">{activeSeo?.h2 || 'без ризиків та переплат'}</span>
-                  </>
-                )}
               </h1>
 
               {/* Banner / Badge */}
@@ -437,16 +483,20 @@ export default function HeroSection({
                     <p className="text-gray-300 mb-2 text-xl font-light">— Наявність на відділеннях</p>
                     <p className="text-gray-300 mb-2 text-xl font-light">— Оптовий курс</p>
                     <p className="text-gray-300 mb-8 text-xl font-light">— інше.</p>
-                    <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">НАПИШІТЬ НАМ:</p>
+                    <p className="text-gray-500 mb-4 text-sm uppercase tracking-wider font-semibold">НАПИШІТЬ НАМ АБО ЗАТЕЛЕФОНУЙТЕ:</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-gray-400 mb-2 text-xl font-light">
-                      Маєте питання?
-                    </p>
-                    <p className="text-gray-300 mb-8 text-xl font-light">
-                      Напишіть нам — відповімо за кілька хвилин.
-                    </p>
+                    {chatOnline && (
+                      <>
+                        <p className="text-gray-400 mb-2 text-xl font-light">
+                          Маєте питання?
+                        </p>
+                        <p className="text-gray-300 mb-8 text-xl font-light">
+                          Напишіть нам або зателефонуйте — відповімо за кілька хвилин.
+                        </p>
+                      </>
+                    )}
                   </>
                 )}
                 <div className="flex items-center gap-6">
@@ -472,13 +522,24 @@ export default function HeroSection({
                     </div>
                   </div>
 
-                  {/* Chat Button */}
-                  <button
-                    onClick={onOpenChat}
-                    className="px-10 py-4 bg-accent-yellow rounded-full text-primary font-bold text-lg hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:-translate-y-0.5"
-                  >
-                    Відкрити чат
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {/* Chat Button */}
+                    <button
+                      onClick={onOpenChat}
+                      className="w-14 h-14 bg-accent-yellow rounded-full flex items-center justify-center text-primary hover:bg-yellow-400 hover:shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:-translate-y-0.5"
+                    >
+                      <MessageSquare className="w-6 h-6" />
+                    </button>
+                    {/* Phone Button */}
+                    {settings?.phone && (
+                      <a
+                        href={`tel:${settings.phone.replace(/[^\d+]/g, '')}`}
+                        className="px-8 py-4 bg-sky-500 rounded-full text-white font-bold text-lg hover:bg-sky-400 hover:shadow-lg hover:shadow-sky-500/20 transition-all transform hover:-translate-y-0.5"
+                      >
+                        {settings.phone}
+                      </a>
+                    )}
+                  </div>
                 </div>
                 {!chatOnline && (
                   <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 08:00 до 20:00</p>
@@ -488,14 +549,78 @@ export default function HeroSection({
 
             {/* Right - Exchange Card */}
             <div
-              className="flex justify-end p-12 rounded-3xl"
-              style={{
-                backgroundImage: "url('/hero-bg.jpg')",
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-              }}
+              className="flex justify-end p-4 lg:p-12 rounded-[40px] hero-bg-premium shadow-2xl overflow-hidden"
             >
+              <div className="hero-glass-card rounded-[32px] p-1 w-full max-w-xl">
+                <ExchangeCard
+                  giveAmount={giveAmount}
+                  setGiveAmount={setGiveAmount}
+                  giveCurrency={giveCurrency}
+                  setGiveCurrency={setGiveCurrency}
+                  getCurrency={getCurrency}
+                  setGetCurrency={setGetCurrency}
+                  getAmount={getAmount}
+                  onOpenCurrencyModal={onOpenCurrencyModal}
+                  onSwapCurrencies={onSwapCurrencies}
+                  onReserve={handleStartBooking}
+                  error={error}
+                  settings={settings}
+                  branches={branches}
+                  activeBranch={activeBranch}
+                  onBranchChange={onBranchChange}
+                  sellCurrency={sellCurrency}
+                  buyCurrency={buyCurrency}
+                  sellInputValue={sellInputValue}
+                  setSellInputValue={setSellInputValue}
+                  buyInputValue={buyInputValue}
+                  setBuyInputValue={setBuyInputValue}
+
+                  reservationTime={reservationTime}
+                  branchDropdownOpen={branchDropdownOpen}
+                  setBranchDropdownOpen={setBranchDropdownOpen}
+                  focusedInput={focusedInput}
+                  setFocusedInput={setFocusedInput}
+                  isSellMode={isSellMode}
+                  handleSellChange={handleSellChange}
+                  handleBuyChange={handleBuyChange}
+                  buyRate={displayBuyRate}
+                  sellRate={displaySellRate}
+                  getEffectiveRate={getEffectiveRate}
+                  currencyInfoMap={currencyInfoMap}
+                  ratesUpdated={ratesUpdated}
+                  bestBranchCurrency={heroBestBranchCurrency}
+                  isCurrencyRoute={hasCurrencyInfo}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="lg:hidden relative overflow-hidden">
+        <div className="relative z-10 pt-2 pb-10 flex flex-col gap-8 px-[10px]">
+          <div className="flex flex-col gap-4 text-center items-center">
+            {hasCurrencyInfo && (
+              <h1
+                aria-hidden="false"
+                style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
+              >
+                {activeH1}
+              </h1>
+            )}
+            <h1 className="text-3xl font-bold leading-tight" aria-hidden={hasCurrencyInfo}>
+              <span className="text-accent-yellow text-4xl">{activeSeo?.h1 || 'Обмін валют'}</span>
+            </h1>
+            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
+              <div className="w-8 h-8 bg-accent-yellow/20 rounded-full flex items-center justify-center">
+                <ArrowRight className="w-4 h-4 text-accent-yellow transform -rotate-45" />
+              </div>
+              <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-[32px] overflow-hidden hero-bg-premium shadow-xl">
+            <div className="hero-glass-card rounded-[32px]">
               <ExchangeCard
                 giveAmount={giveAmount}
                 setGiveAmount={setGiveAmount}
@@ -509,6 +634,7 @@ export default function HeroSection({
                 onReserve={handleStartBooking}
                 error={error}
                 settings={settings}
+                isMobile
                 branches={branches}
                 activeBranch={activeBranch}
                 onBranchChange={onBranchChange}
@@ -518,7 +644,6 @@ export default function HeroSection({
                 setSellInputValue={setSellInputValue}
                 buyInputValue={buyInputValue}
                 setBuyInputValue={setBuyInputValue}
-
                 reservationTime={reservationTime}
                 branchDropdownOpen={branchDropdownOpen}
                 setBranchDropdownOpen={setBranchDropdownOpen}
@@ -532,92 +657,9 @@ export default function HeroSection({
                 getEffectiveRate={getEffectiveRate}
                 currencyInfoMap={currencyInfoMap}
                 ratesUpdated={ratesUpdated}
+                bestBranchCurrency={heroBestBranchCurrency}
+                isCurrencyRoute={hasCurrencyInfo}
               />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Layout */}
-      <div className="lg:hidden relative overflow-hidden">
-        {/* Background images removed for transparency */}
-        {/* <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/mobile-pattern.png')" }}
-        ></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/90 via-primary/80 to-primary/90"></div> */}
-        <div className="relative z-10 pt-2 pb-10 flex flex-col gap-8 px-[10px]">
-          <div
-            className="p-0 rounded-3xl overflow-hidden"
-            style={{
-              backgroundImage: "url('/hero-bg-mobile.jpg')",
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.5)'
-            }}
-          >
-            <ExchangeCard
-              giveAmount={giveAmount}
-              setGiveAmount={setGiveAmount}
-              giveCurrency={giveCurrency}
-              setGiveCurrency={setGiveCurrency}
-              getCurrency={getCurrency}
-              setGetCurrency={setGetCurrency}
-              getAmount={getAmount}
-              onOpenCurrencyModal={onOpenCurrencyModal}
-              onSwapCurrencies={onSwapCurrencies}
-              onReserve={handleStartBooking}
-              error={error}
-              settings={settings}
-              isMobile
-              branches={branches}
-              activeBranch={activeBranch}
-              onBranchChange={onBranchChange}
-              sellCurrency={sellCurrency}
-              buyCurrency={buyCurrency}
-              sellInputValue={sellInputValue}
-              setSellInputValue={setSellInputValue}
-              buyInputValue={buyInputValue}
-              setBuyInputValue={setBuyInputValue}
-              reservationTime={reservationTime}
-              branchDropdownOpen={branchDropdownOpen}
-              setBranchDropdownOpen={setBranchDropdownOpen}
-              focusedInput={focusedInput}
-              setFocusedInput={setFocusedInput}
-              isSellMode={isSellMode}
-              handleSellChange={handleSellChange}
-              handleBuyChange={handleBuyChange}
-              buyRate={displayBuyRate}
-              sellRate={displaySellRate}
-              getEffectiveRate={getEffectiveRate}
-              currencyInfoMap={currencyInfoMap}
-              ratesUpdated={ratesUpdated}
-            />
-          </div>
-
-          <div className="flex flex-col gap-4 text-center items-center">
-            {hasCurrencyInfo && (
-              <h1
-                aria-hidden="false"
-                style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
-              >
-                {activeH1}
-              </h1>
-            )}
-            <h1 className="text-3xl font-bold leading-tight" aria-hidden={hasCurrencyInfo}>
-              <span className="text-accent-yellow text-4xl">{activeSeo?.h1 || 'Обмін валют'}</span>
-              {!hasCurrencyInfo && (
-                <>
-                  <br />
-                  <span className="text-white font-light text-2xl">{activeSeo?.h2 || 'без ризиків та переплат'}</span>
-                </>
-              )}
-            </h1>
-            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full pl-1 pr-4 py-1 w-fit backdrop-blur-md">
-              <div className="w-8 h-8 bg-accent-yellow/20 rounded-full flex items-center justify-center">
-                <ArrowRight className="w-4 h-4 text-accent-yellow transform -rotate-45" />
-              </div>
-              <span className="text-xs font-medium text-white/90">Швидко. Безпечно. Вигідно.</span>
             </div>
           </div>
 
@@ -632,20 +674,25 @@ export default function HeroSection({
                   <p className="text-gray-500 text-sm mb-1">— Наявність на відділеннях</p>
                   <p className="text-gray-500 text-sm mb-1">— Оптовий курс</p>
                   <p className="text-gray-500 text-sm mb-3">— інше.</p>
-                  <p className="text-gray-500 text-sm mb-3 uppercase tracking-wider font-semibold">НАПИШІТЬ НАМ:</p>
+                  <p className="text-gray-500 text-sm mb-3 uppercase tracking-wider font-semibold">НАПИШІТЬ НАМ АБО ЗАТЕЛЕФОНУЙТЕ:</p>
                 </>
               ) : (
                 <>
-                  <p className="text-gray-400 text-sm mb-2">
-                    Маєте питання?
-                  </p>
-                  <p className="text-gray-500 text-sm mb-4">
-                    Напишіть нам — відповімо за кілька хвилин.
-                  </p>
+                  {chatOnline && (
+                    <>
+                      <p className="text-gray-400 text-sm mb-2">
+                        Маєте питання?
+                      </p>
+                      <p className="text-gray-500 text-sm mb-4">
+                        Напишіть нам або зателефонуйте — відповімо за кілька хвилин.
+                      </p>
+                    </>
+                  )}
                 </>
               )}
 
-              <div className="flex items-center gap-4">
+
+              <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <img
@@ -666,20 +713,30 @@ export default function HeroSection({
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={onOpenChat}
-                  className="px-6 py-2.5 bg-accent-yellow rounded-full text-primary font-bold text-sm hover:shadow-lg transition-all"
-                >
-                  Відкрити чат
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={onOpenChat}
+                    className="w-10 h-10 bg-accent-yellow rounded-full flex items-center justify-center text-primary hover:shadow-lg transition-all"
+                  >
+                    <MessageSquare className="w-5 h-5" />
+                  </button>
+                  {settings?.phone && (
+                    <a
+                      href={`tel:${settings.phone.replace(/[^\d+]/g, '')}`}
+                      className="px-5 py-2.5 bg-sky-500 rounded-full text-white font-bold text-sm hover:bg-sky-400 hover:shadow-lg transition-all"
+                    >
+                      {settings.phone}
+                    </a>
+                  )}
+                </div>
               </div>
               {!chatOnline && (
                 <p className="text-xs text-gray-500 mt-2">Чат працює щодня з 08:00 до 20:00</p>
               )}
             </div>
           </div>
-        </div>
-      </div>
+        </div >
+      </div >
 
       {/* Step: Unavailable Currency Notice */}
       {
@@ -759,6 +816,25 @@ export default function HeroSection({
                                     <div className="text-[10px] text-accent-yellow">
                                       <span className="opacity-70">Прод: </span>
                                       <span className="font-semibold">{rate.wholesale_sell_rate.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {rate.wholesale2_threshold > 0 && (rate.wholesale2_buy_rate > 0 || rate.wholesale2_sell_rate > 0) && (
+                                <div className="flex items-center gap-3">
+                                  <span className="text-[10px] text-orange-400 bg-orange-400/10 px-1.5 py-0.5 rounded">
+                                    Опт від {rate.wholesale2_threshold} {selectedCode}
+                                  </span>
+                                  {rate.wholesale2_buy_rate > 0 && (
+                                    <div className="text-[10px] text-orange-400">
+                                      <span className="opacity-70">Куп: </span>
+                                      <span className="font-semibold">{rate.wholesale2_buy_rate.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  {rate.wholesale2_sell_rate > 0 && (
+                                    <div className="text-[10px] text-orange-400">
+                                      <span className="opacity-70">Прод: </span>
+                                      <span className="font-semibold">{rate.wholesale2_sell_rate.toFixed(2)}</span>
                                     </div>
                                   )}
                                 </div>
@@ -856,6 +932,8 @@ export default function HeroSection({
                               const rateValue = rate ? (isSellMode ? rate.buy_rate : rate.sell_rate) : 0;
                               const wholesaleRateValue = rate ? (isSellMode ? rate.wholesale_buy_rate : rate.wholesale_sell_rate) : 0;
                               const wholesaleThreshold = rate ? rate.wholesale_threshold : 0;
+                              const wholesale2RateValue = rate ? (isSellMode ? rate.wholesale2_buy_rate : rate.wholesale2_sell_rate) : 0;
+                              const wholesale2Threshold = rate ? rate.wholesale2_threshold : 0;
 
                               return (
                                 <button
@@ -894,6 +972,11 @@ export default function HeroSection({
                                       {(wholesaleThreshold > 0 && wholesaleRateValue > 0) && (
                                         <span className="text-[10px] text-accent-yellow mt-0.5 whitespace-nowrap">
                                           від {wholesaleThreshold} {selectedCode} — {wholesaleRateValue.toFixed(2)} опт
+                                        </span>
+                                      )}
+                                      {(wholesale2Threshold > 0 && wholesale2RateValue > 0) && (
+                                        <span className="text-[10px] text-orange-400 mt-0.5 whitespace-nowrap">
+                                          від {wholesale2Threshold} {selectedCode} — {wholesale2RateValue.toFixed(2)} опт
                                         </span>
                                       )}
                                     </div>
@@ -1084,122 +1167,214 @@ function ExchangeCard({
   getEffectiveRate,
   isMobile,
   currencyInfoMap = {},
-  ratesUpdated
+  ratesUpdated,
+  bestBranchCurrency,
+  isCurrencyRoute
 }) {
+  const showSellRow = !isCurrencyRoute || isSellMode;
+  const showBuyRow = !isCurrencyRoute || !isSellMode;
+
   return (
-    <div className={`rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'bg-transparent px-8 py-8' : 'backdrop-blur-md bg-primary-card/80 p-6 lg:p-8 max-w-xl w-full'}`}>
+    <div className={`rounded-2xl lg:rounded-3xl border border-white/10 ${isMobile ? 'bg-transparent px-4 py-6 mt-4' : 'backdrop-blur-md bg-primary-card/80 p-6 lg:p-8 max-w-xl w-full'}`}>
       <h2 className={`${isMobile ? 'text-2xl' : 'text-lg lg:text-xl'} font-bold text-center mb-1 text-white`}>Забронювати валюту</h2>
       <p className={`${isMobile ? 'text-sm' : 'text-[10px] lg:text-sm'} text-text-secondary text-center mb-6`}>
         Фіксація курсу на {reservationTime} хвилин
       </p>
 
       {/* Row 1: I SELL */}
-      <div className="mb-3 transition-all rounded-xl border p-1 bg-primary-light border-white/10">
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="flex-1 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
-            <div className="pl-3 pr-2 py-2 w-full">
-              <span className="text-[10px] text-text-secondary block">Я продаю</span>
-              <input
-                type="text"
-                value={sellInputValue}
-                onChange={(e) => handleSellChange(e.target.value)}
-                onFocus={() => setFocusedInput('sell')}
-                aria-label="Сума продажу"
-                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
-              />
+      {showSellRow && (
+        <div className="mb-3 transition-all rounded-xl border p-1 bg-primary-light border-white/10">
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex-1 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
+              <div className="pl-3 pr-2 py-2 w-full">
+                <span className="text-[10px] text-text-secondary block">Я продаю</span>
+                <input
+                  type="text"
+                  value={sellInputValue}
+                  onChange={(e) => handleSellChange(e.target.value)}
+                  onFocus={() => setFocusedInput('sell')}
+                  aria-label="Сума продажу"
+                  className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
+                />
+              </div>
+              <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10 mr-1.5" onClick={() => onOpenCurrencyModal('sell_currency')}>
+                <span className="text-lg">{sellCurrency?.flag || '🇺🇸'}</span>
+                <span className="font-bold text-sm">{sellCurrency?.code || 'USD'}</span>
+                <ChevronDown className="w-3 h-3 text-text-secondary" />
+              </div>
             </div>
-            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10 mr-1.5" onClick={() => onOpenCurrencyModal('sell_currency')}>
-              <span className="text-lg">{sellCurrency?.flag || '🇺🇸'}</span>
-              <span className="font-bold text-sm">{sellCurrency?.code || 'USD'}</span>
-              <ChevronDown className="w-3 h-3 text-text-secondary" />
-            </div>
-          </div>
-          <div className="flex-1 border-l border-white/10 md:pl-3 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
-            <div className="pl-3 pr-2 py-2 w-full">
-              <span className="text-[10px] text-text-secondary block">Я отримаю</span>
-              <input
-                type="text"
-                value={((isSellMode && !buyInputValue && sellInputValue) ? getAmount : ((Number(sellInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(sellCurrency, Number(sellInputValue.replace(/[^\d.]/g, '')) || 0, 'buy') : (sellCurrency?.buy_rate || 0)))).toFixed(2)}
-                readOnly
-                aria-label="Сума отримання"
-                onChange={() => { }}
-                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-left text-green-400`}
-              />
-            </div>
-            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 mr-1.5 pointer-events-none">
-              <span className="text-lg">🇺🇦</span>
-              <span className="font-bold text-sm">UAH</span>
+            <div className="flex-1 border-l border-white/10 md:pl-3 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
+              <div className="pl-3 pr-2 py-2 w-full">
+                <span className="text-[10px] text-text-secondary block">Я отримаю</span>
+                <input
+                  type="text"
+                  value={((Number(sellInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(bestBranchCurrency || sellCurrency, Number(sellInputValue.replace(/[^\d.]/g, '')) || 0, 'buy') : ((bestBranchCurrency || sellCurrency)?.buy_rate || 0))).toFixed(2)}
+                  readOnly
+                  aria-label="Сума отримання"
+                  onChange={() => { }}
+                  className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-left text-green-400`}
+                />
+              </div>
+              <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 mr-1.5 pointer-events-none">
+                <span className="text-lg">🇺🇦</span>
+                <span className="font-bold text-sm">UAH</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
 
 
       {/* Row 2: I BUY */}
-      <div className="mb-3 transition-all rounded-xl border p-1 bg-primary-light border-white/10">
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="flex-1 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
-            <div className="pl-3 pr-2 py-2 w-full">
-              <span className="text-[10px] text-text-secondary block">Я купую</span>
-              <input
-                type="text"
-                value={buyInputValue}
-                onChange={(e) => handleBuyChange(e.target.value)}
-                onFocus={() => setFocusedInput('buy')}
-                aria-label="Сума купівлі"
-                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
-              />
+      {showBuyRow && (
+        <div className="mb-3 transition-all rounded-xl border p-1 bg-primary-light border-white/10">
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex-1 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
+              <div className="pl-3 pr-2 py-2 w-full">
+                <span className="text-[10px] text-text-secondary block">Я купую</span>
+                <input
+                  type="text"
+                  value={buyInputValue}
+                  onChange={(e) => handleBuyChange(e.target.value)}
+                  onFocus={() => setFocusedInput('buy')}
+                  aria-label="Сума купівлі"
+                  className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-white min-w-[80px]`}
+                />
+              </div>
+              <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10 mr-1.5" onClick={() => onOpenCurrencyModal('buy_currency')}>
+                <span className="text-lg">{buyCurrency?.flag || '🇺🇸'}</span>
+                <span className="font-bold text-sm">{buyCurrency?.code || 'USD'}</span>
+                <ChevronDown className="w-3 h-3 text-text-secondary" />
+              </div>
             </div>
-            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 cursor-pointer hover:bg-white/10 mr-1.5" onClick={() => onOpenCurrencyModal('buy_currency')}>
-              <span className="text-lg">{buyCurrency?.flag || '🇺🇸'}</span>
-              <span className="font-bold text-sm">{buyCurrency?.code || 'USD'}</span>
-              <ChevronDown className="w-3 h-3 text-text-secondary" />
+            <div className="flex-1 border-l border-white/10 md:pl-3 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
+              <div className="pl-3 pr-2 py-2 w-full">
+                <span className="text-[10px] text-text-secondary block">Мені знадобиться</span>
+                <input
+                  type="text"
+                  value={((Number(buyInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(bestBranchCurrency || buyCurrency, Number(buyInputValue.replace(/[^\d.]/g, '')) || 0, 'sell') : ((bestBranchCurrency || buyCurrency)?.sell_rate || 0))).toFixed(2)}
+                  readOnly
+                  aria-label="Необхідна сума"
+                  onChange={() => { }}
+                  className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-left text-red-400 placeholder-red-400/50`}
+                />
+              </div>
+              <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 mr-1.5 pointer-events-none">
+                <span className="text-lg">🇺🇦</span>
+                <span className="font-bold text-sm">UAH</span>
+              </div>
             </div>
-          </div>
-          <div className="flex-1 border-l border-white/10 md:pl-3 flex items-center bg-primary-light/95 rounded-xl border border-white/5">
-            <div className="pl-3 pr-2 py-2 w-full">
-              <span className="text-[10px] text-text-secondary block">Мені знадобиться</span>
-              <input
-                type="text"
-                value={((!isSellMode && buyInputValue) ? giveAmount : ((Number(buyInputValue.replace(/[^\d.]/g, '')) || 0) * (getEffectiveRate ? getEffectiveRate(buyCurrency, Number(buyInputValue.replace(/[^\d.]/g, '')) || 0, 'sell') : (buyCurrency?.sell_rate || 0)))).toFixed(2)}
-                readOnly
-                aria-label="Необхідна сума"
-                onChange={() => { }}
-                className={`w-full bg-transparent ${isMobile ? 'text-lg' : 'text-xl'} font-bold outline-none text-left text-red-400 placeholder-red-400/50`}
-              />
-            </div>
-            <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-2 mr-1.5 pointer-events-none">
-              <span className="text-lg">🇺🇦</span>
-              <span className="font-bold text-sm">UAH</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-
-
-
-      <div className="flex flex-col gap-2 px-4 mb-4 bg-white/5 py-3 rounded-xl border border-white/10">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
-          <span className="text-xs text-text-secondary">Курс:</span>
-          <div className="text-right flex flex-col items-end">
-            <span className="text-sm sm:text-base font-bold text-accent-yellow leading-tight">
-              {(() => {
-                const showSellRate = focusedInput === 'sell' || (!focusedInput && isSellMode);
-                const currency = showSellRate ? sellCurrency : buyCurrency;
-                const rate = showSellRate ? (currency?.buy_rate || 0) : (currency?.sell_rate || 0);
-                return `1 ${currency?.code || 'USD'} = ${rate.toFixed(2)} UAH`;
-              })()}
-            </span>
           </div>
         </div>
-      </div>
+      )}
 
-      <button onClick={onReserve} className={`w-full ${isMobile ? 'py-3 text-base' : 'py-4 text-lg'} bg-accent-yellow rounded-xl text-primary font-bold`}>
-        Забронювати
-      </button>
+
+
+
+
+      {(() => {
+        const showSellRate = focusedInput === 'sell' || (!focusedInput && isSellMode);
+        const currency = showSellRate ? sellCurrency : buyCurrency;
+
+        const currentAmountStr = showSellRate ? sellInputValue : buyInputValue;
+        const currentAmount = Number(currentAmountStr.replace(/[^\d.]/g, '')) || 0;
+
+        const activeCurrObj = bestBranchCurrency || currency; // Modified to use bestBranchCurrency
+
+        const retailRate = showSellRate ? (activeCurrObj?.buy_rate || 0) : (activeCurrObj?.sell_rate || 0);
+        const wholesaleRate = showSellRate ? (activeCurrObj?.wholesale_buy_rate || 0) : (activeCurrObj?.wholesale_sell_rate || 0);
+
+        let hasWholesale1 = activeCurrObj?.wholesale_threshold > 0 && wholesaleRate > 0;
+        let threshold1 = activeCurrObj?.wholesale_threshold;
+        let rate1 = wholesaleRate;
+
+        // Custom Wholesale 2 logic if any
+        const wholesale2Rate = showSellRate ? (activeCurrObj?.wholesale2_buy_rate || 0) : (activeCurrObj?.wholesale2_sell_rate || 0);
+        let hasWholesale2 = activeCurrObj?.wholesale2_threshold > 0 && wholesale2Rate > 0;
+        let threshold2 = activeCurrObj?.wholesale2_threshold;
+        let rate2 = wholesale2Rate;
+
+        const titleText = showSellRate ? 'Курс купівлі' : 'Курс продажу';
+
+        let tiers = [];
+        tiers.push({
+          label: titleText,
+          rateLabel: `1 ${currency?.code || 'USD'} = ${retailRate.toFixed(2)} UAH`,
+          threshold: 0,
+        });
+
+        if (hasWholesale1) {
+          tiers.push({
+            label: `Опт від ${threshold1} ${currency?.code || 'USD'}`,
+            rateLabel: `1 ${currency?.code || 'USD'} = ${rate1.toFixed(2)} UAH`,
+            threshold: threshold1,
+          });
+        }
+        if (hasWholesale2) {
+          tiers.push({
+            label: `Опт від ${threshold2} ${currency?.code || 'USD'}`,
+            rateLabel: `1 ${currency?.code || 'USD'} = ${rate2.toFixed(2)} UAH`,
+            threshold: threshold2,
+          });
+        }
+
+        tiers.sort((a, b) => a.threshold - b.threshold);
+
+        let activeIndex = 0;
+        for (let i = tiers.length - 1; i >= 0; i--) {
+          if (currentAmount >= tiers[i].threshold) {
+            activeIndex = i;
+            break;
+          }
+        }
+
+        // Just to ensure if currentAmount is 0 we default to 0 index (retail)
+        if (currentAmount === 0 && tiers.length > 0) activeIndex = 0;
+
+        const activeRate = tiers[activeIndex]?.r || (showSellRate ? getEffectiveRate(activeCurrObj, currentAmount, 'buy') : getEffectiveRate(activeCurrObj, currentAmount, 'sell'));
+        const totalUAH = currentAmount * activeRate;
+
+        if (totalUAH > 400000) {
+          return (
+            <div className="flex flex-col gap-3 mt-4 mb-2">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
+                <p className="text-red-400 font-medium text-sm">
+                  Вибачте, але по закону сума операції не може перевищувати 400 000 грн.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <>
+            <div className="flex flex-col gap-1.5 mb-3">
+              {tiers.map((tier, idx) => {
+                const isActive = idx === activeIndex;
+                const bgClass = isActive ? 'bg-[#4488FF] shadow-lg text-white' : 'bg-white/5 border border-white/10 text-white/80';
+                const rateColor = isActive ? 'text-white' : 'text-accent-yellow';
+
+                return (
+                  <div key={idx} className={`flex justify-between items-center py-2 px-3 sm:px-4 rounded-xl transition-colors duration-300 ${bgClass}`}>
+                    <span className={`text-xs sm:text-sm ${isActive ? 'font-medium' : ''}`}>{tier.label}</span>
+                    <span className={`text-sm sm:text-base font-bold ${rateColor}`}>
+                      {tier.rateLabel}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={onReserve}
+              className={`w-full ${isMobile ? 'py-3 text-base' : 'py-4 text-lg'} bg-accent-yellow rounded-xl text-primary font-bold`}
+            >
+              Забронювати
+            </button>
+          </>
+        );
+      })()}
 
       {/* Relevancy Date below button */}
       {ratesUpdated && (

@@ -37,6 +37,7 @@ npm-debug.log*
 
 # PID files
 pids/
+*.pid
 
 # Testing
 coverage/

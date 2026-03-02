@@ -40,8 +40,7 @@ echo "   Встановлення залежностей..."
 pip install --upgrade pip -q 2>/dev/null
 pip install -r requirements.txt -q 2>/dev/null
 
-echo "   Запуск міграцій..."
-python migrate_rates_url.py 2>/dev/null || true
+
 
 nohup python -m uvicorn app.main:app \
     --host 127.0.0.1 \
@@ -67,6 +66,11 @@ fi
 # Build into frontend/dist/
 echo "   Збірка production bundle..."
 npm run build
+
+# Fix file permissions for Apache (npm build creates files with 600)
+echo "   Виправлення прав доступу..."
+find "$DIST_DIR" -type f -exec chmod 644 {} \;
+find "$DIST_DIR" -type d -exec chmod 755 {} \;
 
 # Copy app.js into dist for Passenger
 cp "$FRONTEND_DIR/app.js" "$DIST_DIR/app.js"
