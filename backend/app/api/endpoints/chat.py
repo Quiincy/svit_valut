@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models import models
 from app.api.deps import require_admin
 from app.schemas import ChatSessionCreate, ChatSession, ChatMessage, ChatMessageCreate
+import shutil
+import os
+import uuid
 from datetime import datetime, timezone
 from typing import List
 
@@ -36,6 +39,10 @@ async def get_chat_messages(session_id: str, db: Session = Depends(get_db)):
             m.is_read = True
         db.commit()
 
+    for m in messages:
+        if m.created_at and m.created_at.tzinfo is None:
+            m.created_at = m.created_at.replace(tzinfo=timezone.utc)
+
     return messages
 
 @router.post("/messages", response_model=ChatMessage)
@@ -60,6 +67,9 @@ async def send_chat_message(session_id: str, msg: ChatMessageCreate, db: Session
     db.commit()
     db.refresh(new_msg)
     
+    if new_msg.created_at and new_msg.created_at.tzinfo is None:
+        new_msg.created_at = new_msg.created_at.replace(tzinfo=timezone.utc)
+    return new_msg
 @router.get("/admin/sessions", response_model=List[ChatSession])
 async def admin_get_chat_sessions(user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     """Admin get all active chat sessions sorted by recent activity, excluding empty sessions"""
@@ -73,6 +83,11 @@ async def admin_get_chat_sessions(user: models.User = Depends(require_admin), db
         .order_by(models.ChatSession.last_message_at.desc())
         .all()
     )
+    for s in sessions:
+        if s.created_at and s.created_at.tzinfo is None:
+            s.created_at = s.created_at.replace(tzinfo=timezone.utc)
+        if s.last_message_at and s.last_message_at.tzinfo is None:
+            s.last_message_at = s.last_message_at.replace(tzinfo=timezone.utc)
     return sessions
 
 @router.get("/admin/sessions/{session_id}/messages", response_model=List[ChatMessage])
@@ -83,6 +98,10 @@ async def admin_get_session_messages(session_id: str, user: models.User = Depend
         raise HTTPException(status_code=404, detail="Session not found")
     
     messages = db.query(models.ChatMessage).filter(models.ChatMessage.session_id == session.id).order_by(models.ChatMessage.created_at.asc()).all()
+    
+    for m in messages:
+        if m.created_at and m.created_at.tzinfo is None:
+            m.created_at = m.created_at.replace(tzinfo=timezone.utc)
     return messages
 
 @router.post("/admin/sessions/{session_id}/messages", response_model=ChatMessage)
@@ -103,6 +122,8 @@ async def admin_send_chat_message(session_id: str, msg: ChatMessageCreate, user:
     db.commit()
     db.refresh(new_msg)
     
+    if new_msg.created_at and new_msg.created_at.tzinfo is None:
+        new_msg.created_at = new_msg.created_at.replace(tzinfo=timezone.utc)
     return new_msg
 
 @router.post("/admin/sessions/{session_id}/read")
@@ -134,3 +155,82 @@ async def admin_close_chat_session(session_id: str, user: models.User = Depends(
     session.status = models.ChatSessionStatus.CLOSED
     db.commit()
     return {"success": True}
+
+UPLOAD_DIR = "static/uploads/chat"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@router.post("/messages/image", response_model=ChatMessage)
+async def upload_chat_image_user(
+    session_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """User uploads an image in chat"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4()}.{ext}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    image_url = f"/{file_path}"
+    
+    new_msg = models.ChatMessage(
+        session_id=session.id,
+        sender="user",
+        content="",
+        image_url=image_url
+    )
+    db.add(new_msg)
+    
+    session.last_message_at = datetime.now(timezone.utc)
+    if session.status == models.ChatSessionStatus.CLOSED:
+        session.status = models.ChatSessionStatus.ACTIVE
+        
+    db.commit()
+    db.refresh(new_msg)
+    
+    if new_msg.created_at and new_msg.created_at.tzinfo is None:
+        new_msg.created_at = new_msg.created_at.replace(tzinfo=timezone.utc)
+    return new_msg
+
+@router.post("/admin/sessions/{session_id}/messages/image", response_model=ChatMessage)
+async def admin_upload_chat_image(
+    session_id: str,
+    file: UploadFile = File(...),
+    user: models.User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin uploads an image in chat"""
+    session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4()}.{ext}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    image_url = f"/{file_path}"
+    
+    new_msg = models.ChatMessage(
+        session_id=session.id,
+        sender="admin",
+        content="",
+        image_url=image_url
+    )
+    db.add(new_msg)
+    
+    session.last_message_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(new_msg)
+    
+    if new_msg.created_at and new_msg.created_at.tzinfo is None:
+        new_msg.created_at = new_msg.created_at.replace(tzinfo=timezone.utc)
+    return new_msg

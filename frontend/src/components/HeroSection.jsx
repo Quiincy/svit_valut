@@ -48,7 +48,7 @@ export default function HeroSection({
   // React to header dropdown preset selections
   useEffect(() => {
     if (!presetAction) return;
-    const defaultAmount = '100';
+    const defaultAmount = '1000';
     if (presetAction.type === 'sell') {
       // User wants to SELL foreign currency
       setSellInputValue(defaultAmount);
@@ -164,6 +164,15 @@ export default function HeroSection({
     }
     setError('');
 
+    // --- Enforce 1000 USD/EUR Minimum Limit ---
+    const foreignAmount = isSellMode ? currentAmount : buyVal;
+    const foreignCurrency = isSellMode ? sellCurrency.code : buyCurrency.code;
+
+    if ((foreignCurrency === 'USD' || foreignCurrency === 'EUR') && foreignAmount < 1000) {
+      setError(`Бронювання курсу діє від 1000 ${foreignCurrency}`);
+      return;
+    }
+
     // --- Enforce 400,000 UAH Limit ---
     let totalUAH = 0;
 
@@ -270,9 +279,7 @@ export default function HeroSection({
         get_currency: finalGetCurrency,
         phone: '+' + phoneDigits,
         customer_name: customerName.trim(),
-        branch_id: selectedBranch.id,
-        get_amount: Number(finalGetAmount.toFixed(2)),
-        rate: usedRate
+        branch_id: selectedBranch.id
       });
       // Reset form
       setPhone('');
@@ -338,7 +345,7 @@ export default function HeroSection({
       if (isSellMode) {
         setSellInputValue(giveAmount.toString());
       } else {
-        setBuyInputValue('100'); // Default buy amount
+        setBuyInputValue('1000'); // Default buy amount
       }
     }
   }, [giveAmount, isSellMode, presetAction, buyInputValue, sellInputValue]);
@@ -1426,6 +1433,16 @@ function ExchangeCard({
               })}
             </div>
 
+            {error && (
+              <div className="flex flex-col gap-3 mt-4 mb-3">
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
+                  <p className="text-red-400 font-medium text-sm">
+                    {error}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={onReserve}
               className={`w-full ${isMobile ? 'py-3 text-base' : 'py-4 text-lg'} bg-accent-yellow rounded-xl text-primary font-bold`}
@@ -1452,9 +1469,9 @@ function ExchangeCard({
 
             // Show generic text only if on the homepage AND the currency is the default USD.
             if (isHomepage && activeCurr?.code === 'USD') {
-              return `Актуальний курс валют на ${formattedDate}`;
+              return `Актуальний курс валют станом на ${formattedDate}`;
             } else {
-              return `Курс ${activeCurr?.code || ''} на ${formattedDate}`;
+              return `Курс ${activeCurr?.code || ''} станом на ${formattedDate}`;
             }
           })()}
         </p>

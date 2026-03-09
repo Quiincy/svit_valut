@@ -38,8 +38,8 @@ const api = axios.create({
 // Mock data for when backend is not available
 const MOCK_USERS = {
   admin: { id: 1, username: 'admin', role: 'admin', branch_id: null, name: 'Адміністратор' },
-  operator1: { id: 2, username: 'operator1', role: 'operator', branch_id: 1, name: 'Марія Коваленко', branch_address: 'вул. Старовокзальна, 23' },
-  operator2: { id: 3, username: 'operator2', role: 'operator', branch_id: 2, name: 'Олексій Шевченко', branch_address: 'вул. В. Васильківська, 110' },
+  operator1: { id: 2, username: 'operator1', role: 'operator', branch_id: 4, name: 'Марія Коваленко', branch_address: 'вул. Р. Окіпної, 2' },
+  operator2: { id: 3, username: 'operator2', role: 'operator', branch_id: 3, name: 'Олексій Шевченко', branch_address: 'вул. В. Васильківська, 110' },
 };
 
 const MOCK_PASSWORDS = {
@@ -189,6 +189,7 @@ export const adminService = {
       if (params.date_from) cleanParams.date_from = params.date_from;
       if (params.date_to) cleanParams.date_to = params.date_to;
       if (params.status) cleanParams.status = params.status;
+      if (params.branch_id) cleanParams.branch_id = params.branch_id;
 
       const response = await api.get('/admin/reservations', { params: cleanParams });
 
@@ -206,6 +207,7 @@ export const adminService = {
     }
   },
   updateReservation: (id, data) => api.put(`/admin/reservations/${id}`, data),
+  createReservation: (data) => api.post(`/admin/reservations`, data),
   assignReservation: (id) => api.post(`/admin/reservations/${id}/assign`),
   uploadRates: (file) => {
     const formData = new FormData();
@@ -266,6 +268,8 @@ export const adminService = {
   getChatSessions: () => api.get('/admin/chat/sessions'),
   getChatMessages: (sessionId) => api.get(`/admin/chat/sessions/${sessionId}/messages`),
   sendChatMessage: (sessionId, data) => api.post(`/admin/chat/sessions/${sessionId}/messages`, data),
+  editChatMessage: (messageId, data) => api.put(`/admin/chat/messages/${messageId}`, data),
+  deleteChatMessage: (messageId) => api.delete(`/admin/chat/messages/${messageId}`),
   markChatRead: (sessionId) => api.post(`/admin/chat/sessions/${sessionId}/read`),
   closeChatSession: (sessionId) => api.put(`/admin/chat/sessions/${sessionId}/close`),
 
@@ -281,6 +285,21 @@ export const chatService = {
   initSession: (data) => api.post('/chat/session', data),
   getMessages: (sessionId) => api.get('/chat/messages', { params: { session_id: sessionId } }),
   sendMessage: (sessionId, data) => api.post('/chat/messages', data, { params: { session_id: sessionId } }),
+  uploadImage: (sessionId, file) => {
+    const formData = new FormData();
+    formData.append('session_id', sessionId);
+    formData.append('file', file);
+    return api.post('/chat/messages/image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  adminUploadImage: (sessionId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/chat/admin/sessions/${sessionId}/messages/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
 };
 
 // Operator service

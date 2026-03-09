@@ -63,6 +63,11 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
+echo "   Генерація динамічних SEO-маршрутів..."
+cd "$BACKEND_DIR"
+./venv/bin/python3 -m scripts.generate_routes
+cd "$FRONTEND_DIR"
+
 # Build into frontend/dist/
 echo "   Збірка production bundle..."
 npm run build

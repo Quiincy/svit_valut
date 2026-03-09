@@ -42,6 +42,7 @@ class SiteSettings(Base):
     contacts_url = Column(String, default="/contacts")
     faq_url = Column(String, default="/faq")
     rates_url = Column(String, default="/rates")
+    rates_updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class FAQItem(Base):
     __tablename__ = "faq_items"
@@ -62,6 +63,14 @@ class ServiceItem(Base):
     link_url = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     order = Column(Integer, default=0)
+    
+    # SEO Fields
+    seo_h1 = Column(String, nullable=True)
+    seo_h2 = Column(String, nullable=True)
+    seo_title = Column(String, nullable=True)
+    seo_description = Column(String, nullable=True)
+    seo_text = Column(Text, nullable=True)
+    seo_image = Column(String, nullable=True)
 
 class ArticleItem(Base):
     __tablename__ = "article_items"
@@ -202,7 +211,8 @@ class ChatMessage(Base):
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=False)
     sender = Column(String, nullable=False) # 'user' or 'admin'
-    content = Column(Text, nullable=False)
+    content = Column(Text, nullable=True) # Changed to True since a message might only be an image
+    image_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     is_read = Column(Boolean, default=False)
     

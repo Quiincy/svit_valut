@@ -1,16 +1,14 @@
 import { Link } from 'react-router-dom';
 
-export default function RatesSection({ currencies, crossRates = {}, updatedAt, settings }) {
-  const topCurrencies = currencies.filter(c => c.code !== 'UAH').slice(0, 5);
-  const commonCrossPairs = Object.entries(crossRates).slice(0, 3);
+export default function RatesSection({ currencies = [], crossRates = {}, updatedAt, settings }) {
+  const topCurrencies = (currencies || []).filter(c => c.code !== 'UAH').slice(0, 5);
+  const commonCrossPairs = Object.entries(crossRates || {}).slice(0, 3);
 
-  // Format the date if provided, otherwise fallback to "just now" or empty
   // Format the date if provided, otherwise fallback to "just now" or empty
   const formatDate = (dateString) => {
     const date = dateString ? new Date(dateString) : new Date();
-    const time = date.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
     const day = date.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    return `${time}. ${day}`;
+    return day;
   };
 
   const formattedTime = formatDate(updatedAt);

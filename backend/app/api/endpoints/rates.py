@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.state import state, get_rates_updated_at
 from app.models import models
 from app.schemas import Currency, CrossRate, RatesUploadResponseV2, BranchRate
 from app.services.rates_service import RatesService
@@ -9,8 +10,7 @@ from typing import List, Dict
 
 router = APIRouter()
 
-# Global state for cache (refactor this later if needed)
-rates_updated_at = datetime.now()
+router = APIRouter()
 
 @router.get("")
 async def get_base_rates(db: Session = Depends(get_db)):
@@ -30,7 +30,7 @@ async def get_base_rates(db: Session = Depends(get_db)):
             "is_popular": c.is_popular
         }
     return {
-        "updated_at": rates_updated_at.isoformat(),
+        "updated_at": get_rates_updated_at(db).isoformat(),
         "rates": result
     }
 
@@ -49,7 +49,7 @@ async def get_cross_rates(db: Session = Depends(get_db)):
             "calculated": False
         }
     return {
-        "updated_at": rates_updated_at.isoformat(),
+        "updated_at": get_rates_updated_at(db).isoformat(),
         "cross_rates": results
     }
 
@@ -129,7 +129,7 @@ async def get_branch_rates(branch_id: int, db: Session = Depends(get_db)):
             }
                 
         return {
-            "updated_at": rates_updated_at.isoformat(),
+            "updated_at": get_rates_updated_at(db).isoformat(),
             "branch_id": branch_id,
             "rates": result
         }

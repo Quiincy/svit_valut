@@ -3,15 +3,17 @@ import {
   Upload, Download, LogOut, RefreshCw, CheckCircle,
   XCircle, Clock, DollarSign, TrendingUp, FileSpreadsheet,
   AlertCircle, ChevronDown, Search, Building2, ArrowRightLeft,
-  MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X, Globe, Save, MessageCircle, MessageSquare, Trash2
+  MapPin, Bell, Send, Phone, Pencil, Plus, ToggleLeft, ToggleRight, X, Globe, Save, MessageCircle, MessageSquare, Trash2,
+  Volume2, VolumeX
 } from 'lucide-react';
 import BranchRateCard from '../components/admin/BranchRateCard';
 import BranchBalancesTab from '../components/admin/BranchBalancesTab';
 import SeoEditRow from '../components/admin/SeoEditRow';
 
-import { adminService, currencyService } from '../services/api';
+import { adminService, currencyService, chatService } from '../services/api';
 import SettingsPage from './SettingsPage';
 import { useAudioNotification } from '../hooks/useAudioNotification';
+import { getStaticUrl } from '../services/api';
 import * as XLSX from 'xlsx';
 
 const STATUS_CONFIG = {
@@ -59,11 +61,12 @@ export default function AdminDashboard({ user, onLogout }) {
   const [uploadResult, setUploadResult] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
+  const [branchFilter, setBranchFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [viewNoteModal, setViewNoteModal] = useState(null);
   const [newReservationAlert, setNewReservationAlert] = useState(false);
-  const playNotification = useAudioNotification();
+  const { playNotification, volume, setVolume } = useAudioNotification();
 
   const [lastReservationTime, setLastReservationTime] = useState(null);
   const prevReservationsRef = useRef([]);
@@ -75,6 +78,20 @@ export default function AdminDashboard({ user, onLogout }) {
   const [editingReservation, setEditingReservation] = useState(null);
   const [resForm, setResForm] = useState({ give_amount: '', get_amount: '', rate: '', branch_id: '', customer_name: '', phone: '' });
   const [resSaving, setResSaving] = useState(false);
+
+  // Create Reservation state
+  const [createResModalOpen, setCreateResModalOpen] = useState(false);
+  const [createResForm, setCreateResForm] = useState({
+    direction: 'buy', // 'buy' means user gives UAH, 'sell' means user gets UAH
+    currency: 'USD',
+    give_amount: '',
+    get_amount: '',
+    rate: '',
+    branch_id: '',
+    customer_name: '',
+    phone: '+380',
+    operator_note: ''
+  });
 
   // Rate management state
   const [rateModal, setRateModal] = useState({ open: false, branchId: null, currency: null });
@@ -97,8 +114,12 @@ export default function AdminDashboard({ user, onLogout }) {
   const [activeChatId, setActiveChatId] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
+  const [editingChatMsgId, setEditingChatMsgId] = useState(null);
+  const [editingChatMsgContent, setEditingChatMsgContent] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const chatMessagesEndRef = useRef(null);
+  const chatFileInputRef = useRef(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -108,7 +129,8 @@ export default function AdminDashboard({ user, onLogout }) {
         adminService.getReservations({
           limit: 50,
           date_from: dateFrom || undefined,
-          date_to: dateTo || undefined
+          date_to: dateTo || undefined,
+          branch_id: branchFilter || undefined
         }),
         adminService.getBranches(),
       ]);
@@ -130,21 +152,15 @@ export default function AdminDashboard({ user, onLogout }) {
           items.forEach(newItem => {
             const prevItem = prevReservationsRef.current.find(p => p.id === newItem.id);
             if (prevItem) {
-              // Compare status, note, or updated_at
+              // Compare status or note
               const statusChanged = newItem.status !== prevItem.status;
               const noteChanged = newItem.operator_note !== prevItem.operator_note;
-              const timeChanged = newItem.updated_at && prevItem.updated_at && newItem.updated_at !== prevItem.updated_at;
 
-              if (statusChanged || noteChanged || timeChanged) {
-                // Ignore actions initiated by admin:
-                // 1. "Assign" action (pending_admin -> pending)
-                // 2. "Restore" action (cancelled/expired -> pending)
-                const isAssignAction = prevItem.status === 'pending_admin' && newItem.status === 'pending';
-                const isRestoreAction = (prevItem.status === 'cancelled' || prevItem.status === 'expired') && newItem.status === 'pending';
-
-                if (!isAssignAction && !isRestoreAction) {
-                  hasModified = true;
-                }
+              // "Returns from operator" -> status changed to completed/cancelled OR note added
+              if (statusChanged && ['completed', 'cancelled'].includes(newItem.status)) {
+                hasModified = true;
+              } else if (noteChanged) {
+                hasModified = true;
               }
             }
           });
@@ -184,7 +200,7 @@ export default function AdminDashboard({ user, onLogout }) {
     } finally {
       setLoading(false);
     }
-  }, [lastReservationTime, dateFrom, dateTo]);
+  }, [lastReservationTime, dateFrom, dateTo, branchFilter]);
 
   // Initial fetch and auto-refresh every 15 seconds
   useEffect(() => {
@@ -251,6 +267,30 @@ export default function AdminDashboard({ user, onLogout }) {
     chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, activeChatId]);
 
+  const handleEditChatMsgSave = async (msgId) => {
+    if (!editingChatMsgContent.trim()) return;
+    try {
+      const res = await adminService.editChatMessage(msgId, { content: editingChatMsgContent.trim() });
+      setChatMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: res.data.content } : m));
+      setEditingChatMsgId(null);
+      setEditingChatMsgContent('');
+    } catch (e) {
+      console.error('Error editing message:', e);
+      alert('Помилка редагування: ' + (e.response?.data?.detail || e.message));
+    }
+  };
+
+  const handleDeleteChatMsg = async (msgId) => {
+    if (!window.confirm("Дійсно видалити це повідомлення?")) return;
+    try {
+      await adminService.deleteChatMessage(msgId);
+      setChatMessages(prev => prev.filter(m => m.id !== msgId));
+    } catch (e) {
+      console.error('Error deleting message:', e);
+      alert('Помилка видалення: ' + (e.response?.data?.detail || e.message));
+    }
+  };
+
   const handleSendAdminMessage = async (e) => {
     if (e) e.preventDefault();
     if (!chatInput.trim() || !activeChatId) return;
@@ -271,6 +311,32 @@ export default function AdminDashboard({ user, onLogout }) {
       await adminService.sendChatMessage(activeChatId, { sender: 'admin', content });
     } catch (err) { } finally {
       setChatLoading(false);
+    }
+  };
+
+  const handleAdminImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !activeChatId) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Файл занадто великий (максимум 5 МБ)');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      await chatService.adminUploadImage(activeChatId, file);
+      const msgs = await adminService.getChatMessages(activeChatId);
+      setChatMessages(msgs.data);
+      setTimeout(() => {
+        chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } catch (err) {
+      console.error('Failed to upload image:', err);
+      alert('Помилка завантаження зображення');
+    } finally {
+      setIsUploadingImage(false);
+      if (chatFileInputRef.current) chatFileInputRef.current.value = '';
     }
   };
 
@@ -369,6 +435,33 @@ export default function AdminDashboard({ user, onLogout }) {
     });
   };
 
+  // Auto-recalculate: when give_amount or rate changes, recalculate get_amount
+  const handleResFormChange = (field, value) => {
+    const updated = { ...resForm, [field]: value };
+
+    if (editingReservation && (field === 'give_amount' || field === 'rate')) {
+      const amount = parseFloat(field === 'give_amount' ? value : updated.give_amount);
+      const rate = parseFloat(field === 'rate' ? value : updated.rate);
+      if (!isNaN(amount) && !isNaN(rate) && rate > 0) {
+        if (editingReservation.give_currency === 'UAH') {
+          updated.get_amount = (amount / rate).toFixed(2);
+        } else {
+          updated.get_amount = (amount * rate).toFixed(2);
+        }
+      }
+    }
+
+    setResForm(updated);
+  };
+
+  // Direction helper
+  const getDirection = (res) => {
+    if (res.give_currency === 'UAH') {
+      return { label: 'Купля', color: 'text-green-400 bg-green-400/10' };
+    }
+    return { label: 'Продажа', color: 'text-blue-400 bg-blue-400/10' };
+  };
+
   const handleResSave = async () => {
     setResSaving(true);
     try {
@@ -387,6 +480,98 @@ export default function AdminDashboard({ user, onLogout }) {
     } catch (error) {
       console.error('Error saving reservation:', error);
       alert(error.response?.data?.detail || 'Помилка збереження');
+    } finally {
+      setResSaving(false);
+    }
+  };
+
+  const handleCreateResFormChange = (field, value) => {
+    const updated = { ...createResForm, [field]: value };
+
+    // Auto-fill rate based on branch, direction, and currency
+    if (['branch_id', 'direction', 'currency'].includes(field)) {
+      const bId = field === 'branch_id' ? value : updated.branch_id;
+      const cur = field === 'currency' ? value : updated.currency;
+      const dir = field === 'direction' ? value : updated.direction;
+
+      if (bId && cur && allRates?.branch_rates?.[bId]?.[cur]) {
+        const rateData = allRates.branch_rates[bId][cur];
+        // User "buy": gives UAH to buy foreign -> we sell foreign
+        // User "sell": gives foreign to get UAH -> we buy foreign
+        const newRate = dir === 'buy' ? rateData.sell : rateData.buy;
+        if (newRate) {
+          updated.rate = newRate.toString();
+        }
+      }
+    }
+
+    // Auto calculate amount when rate/amount changes
+    if (['give_amount', 'get_amount', 'rate', 'direction', 'currency', 'branch_id'].includes(field)) {
+      const rate = parseFloat(updated.rate);
+      const direction = field === 'direction' ? value : updated.direction;
+
+      if (!isNaN(rate) && rate > 0) {
+        if (field === 'get_amount') {
+          // User typed get_amount -> calculate give_amount
+          const getAmt = parseFloat(value);
+          if (!isNaN(getAmt)) {
+            if (direction === 'buy') {
+              updated.give_amount = (getAmt * rate).toFixed(2);
+            } else {
+              updated.give_amount = (getAmt / rate).toFixed(2);
+            }
+          } else {
+            updated.give_amount = '';
+          }
+        } else {
+          // User typed give_amount or changed rate/branch -> calculate get_amount
+          const giveAmt = parseFloat(updated.give_amount);
+          if (!isNaN(giveAmt)) {
+            if (direction === 'buy') {
+              updated.get_amount = (giveAmt / rate).toFixed(2);
+            } else {
+              updated.get_amount = (giveAmt * rate).toFixed(2);
+            }
+          } else {
+            updated.get_amount = '';
+          }
+        }
+      }
+    }
+
+    setCreateResForm(updated);
+  };
+
+  const handleCreateResSave = async (e) => {
+    e.preventDefault();
+    if (!createResForm.give_amount || !createResForm.get_amount || !createResForm.rate || !createResForm.branch_id || !createResForm.phone) {
+      alert("Заповніть всі обов'язкові поля!");
+      return;
+    }
+    setResSaving(true);
+    try {
+      const payload = {
+        give_amount: parseFloat(createResForm.give_amount),
+        give_currency: createResForm.direction === 'buy' ? 'UAH' : createResForm.currency,
+        get_amount: parseFloat(createResForm.get_amount),
+        get_currency: createResForm.direction === 'buy' ? createResForm.currency : 'UAH',
+        rate: parseFloat(createResForm.rate),
+        branch_id: parseInt(createResForm.branch_id),
+        customer_name: createResForm.customer_name || null,
+        phone: createResForm.phone,
+        operator_note: createResForm.operator_note || null,
+      };
+
+      await adminService.createReservation(payload);
+      setCreateResModalOpen(false);
+      setCreateResForm({
+        direction: 'buy', currency: 'USD', give_amount: '', get_amount: '',
+        rate: '', branch_id: '', customer_name: '', phone: '+380', operator_note: ''
+      });
+      fetchData();
+    } catch (error) {
+      console.error('Error creating reservation:', error);
+      alert(error.response?.data?.detail || 'Помилка створення');
     } finally {
       setResSaving(false);
     }
@@ -525,14 +710,32 @@ export default function AdminDashboard({ user, onLogout }) {
           </div>
 
           <div className="flex items-center gap-4">
-            <button
-              onClick={playNotification}
-              className="p-2 bg-accent-yellow/20 text-accent-yellow hover:bg-accent-yellow hover:text-primary rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
-              title="Перевірити звук"
-            >
-              <Bell className="w-4 h-4" />
-              Тест звуку
-            </button>
+            <div className="flex items-center gap-2 bg-primary-light/50 rounded-lg px-3 py-1.5 border border-white/10">
+              <button
+                onClick={() => setVolume(volume === 0 ? 0.5 : 0)}
+                className="p-1 text-text-secondary hover:text-accent-yellow transition-colors"
+                title={volume === 0 ? 'Увімкнути звук' : 'Вимкнути звук'}
+              >
+                {volume === 0 ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-accent-yellow" />}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="w-20 h-1 accent-accent-yellow cursor-pointer"
+                title={`Гучність: ${Math.round(volume * 100)}%`}
+              />
+              <button
+                onClick={playNotification}
+                className="p-1 text-text-secondary hover:text-accent-yellow transition-colors"
+                title="Перевірити звук"
+              >
+                <Bell className="w-4 h-4" />
+              </button>
+            </div>
             <div className="text-right">
               <div className="font-medium text-sm">{user.name}</div>
               <div className="text-xs text-accent-yellow">Адміністратор</div>
@@ -672,6 +875,8 @@ export default function AdminDashboard({ user, onLogout }) {
 
         </div>
 
+
+
         {activeTab === 'balances' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-primary-light p-6 rounded-2xl border border-white/10 mb-6 shadow-xl">
@@ -684,7 +889,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 >
                   <option value="">-- Оберіть відділення --</option>
                   {branches.map(b => (
-                    <option key={b.id} value={b.id}>{b.address}</option>
+                    <option key={b.id} value={b.id}>{b.address} (№{b.number})</option>
                   ))}
                 </select>
                 {balancesBranchId && (
@@ -1247,7 +1452,18 @@ export default function AdminDashboard({ user, onLogout }) {
         {activeTab === 'reservations' && (
           <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
-              <h3 className="text-lg font-bold">Всі бронювання</h3>
+              <div className="flex items-center justify-between lg:justify-start w-full lg:w-auto gap-4">
+                <h3 className="text-lg font-bold">Всі бронювання</h3>
+                <button
+                  onClick={() => setCreateResModalOpen(true)}
+                  className="px-4 py-2 bg-accent-yellow text-primary font-bold rounded-lg hover:opacity-90 transition-opacity text-sm flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Створити
+                </button>
+              </div>
 
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1297,6 +1513,17 @@ export default function AdminDashboard({ user, onLogout }) {
 
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <select
+                    value={branchFilter}
+                    onChange={(e) => setBranchFilter(e.target.value)}
+                    className="flex-1 sm:flex-none px-4 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
+                  >
+                    <option value="">Всі відділення</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id}>{b.address} (№{b.number})</option>
+                    ))}
+                  </select>
+
+                  <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="flex-1 sm:flex-none px-4 py-2 bg-primary rounded-lg border border-white/10 text-sm focus:outline-none focus:border-accent-yellow"
@@ -1305,8 +1532,8 @@ export default function AdminDashboard({ user, onLogout }) {
                     <option value="pending_admin">Очікує адміна</option>
                     <option value="pending">Очікує оператора</option>
                     <option value="confirmed">Підтверджено</option>
-                    <option value="completed">Завершено</option>
                     <option value="cancelled">Скасовано</option>
+                    <option value="expired">Прострочено</option>
                   </select>
 
                   <button
@@ -1381,9 +1608,20 @@ export default function AdminDashboard({ user, onLogout }) {
                               <div className="text-[9px] uppercase text-text-secondary font-bold tracking-wider">Курс</div>
                               <div className="text-sm font-bold text-accent-yellow">{res.rate}</div>
                             </div>
+                            <div className="text-center">
+                              <div className="text-[9px] uppercase text-text-secondary font-bold tracking-wider mb-0.5">Тип</div>
+                              {(() => {
+                                const dir = getDirection(res);
+                                return (
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${dir.color}`}>
+                                    {dir.label}
+                                  </span>
+                                );
+                              })()}
+                            </div>
                             <div className="text-right">
                               <div className="text-[9px] uppercase text-text-secondary font-bold tracking-wider mb-0.5">Відділення</div>
-                              <div className="text-xs text-text-secondary max-w-[150px] truncate">{res.branch_address || '—'}</div>
+                              <div className="text-xs text-text-secondary max-w-[150px] truncate">{res.branch_address || '—'}{res.branch_number != null ? ` (№${res.branch_number})` : ''}</div>
                             </div>
                           </div>
 
@@ -1437,6 +1675,7 @@ export default function AdminDashboard({ user, onLogout }) {
                       <tr className="text-left text-xs text-text-secondary border-b border-white/10">
                         <th className="pb-3 pr-4">ID</th>
                         <th className="pb-3 pr-4">Клієнт</th>
+                        <th className="pb-3 pr-4">Тип</th>
                         <th className="pb-3 pr-4">Сума</th>
                         <th className="pb-3 pr-4">Курс</th>
                         <th className="pb-3 pr-4">Відділення</th>
@@ -1469,6 +1708,16 @@ export default function AdminDashboard({ user, onLogout }) {
                               </div>
                             </td>
                             <td className="py-4 pr-4">
+                              {(() => {
+                                const dir = getDirection(res);
+                                return (
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${dir.color}`}>
+                                    {dir.label}
+                                  </span>
+                                );
+                              })()}
+                            </td>
+                            <td className="py-4 pr-4">
                               <div className="text-sm font-medium">
                                 {res.give_amount.toLocaleString()} {res.give_currency}
                               </div>
@@ -1478,7 +1727,7 @@ export default function AdminDashboard({ user, onLogout }) {
                             </td>
                             <td className="py-4 pr-4 text-sm">{res.rate}</td>
                             <td className="py-4 pr-4 text-sm text-text-secondary">
-                              {res.branch_address || '—'}
+                              {res.branch_address || '—'}{res.branch_number != null ? ` (№${res.branch_number})` : ''}
                             </td>
                             <td className="py-4 pr-4">
                               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${statusCfg.color}`}>
@@ -1705,12 +1954,73 @@ export default function AdminDashboard({ user, onLogout }) {
                       chatMessages.map(msg => {
                         const isAdmin = msg.sender === 'admin';
                         return (
-                          <div key={msg.id} className={`flex flex-col ${isAdmin ? 'items-end' : 'items-start'}`}>
-                            <div className={`max-w-[80%] rounded-2xl px-4 py-2 ${isAdmin ? 'bg-accent-yellow text-primary rounded-br-none' : 'bg-white/10 text-white rounded-bl-none'}`}>
-                              <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                          <div key={msg.id} className={`flex flex-col ${isAdmin ? 'items-end' : 'items-start'} group w-full`}>
+                            <div className={`max-w-[80%] rounded-2xl px-4 py-2 relative ${isAdmin ? 'bg-accent-yellow text-primary rounded-br-none' : 'bg-white/10 text-white rounded-bl-none'}`}>
+                              {editingChatMsgId === msg.id ? (
+                                <div className="flex flex-col gap-2 min-w-[200px]">
+                                  <textarea
+                                    className="w-full bg-primary/20 text-primary p-2 border border-primary/20 rounded resize-none"
+                                    value={editingChatMsgContent}
+                                    onChange={(e) => setEditingChatMsgContent(e.target.value)}
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleEditChatMsgSave(msg.id);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingChatMsgId(null);
+                                      }
+                                    }}
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <button onClick={() => setEditingChatMsgId(null)} className="text-[10px] font-bold px-2 py-1 bg-white/30 rounded">Скасувати</button>
+                                    <button onClick={() => handleEditChatMsgSave(msg.id)} className="text-[10px] font-bold px-2 py-1 bg-primary text-white rounded">Зберегти</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col gap-2 group">
+                                  {msg.image_url ? (
+                                    <div className="mb-1 rounded-md overflow-hidden bg-black/10 self-start max-w-full">
+                                      <img
+                                        src={getStaticUrl(msg.image_url)}
+                                        alt="Отримане фото"
+                                        className="max-w-full h-auto max-h-[250px] object-contain rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+                                        onClick={() => window.open(getStaticUrl(msg.image_url), '_blank')}
+                                      />
+                                    </div>
+                                  ) : null}
+                                  {msg.content && <p className="whitespace-pre-wrap text-sm break-words">{msg.content}</p>}
+                                  {isAdmin && (
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1 absolute -left-8 top-0">
+                                      <button
+                                        onClick={() => {
+                                          setEditingChatMsgId(msg.id);
+                                          setEditingChatMsgContent(msg.content || '');
+                                        }}
+                                        className="p-1 hover:bg-black/10 rounded text-text-secondary"
+                                        title="Редагувати"
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteChatMsg(msg.id)}
+                                        className="p-1 hover:bg-red-500/20 rounded text-red-500/70 hover:text-red-500"
+                                        title="Видалити"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <span className="text-[10px] text-text-secondary mt-1 px-1">
+                            <span className="text-[10px] text-text-secondary mt-1 px-1 flex items-center gap-1">
                               {new Date(msg.created_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}
+                              {isAdmin && (
+                                <span className={msg.is_read ? "text-blue-400" : "text-gray-500"}>
+                                  {msg.is_read ? '✓✓' : '✓'}
+                                </span>
+                              )}
                             </span>
                           </div>
                         );
@@ -1720,7 +2030,7 @@ export default function AdminDashboard({ user, onLogout }) {
                   </div>
 
                   <div className="p-4 border-t border-white/10 bg-white/5">
-                    <form onSubmit={handleSendAdminMessage} className="flex gap-2">
+                    <form onSubmit={(e) => { e.preventDefault(); handleSendAdminMessage(); }} className="flex gap-2 items-center">
                       <input
                         type="text"
                         value={chatInput}
@@ -1729,10 +2039,29 @@ export default function AdminDashboard({ user, onLogout }) {
                         disabled={chatLoading}
                         className="flex-1 px-4 py-3 bg-primary border border-white/10 rounded-xl focus:border-accent-yellow focus:outline-none text-sm text-white disabled:opacity-50"
                       />
+
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        ref={chatFileInputRef}
+                        onChange={handleAdminImageUpload}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => chatFileInputRef.current?.click()}
+                        disabled={isUploadingImage}
+                        className="p-3 text-text-secondary hover:text-accent-yellow transition-colors disabled:opacity-50 shrink-0"
+                        title="Прикріпити фото"
+                      >
+                        {isUploadingImage ? <RefreshCw className="w-5 h-5 animate-spin" /> : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>}
+                      </button>
+
                       <button
                         type="submit"
-                        disabled={!chatInput.trim() || chatLoading}
-                        className="px-6 py-3 bg-accent-yellow text-primary font-bold rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                        disabled={(!chatInput.trim() && !isUploadingImage) || chatLoading}
+                        className="px-6 py-3 bg-accent-yellow text-primary font-bold rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shrink-0"
                       >
                         <Send className="w-4 h-4" />
                         Відправити
@@ -1784,7 +2113,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     <input id="editingreservation_give_currency_12"
                       type="number"
                       value={resForm.give_amount}
-                      onChange={(e) => setResForm({ ...resForm, give_amount: e.target.value })}
+                      onChange={(e) => handleResFormChange('give_amount', e.target.value)}
                       className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
                     />
                   </div>
@@ -1795,7 +2124,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     <input id="editingreservation_get_currency_13"
                       type="number"
                       value={resForm.get_amount}
-                      onChange={(e) => setResForm({ ...resForm, get_amount: e.target.value })}
+                      onChange={(e) => handleResFormChange('get_amount', e.target.value)}
                       className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
                     />
                   </div>
@@ -1807,7 +2136,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     type="number"
                     step="0.01"
                     value={resForm.rate}
-                    onChange={(e) => setResForm({ ...resForm, rate: e.target.value })}
+                    onChange={(e) => handleResFormChange('rate', e.target.value)}
                     className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
                   />
                 </div>
@@ -1821,7 +2150,7 @@ export default function AdminDashboard({ user, onLogout }) {
                   >
                     <option value="">— Оберіть відділення —</option>
                     {branches.map((b) => (
-                      <option key={b.id} value={b.id}>{b.address}</option>
+                      <option key={b.id} value={b.id}>{b.address} (№{b.number})</option>
                     ))}
                   </select>
                 </div>
@@ -1885,6 +2214,168 @@ export default function AdminDashboard({ user, onLogout }) {
                   className="flex-1 py-3 bg-accent-yellow text-primary rounded-xl font-medium hover:brightness-110 transition-all disabled:opacity-50"
                 >
                   {resSaving ? 'Збереження...' : 'Зберегти'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Create Reservation Modal */}
+        {createResModalOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm shadow-2xl flex justify-center z-[60] overflow-y-auto" onClick={() => setCreateResModalOpen(false)}>
+            <div
+              className="bg-primary-light m-auto w-full max-w-lg mb-8"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-5 border-b border-white/10 flex justify-between items-center sticky top-0 bg-primary-light z-10 shadow-sm">
+                <h3 className="text-xl font-bold flex items-center gap-3">
+                  <div className="p-2 bg-accent-yellow/10 rounded-lg text-accent-yellow">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  Створити бронювання
+                </h3>
+                <button onClick={() => setCreateResModalOpen(false)} className="p-2 hover:bg-white/10 rounded-lg text-text-secondary hover:text-white transition-colors" aria-label="Закрити">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div className="p-4 bg-primary/50 border border-white/5 rounded-xl space-y-4">
+
+                  {/* Direction */}
+                  <div>
+                    <label className="text-xs font-medium text-text-secondary mb-1.5 block uppercase tracking-wider">Тип операції</label>
+                    <select
+                      className="w-full bg-primary border-white/10"
+                      value={createResForm.direction}
+                      onChange={(e) => handleCreateResFormChange('direction', e.target.value)}
+                    >
+                      <option value="buy">Клієнт купує валюту (Віддає UAH)</option>
+                      <option value="sell">Клієнт здає валюту (Отримує UAH)</option>
+                    </select>
+                  </div>
+
+                  {/* Currency */}
+                  <div>
+                    <label className="text-xs font-medium text-text-secondary mb-1.5 block uppercase tracking-wider">Валюта</label>
+                    <select
+                      className="w-full bg-primary border-white/10"
+                      value={createResForm.currency}
+                      onChange={(e) => handleCreateResFormChange('currency', e.target.value)}
+                    >
+                      {currencies.map(c => (
+                        <option key={c.code} value={c.code}>{c.code} - {c.name_uk}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Branch */}
+                  <div>
+                    <label className="text-xs font-medium text-text-secondary mb-1.5 block uppercase tracking-wider">Відділення</label>
+                    <select
+                      className="w-full bg-primary border-white/10"
+                      value={createResForm.branch_id}
+                      onChange={(e) => handleCreateResFormChange('branch_id', e.target.value)}
+                      required
+                    >
+                      <option value="">Оберіть відділення...</option>
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.address}{b.number ? ` (№${b.number})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-text-secondary mb-1.5 block uppercase tracking-wider">
+                      Віддає ({createResForm.direction === 'buy' ? 'UAH' : createResForm.currency})
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-full bg-primary/50 border-white/10"
+                      value={createResForm.give_amount}
+                      onChange={(e) => handleCreateResFormChange('give_amount', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-text-secondary mb-1.5 block uppercase tracking-wider">
+                      Отримує ({createResForm.direction === 'buy' ? createResForm.currency : 'UAH'})
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-full bg-primary/50 border-white/10"
+                      value={createResForm.get_amount}
+                      onChange={(e) => handleCreateResFormChange('get_amount', e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-text-secondary mb-1.5 block uppercase tracking-wider">Курс</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className="w-full bg-primary/50 border-white/10"
+                    value={createResForm.rate}
+                    onChange={(e) => handleCreateResFormChange('rate', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-text-secondary mb-1.5 block uppercase tracking-wider">Ім'я</label>
+                    <input
+                      className="w-full bg-primary/50 border-white/10"
+                      value={createResForm.customer_name}
+                      onChange={(e) => handleCreateResFormChange('customer_name', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-text-secondary mb-1.5 block uppercase tracking-wider">Телефон</label>
+                    <input
+                      className="w-full bg-primary/50 border-white/10"
+                      value={createResForm.phone}
+                      onChange={(e) => handleCreateResFormChange('phone', e.target.value)}
+                      required
+                      placeholder="+380..."
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-text-secondary mb-1.5 block uppercase tracking-wider">Нотатка</label>
+                  <textarea
+                    rows={2}
+                    className="w-full bg-primary/50 border-white/10"
+                    value={createResForm.operator_note}
+                    onChange={(e) => handleCreateResFormChange('operator_note', e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="p-5 border-t border-white/10 bg-primary flex gap-3 sticky bottom-0 z-10">
+                <button
+                  onClick={() => setCreateResModalOpen(false)}
+                  className="flex-1 py-3 bg-white/5 rounded-xl text-text-secondary hover:text-white hover:bg-white/10 transition-all font-medium"
+                >
+                  Скасувати
+                </button>
+                <button
+                  onClick={handleCreateResSave}
+                  disabled={resSaving}
+                  className="flex-1 py-3 bg-accent-yellow text-primary rounded-xl font-bold hover:brightness-110 transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] disabled:opacity-50 flex justify-center items-center gap-2"
+                >
+                  {resSaving ? 'Створення...' : 'Створити'}
                 </button>
               </div>
             </div>

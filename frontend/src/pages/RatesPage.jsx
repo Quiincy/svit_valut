@@ -1,20 +1,44 @@
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useLocation } from 'react-router-dom';
 import { TrendingUp, TrendingDown } from 'lucide-react';
+import SeoTextBlock from '../components/SeoTextBlock';
+import { Helmet } from 'react-helmet-async';
 
 export default function RatesPage() {
-  const { currencies, settings, crossRates, ratesUpdated } = useOutletContext();
+  const { currencies, settings, crossRates, ratesUpdated, seoList } = useOutletContext();
+  const location = useLocation();
 
-  // Use lastUpdate from context or fallback to now if not passed (though App provides it)
+  // Compute activeSeo for the current page
+  const pathname = decodeURIComponent(location.pathname);
+  const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const reqPath = cleanPathname.toLowerCase();
+  const activeSeo = (seoList || []).find(s => {
+    if (!s.url_path) return false;
+    let dbPath = s.url_path.toLowerCase();
+    if (!dbPath.startsWith('/')) dbPath = '/' + dbPath;
+    if (dbPath.endsWith('/') && dbPath.length > 1) dbPath = dbPath.slice(0, -1);
+    return dbPath === reqPath;
+  });
+
+  const pageH1 = activeSeo?.h1 || 'Актуальні курси валют';
+  const pageTitle = activeSeo?.title ? (activeSeo.title.includes('Світ Валют') ? activeSeo.title : `${activeSeo.title} | Світ Валют`) : 'Актуальні курси валют | Світ Валют';
+  const pageDesc = activeSeo?.description || activeSeo?.text?.replace(/<[^>]*>?/gm, '').substring(0, 160) || 'Актуальні курси валют в Києві.';
+
+  // Use lastUpdate from context or fallback to now if not passed
   const lastUpdateDate = ratesUpdated ? new Date(ratesUpdated) : new Date();
 
   return (
     <div className="bg-primary pb-12">
+      <Helmet>
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDesc} />
+      </Helmet>
+
       {/* Content */}
       <main className="max-w-4xl mx-auto px-4 lg:px-8 py-8 pt-24 lg:pt-32">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl lg:text-3xl font-bold">Актуальні курси валют</h1>
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+          <h1 className="text-2xl lg:text-3xl font-bold">{pageH1}</h1>
           <p className="text-sm text-text-secondary">
-            Оновлено: <span className="text-accent-yellow">{lastUpdateDate.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}</span>
+            Оновлено: <span className="text-accent-yellow">{lastUpdateDate.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
           </p>
         </div>
 
@@ -36,7 +60,7 @@ export default function RatesPage() {
           </div>
 
           {/* Rows */}
-          {currencies.filter(c => c.code !== 'UAH').map((currency, index, filtered) => {
+          {(currencies || []).filter(c => c.code !== 'UAH').map((currency, index, filtered) => {
             // Determine link URL (prefer sell_url, fallback to buy_url or auto-generated)
             const linkUrl = currency.sell_url || currency.buy_url || `/buy-${currency.code.toLowerCase()}`;
             return (
@@ -74,10 +98,10 @@ export default function RatesPage() {
               <div className="text-sm font-medium text-text-secondary text-right">Продаж</div>
             </div>
 
-            {Object.entries(crossRates).map(([pair, rate], index) => (
+            {Object.entries(crossRates || {}).map(([pair, rate], index) => (
               <div
                 key={pair}
-                className={`grid grid-cols-3 px-4 lg:px-6 py-4 items-center hover:bg-white/5 transition-colors ${index !== Object.keys(crossRates).length - 1 ? 'border-b border-white/5' : ''
+                className={`grid grid-cols-3 px-4 lg:px-6 py-4 items-center hover:bg-white/5 transition-colors ${index !== Object.keys(crossRates || {}).length - 1 ? 'border-b border-white/5' : ''
                   }`}
               >
                 <div className="font-bold">{pair}</div>
@@ -113,6 +137,14 @@ export default function RatesPage() {
             Забронювати валюту
           </Link>
         </div>
+        {/* SEO Text Block */}
+        {activeSeo?.text && (
+          <div className="mt-8 bg-primary-light rounded-2xl border border-white/10 p-6">
+            {activeSeo.h2 && <h2 className="text-2xl font-bold mb-4">{activeSeo.h2}</h2>}
+            <SeoTextBlock html={activeSeo.text} prose />
+          </div>
+        )}
+
       </main>
     </div>
   );

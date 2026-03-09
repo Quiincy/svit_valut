@@ -287,14 +287,16 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-accent-yellow border-t-transparent rounded-full animate-spin" />
+      <div className="space-y-6 min-h-[600px] animate-in fade-in duration-300">
+        <div className="flex items-center justify-center h-64">
+          <div className="w-8 h-8 border-4 border-accent-yellow border-t-transparent rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-h-[600px] animate-in fade-in duration-300">
       {/* Message Toast */}
       {message && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl ${message.type === 'error' ? 'bg-red-500' : 'bg-green-500'
@@ -1027,23 +1029,71 @@ export default function SettingsPage() {
                 <p className="text-xs text-text-secondary mt-1">Кастомний URL для цієї послуги (наприклад: /obmin-valyut)</p>
               </div>
 
-              <div>
-                <label className="block text-sm text-text-secondary mb-2">Опис</label>
-                <div className="seo-quill-editor bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                  <ReactQuill
-                    theme="snow"
-                    value={editingService.description}
-                    onChange={(value) => setEditingService({ ...editingService, description: value })}
-                    modules={{
-                      toolbar: [
-                        ['bold', 'italic', 'underline'],
-                        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                        ['link', 'clean']
-                      ]
-                    }}
-                    className="text-white"
-                    placeholder="Опис послуги..."
-                  />
+              <div className="border-t border-white/10 pt-4 mt-4">
+                <h4 className="font-bold text-md mb-4 text-accent-yellow">SEO Налаштування</h4>
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="field_seo_title" className="block text-sm text-text-secondary mb-2">SEO Title (Заголовок вікна)</label>
+                    <input id="field_seo_title"
+                      type="text"
+                      value={editingService.seo_title || ''}
+                      onChange={(e) => setEditingService({ ...editingService, seo_title: e.target.value })}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="field_seo_description" className="block text-sm text-text-secondary mb-2">SEO Description (Мета-опис)</label>
+                    <textarea id="field_seo_description"
+                      value={editingService.seo_description || ''}
+                      onChange={(e) => setEditingService({ ...editingService, seo_description: e.target.value })}
+                      rows={2}
+                      className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none resize-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="field_seo_h1" className="block text-sm text-text-secondary mb-2">H1 Заголовок</label>
+                      <input id="field_seo_h1"
+                        type="text"
+                        value={editingService.seo_h1 || ''}
+                        onChange={(e) => setEditingService({ ...editingService, seo_h1: e.target.value })}
+                        className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="field_seo_h2" className="block text-sm text-text-secondary mb-2">H2 Заголовок</label>
+                      <input id="field_seo_h2"
+                        type="text"
+                        value={editingService.seo_h2 || ''}
+                        onChange={(e) => setEditingService({ ...editingService, seo_h2: e.target.value })}
+                        className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-white/10 pt-4 mt-4">
+                <h4 className="font-bold text-md mb-4 text-accent-yellow">Основний контент</h4>
+                <div>
+                  <label className="block text-sm text-text-secondary mb-2">Опис (головний контент сторінки)</label>
+                  <div className="seo-quill-editor bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                    <ReactQuill
+                      theme="snow"
+                      value={editingService.description || ''}
+                      onChange={(value) => setEditingService({ ...editingService, description: value })}
+                      modules={{
+                        toolbar: [
+                          ['bold', 'italic', 'underline'],
+                          [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                          ['link', 'clean']
+                        ]
+                      }}
+                      className="text-white"
+                      placeholder="Опис послуги..."
+                    />
+                  </div>
                 </div>
               </div>
 

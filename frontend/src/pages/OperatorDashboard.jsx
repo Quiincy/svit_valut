@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   LogOut, RefreshCw, CheckCircle, XCircle, Clock,
   DollarSign, TrendingUp, Phone, MapPin, MessageSquare,
-  Check, X, AlertCircle, Download, Bell, Copy
+  Check, X, AlertCircle, Download, Bell, Copy, Pencil,
+  Volume2, VolumeX
 } from 'lucide-react';
 import { operatorService, branchService } from '../services/api';
 import BranchBalancesTab from '../components/admin/BranchBalancesTab';
@@ -38,14 +39,29 @@ export default function OperatorDashboard({ user, onLogout }) {
   const [dateTo, setDateTo] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [noteModal, setNoteModal] = useState(null);
+  const [cancelModal, setCancelModal] = useState(null);
   const [note, setNote] = useState('');
   const [lastReservationTime, setLastReservationTime] = useState(null);
   const [newReservationAlert, setNewReservationAlert] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [copiedId, setCopiedId] = useState(null);
-  const playNotification = useAudioNotification();
+  const { playNotification, volume, setVolume } = useAudioNotification();
+
+  // Edit modal state
+  const [editingReservation, setEditingReservation] = useState(null);
+  const [resForm, setResForm] = useState({});
+  const [resSaving, setResSaving] = useState(false);
+  const [branches, setBranches] = useState([]);
+
+  // Fetch branches for transfer dropdown
+  useEffect(() => {
+    branchService.getAll().then(res => {
+      if (res?.data) setBranches(res.data);
+    }).catch(() => { });
+  }, []);
 
   const prevReservationsRef = useRef([]);
+  const prevPendingIdsRef = useRef(null);
 
   // Update time every minute (Kyiv time)
   useEffect(() => {
@@ -67,30 +83,14 @@ export default function OperatorDashboard({ user, onLogout }) {
       setDashboard(dashboardRes.data);
       const items = reservationsRes.data.items || [];
 
-      // Check for new or modified reservations
+      // Detect strictly new pending items via ID diffs
       let shouldNotify = false;
+      const currentPendingIds = dashboardRes.data.pending_ids || [];
 
-      // Only check for notifications if it's not the first load
-      if (lastReservationTime !== null) {
-        const prevIds = new Set(prevReservationsRef.current.map(i => i.id));
-
-        // 1. New items for this specific view (status filter)
-        for (const item of items) {
-          if (!prevIds.has(item.id)) {
-            shouldNotify = true;
-            break;
-          }
-        }
-
-        // 2. Status changes or note changes on existing items
-        if (!shouldNotify) {
-          for (const item of items) {
-            const prev = prevReservationsRef.current.find(p => p.id === item.id);
-            if (prev && (prev.status !== item.status || prev.operator_note !== item.operator_note)) {
-              shouldNotify = true;
-              break;
-            }
-          }
+      if (prevPendingIdsRef.current !== null) {
+        const newIds = currentPendingIds.filter(id => !prevPendingIdsRef.current.includes(id));
+        if (newIds.length > 0) {
+          shouldNotify = true;
         }
       }
 
@@ -101,8 +101,7 @@ export default function OperatorDashboard({ user, onLogout }) {
       }
 
       // Update trackers
-      const latestTime = items.length > 0 ? new Date(items[0].created_at).getTime() : Date.now();
-      setLastReservationTime(latestTime);
+      prevPendingIdsRef.current = currentPendingIds;
       prevReservationsRef.current = items;
       setReservations(items);
     } catch (error) {
@@ -161,18 +160,28 @@ export default function OperatorDashboard({ user, onLogout }) {
     }
   };
 
-  const handleCancel = async (id) => {
-    if (!confirm('Ви впевнені, що хочете скасувати це бронювання?')) return;
+  const openCancelConfirm = (id) => {
+    setCancelModal(id);
+  };
 
+  const confirmCancel = async () => {
+    if (!cancelModal) return;
+    const id = cancelModal;
+    setCancelModal(null);
     setActionLoading(id);
     try {
       await operatorService.cancelReservation(id);
       fetchData();
     } catch (error) {
       console.error('Error cancelling reservation:', error);
+      alert('Помилка скасування: ' + (error.response?.data?.detail || error.message));
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const closeCancelConfirm = () => {
+    setCancelModal(null);
   };
 
   const handleAddNote = async () => {
@@ -204,6 +213,69 @@ export default function OperatorDashboard({ user, onLogout }) {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // --- Edit modal logic ---
+  const openResModal = (res) => {
+    setEditingReservation(res);
+    setResForm({
+      give_amount: res.give_amount,
+      get_amount: res.get_amount,
+      rate: res.rate,
+      branch_id: res.branch_id || '',
+      operator_note: res.operator_note || '',
+    });
+  };
+
+  const handleResSave = async () => {
+    setResSaving(true);
+    try {
+      await operatorService.updateReservation(editingReservation.id, {
+        give_amount: parseFloat(resForm.give_amount),
+        get_amount: parseFloat(resForm.get_amount),
+        rate: parseFloat(resForm.rate),
+        branch_id: resForm.branch_id || null,
+        operator_note: resForm.operator_note || null,
+      });
+      setEditingReservation(null);
+      fetchData();
+    } catch (error) {
+      console.error('Error saving reservation:', error);
+      alert(error.response?.data?.detail || 'Помилка збереження');
+    } finally {
+      setResSaving(false);
+    }
+  };
+
+  // Auto-recalculate: when give_amount or rate changes, recalculate get_amount
+  const handleResFormChange = (field, value) => {
+    const updated = { ...resForm, [field]: value };
+
+    if (editingReservation && (field === 'give_amount' || field === 'rate')) {
+      const amount = parseFloat(field === 'give_amount' ? value : updated.give_amount);
+      const rate = parseFloat(field === 'rate' ? value : updated.rate);
+      if (!isNaN(amount) && !isNaN(rate) && rate > 0) {
+        // If client gives UAH (buying foreign) => get_amount = give / rate
+        // If client gives foreign (selling) => get_amount = give * rate
+        if (editingReservation.give_currency === 'UAH') {
+          updated.get_amount = (amount / rate).toFixed(2);
+        } else {
+          updated.get_amount = (amount * rate).toFixed(2);
+        }
+      }
+    }
+
+    setResForm(updated);
+  };
+
+  // Direction helper
+  const getDirection = (res) => {
+    // If client gives UAH => they are BUYING foreign currency
+    // If client gives foreign => they are SELLING foreign currency
+    if (res.give_currency === 'UAH') {
+      return { label: 'Купля', color: 'text-green-400 bg-green-400/10' };
+    }
+    return { label: 'Продажа', color: 'text-blue-400 bg-blue-400/10' };
+  };
+
   return (
     <div className="min-h-screen bg-primary">
       {/* Header */}
@@ -215,7 +287,9 @@ export default function OperatorDashboard({ user, onLogout }) {
             </div>
             <div>
               <h1 className="font-bold text-lg">Панель оператора</h1>
-              <p className="text-xs text-text-secondary">{user.branch_address}</p>
+              <p className="text-xs text-text-secondary">
+                {user.branch_address} {user.branch_number ? `(№${user.branch_number})` : ''}
+              </p>
             </div>
             {newReservationAlert && (
               <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/20 border border-yellow-500/50 rounded-lg animate-pulse">
@@ -232,15 +306,33 @@ export default function OperatorDashboard({ user, onLogout }) {
               <div className="font-mono">{currentTime.toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit' })}</div>
             </div>
 
-            {/* Test Sound Button */}
-            <button
-              onClick={playNotification}
-              className="p-2 bg-accent-yellow/20 text-accent-yellow hover:bg-accent-yellow hover:text-primary rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
-              title="Перевірити звук"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="hidden sm:inline">Тест звуку</span>
-            </button>
+            {/* Volume Control */}
+            <div className="flex items-center gap-2 bg-primary-light/50 rounded-lg px-3 py-1.5 border border-white/10">
+              <button
+                onClick={() => setVolume(volume === 0 ? 0.5 : 0)}
+                className="p-1 text-text-secondary hover:text-accent-yellow transition-colors"
+                title={volume === 0 ? 'Увімкнути звук' : 'Вимкнути звук'}
+              >
+                {volume === 0 ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-accent-yellow" />}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="w-20 h-1 accent-accent-yellow cursor-pointer"
+                title={`Гучність: ${Math.round(volume * 100)}%`}
+              />
+              <button
+                onClick={playNotification}
+                className="p-1 text-text-secondary hover:text-accent-yellow transition-colors"
+                title="Перевірити звук"
+              >
+                <Bell className="w-4 h-4" />
+              </button>
+            </div>
 
             {/* Download Rates Button */}
             <button
@@ -307,12 +399,17 @@ export default function OperatorDashboard({ user, onLogout }) {
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setActiveTab('reservations')}
-            className={`px-5 py-2.5 rounded-xl font-medium transition-all ${activeTab === 'reservations'
+            className={`px-5 py-2.5 rounded-xl font-medium transition-all relative ${activeTab === 'reservations'
               ? 'bg-accent-yellow text-primary'
-              : 'bg-primary-light text-text-secondary hover:text-white'
+              : dashboard?.pending_reservations > 0
+                ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 animate-pulse'
+                : 'bg-primary-light text-text-secondary hover:text-white'
               }`}
           >
             Бронювання
+            {dashboard?.pending_reservations > 0 && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-ping"></span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('balances')}
@@ -344,12 +441,17 @@ export default function OperatorDashboard({ user, onLogout }) {
                         ? 'bg-accent-yellow text-primary'
                         : tab.value === 'pending' && dashboard?.pending_reservations > 0
                           ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 animate-pulse'
-                          : 'bg-primary-light text-text-secondary hover:text-white'
+                          : tab.value === 'confirmed' && dashboard?.confirmed_reservations > 0
+                            ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 animate-pulse'
+                            : 'bg-primary-light text-text-secondary hover:text-white'
                         }`}
                     >
                       {tab.label}
                       {tab.value === 'pending' && dashboard?.pending_reservations > 0 && (
                         <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full animate-ping"></span>
+                      )}
+                      {tab.value === 'confirmed' && dashboard?.confirmed_reservations > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-400 rounded-full animate-ping"></span>
                       )}
                     </button>
                   ))}
@@ -430,7 +532,7 @@ export default function OperatorDashboard({ user, onLogout }) {
                     >
                       <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                         {/* Main Info */}
-                        <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="flex-1 grid grid-cols-2 lg:grid-cols-5 gap-4">
                           {/* ID & Name & Phone */}
                           <div>
                             <div className="text-xs text-text-secondary mb-1">Бронювання</div>
@@ -440,6 +542,19 @@ export default function OperatorDashboard({ user, onLogout }) {
                               <Phone className="w-3 h-3" />
                               <span>••••••••••</span>
                             </div>
+                          </div>
+
+                          {/* Direction */}
+                          <div>
+                            <div className="text-xs text-text-secondary mb-1">Тип</div>
+                            {(() => {
+                              const dir = getDirection(res);
+                              return (
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold ${dir.color}`}>
+                                  {dir.label}
+                                </span>
+                              );
+                            })()}
                           </div>
 
                           {/* Amount */}
@@ -485,7 +600,7 @@ export default function OperatorDashboard({ user, onLogout }) {
                                 Підтвердити
                               </button>
                               <button
-                                onClick={() => handleCancel(res.id)}
+                                onClick={() => openCancelConfirm(res.id)}
                                 disabled={isLoading}
                                 className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-xl text-red-400 text-sm font-medium transition-colors disabled:opacity-50"
                               >
@@ -505,7 +620,7 @@ export default function OperatorDashboard({ user, onLogout }) {
                                 Завершити
                               </button>
                               <button
-                                onClick={() => handleCancel(res.id)}
+                                onClick={() => openCancelConfirm(res.id)}
                                 disabled={isLoading}
                                 className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-xl text-red-400 text-sm font-medium transition-colors disabled:opacity-50"
                               >
@@ -513,6 +628,14 @@ export default function OperatorDashboard({ user, onLogout }) {
                               </button>
                             </>
                           )}
+
+                          <button
+                            onClick={() => openResModal(res)}
+                            className="p-2 rounded-xl transition-colors bg-white/5 text-text-secondary hover:text-white hover:bg-white/10"
+                            title="Редагувати"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
 
                           <button
                             onClick={() => {
@@ -581,6 +704,138 @@ export default function OperatorDashboard({ user, onLogout }) {
                 className="flex-1 py-3 bg-accent-yellow rounded-xl text-primary font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 Зберегти
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Confirm Modal */}
+      {cancelModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-light rounded-2xl w-full max-w-sm border border-white/10 overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4 mx-auto">
+                <AlertCircle className="w-6 h-6 text-red-400" />
+              </div>
+              <h3 className="text-xl font-bold text-center mb-2">Скасувати бронювання?</h3>
+              <p className="text-text-secondary text-center text-sm mb-6">
+                Ви впевнені, що хочете скасувати це бронювання #{cancelModal}? Цю дію неможливо скасувати.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={closeCancelConfirm}
+                  className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-colors font-medium text-sm"
+                >
+                  Відхилити
+                </button>
+                <button
+                  onClick={confirmCancel}
+                  className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors font-medium text-sm shadow-lg shadow-red-500/20"
+                >
+                  Так, скасувати
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Reservation Modal */}
+      {editingReservation && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-light rounded-2xl p-6 w-full max-w-md border border-white/10 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold mb-4">Редагувати бронювання #{editingReservation.id}</h3>
+
+            {/* Direction badge */}
+            {(() => {
+              const dir = getDirection(editingReservation);
+              return (
+                <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold mb-4 ${dir.color}`}>
+                  Клієнт: {dir.label}
+                </div>
+              );
+            })()}
+
+            <div className="space-y-4">
+              {/* Amounts */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">
+                    Віддає ({editingReservation.give_currency})
+                  </label>
+                  <input
+                    type="number"
+                    value={resForm.give_amount}
+                    onChange={(e) => handleResFormChange('give_amount', e.target.value)}
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">
+                    Отримує ({editingReservation.get_currency})
+                  </label>
+                  <input
+                    type="number"
+                    value={resForm.get_amount}
+                    onChange={(e) => handleResFormChange('get_amount', e.target.value)}
+                    className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                  />
+                </div>
+              </div>
+
+              {/* Rate */}
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Курс</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={resForm.rate}
+                  onChange={(e) => handleResFormChange('rate', e.target.value)}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                />
+              </div>
+
+              {/* Branch (Transfer) */}
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Відділення</label>
+                <select
+                  value={resForm.branch_id}
+                  onChange={(e) => setResForm({ ...resForm, branch_id: e.target.value ? parseInt(e.target.value) : '' })}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow"
+                >
+                  <option value="">— Оберіть відділення —</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.address} (№{b.number})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Note */}
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Нотатка</label>
+                <textarea
+                  value={resForm.operator_note || ''}
+                  onChange={(e) => setResForm({ ...resForm, operator_note: e.target.value })}
+                  placeholder="Нотатка до бронювання..."
+                  rows={2}
+                  className="w-full px-4 py-3 bg-primary rounded-xl border border-white/10 focus:outline-none focus:border-accent-yellow resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditingReservation(null)}
+                className="flex-1 py-3 bg-white/5 rounded-xl text-text-secondary hover:text-white hover:bg-white/10 transition-all"
+              >
+                Скасувати
+              </button>
+              <button
+                onClick={handleResSave}
+                disabled={resSaving}
+                className="flex-1 py-3 bg-accent-yellow text-primary rounded-xl font-medium hover:brightness-110 transition-all disabled:opacity-50"
+              >
+                {resSaving ? 'Збереження...' : 'Зберегти'}
               </button>
             </div>
           </div>

@@ -1,10 +1,21 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 // Path to standard iOS-compatible M4A audio file (Glass sound)
 const NOTIFICATION_AUDIO_PATH = '/audio/notification.m4a';
+const VOLUME_STORAGE_KEY = 'notificationVolume';
 
 export function useAudioNotification() {
     const interactedRef = useRef(false);
+    const [volume, setVolumeState] = useState(() => {
+        const saved = localStorage.getItem(VOLUME_STORAGE_KEY);
+        return saved !== null ? parseFloat(saved) : 1.0;
+    });
+
+    const setVolume = useCallback((newVolume) => {
+        const v = Math.max(0, Math.min(1, newVolume));
+        setVolumeState(v);
+        localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
+    }, []);
 
     useEffect(() => {
         // Create the element physically in the HTML document
@@ -60,10 +71,12 @@ export function useAudioNotification() {
             return;
         }
 
+        if (volume === 0) return; // Muted
+
         try {
             const el = document.getElementById('global-notification-audio');
             if (el) {
-                el.volume = 0.5;
+                el.volume = volume;
                 el.currentTime = 0;
                 const playPromise = el.play();
 
@@ -76,7 +89,7 @@ export function useAudioNotification() {
         } catch (e) {
             console.error("Audio playback error:", e);
         }
-    }, []);
+    }, [volume]);
 
-    return playNotification;
+    return { playNotification, volume, setVolume };
 }

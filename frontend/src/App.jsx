@@ -23,6 +23,7 @@ const SuccessModal = lazy(() => import('./components/SuccessModal'));
 const MobileNav = lazy(() => import('./components/MobileNav'));
 const LiveChat = lazy(() => import('./components/LiveChat'));
 const OfflineContactModal = lazy(() => import('./components/OfflineContactModal'));
+const TelegramPopup = lazy(() => import('./components/TelegramPopup'));
 
 // Pages — lazy loaded (separate routes)
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -73,7 +74,7 @@ function PublicLayout() {
   const [currencyModalType, setCurrencyModalType] = useState('give');
   const [successModalOpen, setSuccessModalOpen] = useState(false);
 
-  const [giveAmount, setGiveAmount] = useState(100);
+  const [giveAmount, setGiveAmount] = useState(1000);
   const [giveCurrency, setGiveCurrency] = useState({ code: 'USD', name_uk: 'Долар', flag: '🇺🇸', buy_rate: 1, sell_rate: 1 });
   const [getCurrency, setGetCurrency] = useState({ code: 'UAH', name_uk: 'Гривня', flag: '🇺🇦' });
   const [getAmount, setGetAmount] = useState(0);
@@ -98,6 +99,13 @@ function PublicLayout() {
 
   useEffect(() => {
     fetchData();
+
+    // Setup polling every 10 seconds
+    const intervalId = setInterval(() => {
+      fetchData(true);
+    }, 10000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   // Distance Calculation (Haversine)
@@ -251,36 +259,6 @@ function PublicLayout() {
   useEffect(() => {
     if (loading || !currencies.length) return;
 
-    // 1. UPDATE METADATA (Title & Description) globally based on URL
-    const decodedPathname = decodeURIComponent(pathname);
-    const reqPath = decodedPathname.toLowerCase();
-
-    const activeSeo = seoList.find(s => {
-      if (!s.url_path) return false;
-      let dbPath = s.url_path.toLowerCase();
-      if (!dbPath.startsWith('/')) dbPath = '/' + dbPath;
-      if (!dbPath.endsWith('/') && dbPath.length > 1) dbPath = dbPath + '/';
-      return dbPath === reqPath;
-    });
-
-    if (activeSeo) {
-      const metaTitle = activeSeo.title || activeSeo.h1 || 'Світ Валют';
-      document.title = metaTitle.includes('Світ Валют') ? metaTitle : `${metaTitle} | Світ Валют`;
-
-      const metaDescText = activeSeo.description || activeSeo.text || '';
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc && metaDescText) {
-        const plainText = metaDescText.replace(/<[^>]*>?/gm, '').substring(0, 160);
-        metaDesc.setAttribute('content', plainText);
-      }
-    } else {
-      document.title = 'Світ Валют | Обмін валют в Києві';
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) {
-        metaDesc.setAttribute('content', 'Обмін валют в Києві. Найкращі курси, безпечно та швидко.');
-      }
-    }
-
     // UPDATE CANONICAL & SCHEMA
     updateCanonicalTag(pathname);
     updateSchemaMarkup({ settings, activeBranch, branches, currencies, giveCurrency, getCurrency });
@@ -312,7 +290,8 @@ function PublicLayout() {
       }
     };
 
-    // cleanPathname is already defined and normalized above
+    const decodedPathname = decodeURIComponent(pathname);
+    const cleanPathname = decodedPathname.endsWith('/') && decodedPathname.length > 1 ? decodedPathname.slice(0, -1) : decodedPathname;
 
     const isKnownSeoPath = Object.values(currencyInfoMap).some(inf => {
       const bUrl = inf.buy_url ? (inf.buy_url.endsWith('/') ? inf.buy_url : inf.buy_url + '/') : null;
@@ -325,8 +304,35 @@ function PublicLayout() {
     const isKnownPage = pathname === '/' || pathname.startsWith('/services') || pathname.startsWith(ratesUrl) || pathname.startsWith('/rates') || pathname.startsWith(contactsUrl) || pathname.startsWith('/contact') || pathname.startsWith(faqUrl) || pathname.startsWith('/faq') || pathname.startsWith('/admin') || pathname.startsWith('/panel') || pathname.startsWith('/operator') || pathname.startsWith('/login');
 
     if (!isKnownPage && !isKnownSeoPath) {
-      // It's a 404 path, let React Router handle it without syncing/redirecting
+      // It's a 404 path, let React Router handle it without syncing/redirecting (And don't overwrite the 404 title)
       return;
+    }
+
+    // 1. UPDATE METADATA (Title & Description) globally based on URL (Only for known pages)
+    const activeSeo = seoList.find(s => {
+      if (!s.url_path) return false;
+      let dbPath = s.url_path.toLowerCase();
+      if (!dbPath.startsWith('/')) dbPath = '/' + dbPath;
+      if (!dbPath.endsWith('/') && dbPath.length > 1) dbPath = dbPath + '/';
+      return dbPath === decodedPathname.toLowerCase();
+    });
+
+    if (activeSeo) {
+      const metaTitle = activeSeo.title || activeSeo.h1 || 'Світ Валют';
+      document.title = metaTitle.includes('Світ Валют') ? metaTitle : `${metaTitle} | Світ Валют`;
+
+      const metaDescText = activeSeo.description || activeSeo.text || '';
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc && metaDescText) {
+        const plainText = metaDescText.replace(/<[^>]*>?/gm, '').substring(0, 160);
+        metaDesc.setAttribute('content', plainText);
+      }
+    } else {
+      document.title = 'Світ Валют | Обмін валют в Києві';
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) {
+        metaDesc.setAttribute('content', 'Обмін валют в Києві. Найкращі курси, безпечно та швидко.');
+      }
     }
 
 
@@ -380,12 +386,9 @@ function PublicLayout() {
         }
       }
     } else {
-      const isOnStaticPage = pathname === '/' || pathname.startsWith('/services') || pathname.startsWith('/rates') || pathname.startsWith(ratesUrl) || pathname.startsWith('/contacts') || pathname.startsWith(contactsUrl) || pathname.startsWith('/faq') || pathname.startsWith(faqUrl) || pathname.startsWith('/admin') || pathname.startsWith('/panel') || pathname.startsWith('/operator') || pathname.startsWith('/login');
-
-      // ONLY redirect to home if it's NOT a static page AND NOT a known SEO path
-      if (!isOnStaticPage && !isKnownSeoPath) {
-        navigate('/', { replace: true });
-      }
+      // Intentionally DO NOT redirect to '/' here for unknown pages.
+      // Doing so prevents the <Route path="*" element={<NotFoundPage />} /> from ever being reached.
+      // Let React Router handle the 404 state.
     }
   }, [giveCurrency, getCurrency, loading, currencyInfoMap, pathname, navigate, currencies, seoList]);
 
@@ -394,9 +397,9 @@ function PublicLayout() {
     calculateExchange();
   }, [giveAmount, giveCurrency, getCurrency, crossRates, loading]);
 
-  const fetchData = async () => {
+  const fetchData = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       const [currenciesRes, branchesRes, settingsRes, faqRes, servicesRes, crossRatesRes, ratesRes, currInfoRes, seoRes] = await Promise.all([
         currencyService.getAll(),
         branchService.getAll(),
@@ -536,63 +539,70 @@ function PublicLayout() {
           setCurrencies(allBranchCurrencies); // Keep main currencies list raw? Or sorted? User said HEADER dropdowns.
           // Set header currencies to the unique list from all branches (user request)
           setHeaderCurrencies(sorted);
-          // Determine initial currency based on URL OR fallback to USD
-          let initialCode = 'USD';
-          let initialMode = 'sell'; // default mode
+          if (!isBackground) {
+            // Determine initial currency based on URL OR fallback to USD
+            let initialCode = 'USD';
+            let initialMode = 'sell'; // default mode
 
-          const decodedPath = decodeURIComponent(pathname);
-          const normalizedPath = (decodedPath.endsWith('/') && decodedPath.length > 1 ? decodedPath.slice(0, -1) : decodedPath).toLowerCase();
+            const decodedPath = decodeURIComponent(pathname);
+            const normalizedPath = (decodedPath.endsWith('/') && decodedPath.length > 1 ? decodedPath.slice(0, -1) : decodedPath).toLowerCase();
 
-          // Check standard patterns (/sell-usd, /buy-eur)
-          const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
-          if (match) {
-            initialMode = match[1].toLowerCase();
-            initialCode = match[2].toUpperCase();
-          } else {
-            // Check SEO map with robust normalization
-            const normalize = (u) => {
-              if (!u) return null;
-              try {
-                let res = decodeURIComponent(u.trim());
-                if (!res.startsWith('/')) res = '/' + res;
-                if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
-                return res.toLowerCase();
-              } catch (e) {
-                let res = u.trim();
-                if (!res.startsWith('/')) res = '/' + res;
-                if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
-                return res.toLowerCase();
-              }
-            };
+            // Check standard patterns (/sell-usd, /buy-eur)
+            const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})$/i);
+            if (match) {
+              initialMode = match[1].toLowerCase();
+              initialCode = match[2].toUpperCase();
+            } else {
+              // Check SEO map with robust normalization
+              const normalize = (u) => {
+                if (!u) return null;
+                try {
+                  let res = decodeURIComponent(u.trim());
+                  if (!res.startsWith('/')) res = '/' + res;
+                  if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+                  return res.toLowerCase();
+                } catch (e) {
+                  let res = u.trim();
+                  if (!res.startsWith('/')) res = '/' + res;
+                  if (res.endsWith('/') && res.length > 1) res = res.slice(0, -1);
+                  return res.toLowerCase();
+                }
+              };
 
-            for (const [code, info] of Object.entries(currInfoRes.data || {})) {
-              const normBuy = normalize(info.buy_url);
-              const normSell = normalize(info.sell_url);
+              for (const [code, info] of Object.entries(currInfoRes.data || {})) {
+                const normBuy = normalize(info.buy_url);
+                const normSell = normalize(info.sell_url);
 
-              if (normBuy && normalizedPath === normBuy) {
-                initialCode = code;
-                initialMode = 'buy';
-                break;
-              }
-              if (normSell && normalizedPath === normSell) {
-                initialCode = code;
-                initialMode = 'sell';
-                break;
+                if (normBuy && normalizedPath === normBuy) {
+                  initialCode = code;
+                  initialMode = 'buy';
+                  break;
+                }
+                if (normSell && normalizedPath === normSell) {
+                  initialCode = code;
+                  initialMode = 'sell';
+                  break;
+                }
               }
             }
-          }
 
-          const targetCurrency = allBranchCurrencies.find(c => c.code === initialCode) || allBranchCurrencies.find(c => c.code === 'USD') || allBranchCurrencies[0];
+            const targetCurrency = allBranchCurrencies.find(c => c.code === initialCode) || allBranchCurrencies.find(c => c.code === 'USD') || allBranchCurrencies[0];
 
-          if (initialMode === 'buy') {
-            setGiveCurrency(uah);
-            setGetCurrency(targetCurrency);
+            if (initialMode === 'buy') {
+              setGiveCurrency(uah);
+              setGetCurrency(targetCurrency);
+            } else {
+              setGiveCurrency(targetCurrency);
+              setGetCurrency(uah);
+            }
+            setSellCurrency(targetCurrency);
+            setBuyCurrency(targetCurrency);
           } else {
-            setGiveCurrency(targetCurrency);
-            setGetCurrency(uah);
+            setGiveCurrency(prev => prev?.code !== 'UAH' ? (allBranchCurrencies.find(c => c.code === prev.code) || prev) : prev);
+            setGetCurrency(prev => prev?.code !== 'UAH' ? (allBranchCurrencies.find(c => c.code === prev.code) || prev) : prev);
+            setSellCurrency(prev => allBranchCurrencies.find(c => c.code === prev?.code) || prev);
+            setBuyCurrency(prev => allBranchCurrencies.find(c => c.code === prev?.code) || prev);
           }
-          setSellCurrency(targetCurrency);
-          setBuyCurrency(targetCurrency);
           currenciesResolved = true;
         }
       }
@@ -601,37 +611,44 @@ function PublicLayout() {
       if (!currenciesResolved) {
         setCurrencies(finalCurrencies);
         if (finalCurrencies.length > 0) {
-          // Same logic: try to grab from URL
-          let initialCode = 'USD';
-          let initialMode = 'sell';
+          if (!isBackground) {
+            // Same logic: try to grab from URL
+            let initialCode = 'USD';
+            let initialMode = 'sell';
 
-          const decodedPath = decodeURIComponent(pathname);
-          const normalizedPath = decodedPath.endsWith('/') && decodedPath.length > 1 ? decodedPath.slice(0, -1) : decodedPath;
+            const decodedPath = decodeURIComponent(pathname);
+            const normalizedPath = decodedPath.endsWith('/') && decodedPath.length > 1 ? decodedPath.slice(0, -1) : decodedPath;
 
-          const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})/i);
-          if (match) {
-            initialMode = match[1].toLowerCase();
-            initialCode = match[2].toUpperCase();
-          }
+            const match = normalizedPath.match(/^\/(buy|sell)-([a-zA-Z]{3,})/i);
+            if (match) {
+              initialMode = match[1].toLowerCase();
+              initialCode = match[2].toUpperCase();
+            }
 
-          const targetCurrency = finalCurrencies.find(c => c.code === initialCode) || finalCurrencies.find(c => c.code === 'USD') || finalCurrencies[0];
+            const targetCurrency = finalCurrencies.find(c => c.code === initialCode) || finalCurrencies.find(c => c.code === 'USD') || finalCurrencies[0];
 
-          if (initialMode === 'buy') {
-            setGiveCurrency(uah);
-            setGetCurrency(targetCurrency);
+            if (initialMode === 'buy') {
+              setGiveCurrency(uah);
+              setGetCurrency(targetCurrency);
+            } else {
+              setGiveCurrency(targetCurrency);
+              setGetCurrency(uah);
+            }
+            setSellCurrency(targetCurrency);
+            setBuyCurrency(targetCurrency);
           } else {
-            setGiveCurrency(targetCurrency);
-            setGetCurrency(uah);
+            setGiveCurrency(prev => prev?.code !== 'UAH' ? (finalCurrencies.find(c => c.code === prev.code) || prev) : prev);
+            setGetCurrency(prev => prev?.code !== 'UAH' ? (finalCurrencies.find(c => c.code === prev.code) || prev) : prev);
+            setSellCurrency(prev => finalCurrencies.find(c => c.code === prev?.code) || prev);
+            setBuyCurrency(prev => finalCurrencies.find(c => c.code === prev?.code) || prev);
           }
-          setSellCurrency(targetCurrency);
-          setBuyCurrency(targetCurrency);
         }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
       // Fallback logic omitted for brevity, keeping same structure
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
@@ -855,7 +872,7 @@ function PublicLayout() {
     try {
       const response = await reservationService.create(data);
       setSuccessModalOpen(true);
-      setGiveAmount(500);
+      setGiveAmount(1000);
     } catch (error) {
       console.error('Reservation error:', error);
       throw new Error(error.response?.data?.detail || 'Помилка створення бронювання');
@@ -871,7 +888,7 @@ function PublicLayout() {
       setGetCurrency(uah);
       setSellCurrency(defaultFx);
       setBuyCurrency(defaultFx);
-      setGiveAmount(100);
+      setGiveAmount(1000);
       setPresetAction(null);
       navigate('/');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1046,20 +1063,20 @@ function PublicLayout() {
         return (
           <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3">
             {/* Phone Button (Mobile Only) */}
-            <a
-              href="tel:0989998888"
-              className="md:hidden flex items-center gap-3 bg-[#4488FF] text-white rounded-full py-2 px-4 shadow-lg hover:bg-blue-600 transition-colors"
-            >
-              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center shrink-0">
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            {settings?.phone && (
+              <a
+                href={`tel:${settings.phone.replace(/[^\d+]/g, '')}`}
+                className="md:hidden flex items-center gap-3 bg-[#4488FF] text-white rounded-full h-14 px-5 shadow-lg hover:bg-blue-600 transition-colors"
+              >
+                <svg className="w-5 h-5 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>
-              </div>
-              <div className="flex flex-col pr-1">
-                <span className="text-sm font-bold leading-tight">098 999 88 88</span>
-                <span className="text-[10px] text-white/80 leading-tight">Щодня з 8:00 до 20:00</span>
-              </div>
-            </a>
+                <div className="flex flex-col pr-1">
+                  <span className="text-sm font-bold leading-tight">{settings.phone}</span>
+                  <span className="text-[10px] text-[#0f2c4c] font-medium leading-tight">Щодня з 8:00 до 20:00</span>
+                </div>
+              </a>
+            )}
 
             {/* Chat Button */}
             <button
@@ -1203,8 +1220,16 @@ function HomePage() {
     contactsPath, faqPath, ratesPath
   ];
 
-  // If a slug is present but it's not a recognized currency URL and not a dedicated SPA route, render the 404 page.
-  if (slug && !dedicatedSPA_Routes.includes(slug) && !loading && !pathCurrency && !isFallbackCurrencyRoute) {
+  const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const reqPath = cleanPathname.toLowerCase();
+  const activeSeo = seoList.find(s => {
+    if (!s.url_path) return false;
+    const dbPath = s.url_path.toLowerCase();
+    return dbPath === reqPath || dbPath === reqPath + '/';
+  });
+
+  // If a slug is present but it's not a recognized currency URL, not a dedicated SPA route, and not an SEO page, render the 404 page.
+  if (slug && !dedicatedSPA_Routes.includes(slug) && !loading && !pathCurrency && !isFallbackCurrencyRoute && !activeSeo) {
     return <NotFoundPage />;
   }
 
@@ -1217,14 +1242,6 @@ function HomePage() {
   // STRICT URL-BASED SEO:
   // If we are on a known URL, show its SEO. Otherwise, nothing.
   const activeCurrencyInfo = slug ? pathCurrency : null;
-
-  const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
-  const reqPath = cleanPathname.toLowerCase();
-  const activeSeo = seoList.find(s => {
-    if (!s.url_path) return false;
-    const dbPath = s.url_path.toLowerCase();
-    return dbPath === reqPath || dbPath === reqPath + '/';
-  });
 
   const activeH1 = activeSeo?.h1 || null;
   const activeH2 = activeSeo?.h2 || null;
@@ -1319,6 +1336,9 @@ function HomePage() {
         <RatesSection currencies={currencies} crossRates={crossRates} updatedAt={ratesUpdated} settings={settings} />
         <ServicesSection services={services} />
         <FAQSection faqItems={faqItems} />
+
+        {/* Telegram Promo Popup */}
+        <TelegramPopup telegramUrl={settings?.footer_telegram_url} />
       </Suspense>
 
     </>

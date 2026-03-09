@@ -1,10 +1,29 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext, useParams } from 'react-router-dom';
+import { useOutletContext, useParams, useLocation } from 'react-router-dom';
 import { ChevronDown, HelpCircle } from 'lucide-react';
+import SeoTextBlock from '../components/SeoTextBlock';
+import { Helmet } from 'react-helmet-async';
 
 export default function FAQPage() {
-    const { faqItems } = useOutletContext();
+    const { faqItems, seoList } = useOutletContext();
     const { id } = useParams();
+    const location = useLocation();
+
+    // Compute activeSeo for the current page
+    const pathname = decodeURIComponent(location.pathname);
+    const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+    const reqPath = cleanPathname.toLowerCase();
+    const activeSeo = (seoList || []).find(s => {
+        if (!s.url_path) return false;
+        let dbPath = s.url_path.toLowerCase();
+        if (!dbPath.startsWith('/')) dbPath = '/' + dbPath;
+        if (dbPath.endsWith('/') && dbPath.length > 1) dbPath = dbPath.slice(0, -1);
+        return dbPath === reqPath;
+    });
+
+    const pageH1 = activeSeo?.h1 || 'Часті запитання';
+    const pageTitle = activeSeo?.title ? (activeSeo.title.includes('Світ Валют') ? activeSeo.title : `${activeSeo.title} | Світ Валют`) : 'Часті запитання | Світ Валют';
+    const pageDesc = activeSeo?.description || activeSeo?.text?.replace(/<[^>]*>?/gm, '').substring(0, 160) || 'Відповіді на популярні запитання про обмін валют у «Світ Валют».';
     const [openItem, setOpenItem] = useState(null);
 
     // Auto-expand item if ID is present in URL
@@ -41,13 +60,18 @@ export default function FAQPage() {
 
     return (
         <div className="min-h-screen bg-primary pt-28 pb-16">
+            <Helmet>
+                <title>{pageTitle}</title>
+                <meta name="description" content={pageDesc} />
+            </Helmet>
+
             <div className="max-w-3xl mx-auto px-4 lg:px-8">
                 {/* Header */}
                 <div className="text-center mb-12">
                     <div className="w-16 h-16 bg-accent-yellow/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
                         <HelpCircle className="w-8 h-8 text-accent-yellow" />
                     </div>
-                    <h1 className="text-3xl lg:text-5xl font-bold text-white mb-4">Часті запитання</h1>
+                    <h1 className="text-3xl lg:text-5xl font-bold text-white mb-4">{pageH1}</h1>
                     <p className="text-text-secondary text-lg max-w-xl mx-auto">
                         Відповіді на популярні запитання про обмін валют у «Світ Валют».
                     </p>
@@ -97,6 +121,14 @@ export default function FAQPage() {
                         Зв'язатися з нами
                     </a>
                 </div>
+
+                {/* SEO Text Block */}
+                {activeSeo?.text && (
+                    <div className="mt-12 bg-primary-light rounded-2xl border border-white/10 p-6">
+                        {activeSeo.h2 && <h2 className="text-2xl font-bold mb-4">{activeSeo.h2}</h2>}
+                        <SeoTextBlock html={activeSeo.text} prose />
+                    </div>
+                )}
             </div>
         </div>
     );

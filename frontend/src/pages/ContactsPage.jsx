@@ -1,9 +1,28 @@
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useLocation } from 'react-router-dom';
 import { MapPin, Phone, Clock, Send, MessageSquare } from 'lucide-react';
 import BranchesSection from '../components/BranchesSection';
+import SeoTextBlock from '../components/SeoTextBlock';
+import { Helmet } from 'react-helmet-async';
 
 export default function ContactsPage() {
-    const { branches, settings, onOpenChat } = useOutletContext();
+    const { branches, settings, onOpenChat, seoList } = useOutletContext();
+    const location = useLocation();
+
+    // Compute activeSeo for the current page
+    const pathname = decodeURIComponent(location.pathname);
+    const cleanPathname = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+    const reqPath = cleanPathname.toLowerCase();
+    const activeSeo = (seoList || []).find(s => {
+        if (!s.url_path) return false;
+        let dbPath = s.url_path.toLowerCase();
+        if (!dbPath.startsWith('/')) dbPath = '/' + dbPath;
+        if (dbPath.endsWith('/') && dbPath.length > 1) dbPath = dbPath.slice(0, -1);
+        return dbPath === reqPath;
+    });
+
+    const pageH1 = activeSeo?.h1 || 'Контакти';
+    const pageTitle = activeSeo?.title ? (activeSeo.title.includes('Світ Валют') ? activeSeo.title : `${activeSeo.title} | Світ Валют`) : 'Контакти | Світ Валют';
+    const pageDesc = activeSeo?.description || activeSeo?.text?.replace(/<[^>]*>?/gm, '').substring(0, 160) || 'Зв\'яжіться з нами будь-яким зручним способом.';
 
     const phone = settings?.phone || '(096) 048-88-84';
     const phoneClean = phone.replace(/[^\d+]/g, '');
@@ -11,10 +30,15 @@ export default function ContactsPage() {
 
     return (
         <div className="min-h-screen bg-primary pt-28 pb-16">
+            <Helmet>
+                <title>{pageTitle}</title>
+                <meta name="description" content={pageDesc} />
+            </Helmet>
+
             <div className="max-w-5xl mx-auto px-4 lg:px-8">
                 {/* Page Header */}
                 <div className="text-center mb-12">
-                    <h1 className="text-3xl lg:text-5xl font-bold text-white mb-4">Контакти</h1>
+                    <h1 className="text-3xl lg:text-5xl font-bold text-white mb-4">{pageH1}</h1>
                     <p className="text-text-secondary text-lg max-w-2xl mx-auto">
                         Зв'яжіться з нами будь-яким зручним способом або завітайте до одного з наших відділень.
                     </p>
@@ -105,6 +129,14 @@ export default function ContactsPage() {
                                 </a>
                             )}
                         </div>
+                    </div>
+                )}
+
+                {/* SEO Text Block */}
+                {activeSeo?.text && (
+                    <div className="mt-8 bg-primary-light rounded-2xl border border-white/10 p-6">
+                        {activeSeo.h2 && <h2 className="text-2xl font-bold mb-4">{activeSeo.h2}</h2>}
+                        <SeoTextBlock html={activeSeo.text} prose />
                     </div>
                 )}
 

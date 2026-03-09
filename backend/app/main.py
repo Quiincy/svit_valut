@@ -14,6 +14,7 @@ import io
 import os
 from app.models import models
 from app.core import database
+from app.core.state import state, get_rates_updated_at, set_rates_updated_at
 from sqlalchemy.orm import Session
 from app.schemas import *
 import shutil
@@ -121,8 +122,8 @@ class ReservationStatus(str, enum.Enum):
 # Strict list of 34 currencies for Excel template/ordering
 ORDERED_CURRENCIES = [
     "USD", "EUR", "PLN", "GBP", "CHF", "MDL", "DKK", "NOK", "SEK", "CNY", 
-    "HUF", "ILS", "KZT", "MLD", "RON", "SAR", "SGD", "THB", "AED", "RSD", 
-    "AZN", "BGN", "HKD", "GEL", "KRW", "MXN", "NZD", "EGP", "JPY", "INR", 
+    "HUF", "ILS", "KZT", "RON", "SAR", "SGD", "THB", "AED", "RSD", 
+    "AZN", "HKD", "GEL", "KRW", "MXN", "NZD", "EGP", "JPY", "INR", 
     "AUD", "CAD", "CZK", "TRY"
 ]
 
@@ -136,8 +137,8 @@ branches_data = [
 
 users_db = {
     "admin": User(id=1, username="admin", role=UserRole.ADMIN, branch_id=None, name="Адміністратор"),
-    "operator1": User(id=2, username="operator1", role=UserRole.OPERATOR, branch_id=1, name="Марія Коваленко"),
-    "operator2": User(id=3, username="operator2", role=UserRole.OPERATOR, branch_id=2, name="Олексій Шевченко"),
+    "operator1": User(id=2, username="operator1", role=UserRole.OPERATOR, branch_id=4, name="Марія Коваленко"),
+    "operator2": User(id=3, username="operator2", role=UserRole.OPERATOR, branch_id=3, name="Олексій Шевченко"),
     "operator3": User(id=4, username="operator3", role=UserRole.OPERATOR, branch_id=3, name="Ірина Бондаренко"),
     "operator4": User(id=5, username="operator4", role=UserRole.OPERATOR, branch_id=4, name="Дмитро Мельник"),
 }
@@ -164,7 +165,6 @@ currencies_data = [
     Currency(code="HUF", name="Hungarian Forint", name_uk="Форинт", flag="🇭🇺", buy_rate=0.11, sell_rate=0.12, is_popular=False),
     Currency(code="ILS", name="Israeli New Shekel", name_uk="Новий ізраїльський шекель", flag="🇮🇱", buy_rate=11.20, sell_rate=11.50, is_popular=False),
     Currency(code="KZT", name="Kazakhstani Tenge", name_uk="Теньге", flag="🇰🇿", buy_rate=0.09, sell_rate=0.10, is_popular=False),
-    Currency(code="JOD", name="Jordanian Dinar", name_uk="Йорданський динар", flag="🇯🇴", buy_rate=53.00, sell_rate=54.50, is_popular=False),
     Currency(code="RON", name="Romanian Leu", name_uk="Румунський лей", flag="🇷🇴", buy_rate=9.00, sell_rate=9.20, is_popular=False),
     Currency(code="SAR", name="Saudi Riyal", name_uk="Саудівський ріал", flag="🇸🇦", buy_rate=11.00, sell_rate=11.30, is_popular=False),
     Currency(code="SGD", name="Singapore Dollar", name_uk="Сінгапурський долар", flag="🇸🇬", buy_rate=30.50, sell_rate=31.00, is_popular=False),
@@ -172,7 +172,6 @@ currencies_data = [
     Currency(code="AED", name="UAE Dirham", name_uk="Дирхам ОАЕ", flag="🇦🇪", buy_rate=11.30, sell_rate=11.50, is_popular=False),
     Currency(code="RSD", name="Serbian Dinar", name_uk="Сербський динар", flag="🇷🇸", buy_rate=0.38, sell_rate=0.40, is_popular=False),
     Currency(code="AZN", name="Azerbaijani Manat", name_uk="Азербайджанський манат", flag="🇦🇿", buy_rate=24.50, sell_rate=25.00, is_popular=False),
-    Currency(code="BGN", name="Bulgarian Lev", name_uk="Болгарський лев", flag="🇧🇬", buy_rate=22.50, sell_rate=23.00, is_popular=False),
     Currency(code="HKD", name="Hong Kong Dollar", name_uk="Гонконгівський долар", flag="🇭🇰", buy_rate=5.30, sell_rate=5.45, is_popular=False),
     Currency(code="GEL", name="Georgian Lari", name_uk="Ларі", flag="🇬🇪", buy_rate=15.20, sell_rate=15.50, is_popular=False),
     Currency(code="KRW", name="South Korean Won", name_uk="Вона", flag="🇰🇷", buy_rate=0.030, sell_rate=0.032, is_popular=False),
@@ -285,7 +284,6 @@ def init_db_data(db: Session):
     db.commit()
 
 # Current state (in-memory parts we still use)
-rates_updated_at = datetime.now()
 
 # Startup event
 @app.on_event("startup")
@@ -327,6 +325,11 @@ async def get_my_location():
         ("https://ipapi.co/json/", lambda d: (d.get("latitude"), d.get("longitude"))),
     ]
 
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
     for url, parser in providers:
         try:
             # Set a user agent to avoid being blocked by some APIs
@@ -335,7 +338,7 @@ async def get_my_location():
                 data=None, 
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             )
-            with urllib.request.urlopen(req, timeout=3) as response:
+            with urllib.request.urlopen(req, timeout=3, context=ctx) as response:
                 if response.status == 200:
                     data = json.loads(response.read().decode())
                     lat, lng = parser(data)
@@ -553,7 +556,7 @@ async def get_rates(db: Session = Depends(get_db)):
         rates_dict[r.currency_code] = {"buy": buy, "sell": sell}
         
     return {
-        "updated_at": rates_updated_at.isoformat(),
+        "updated_at": get_rates_updated_at(db).isoformat(),
         "base": "UAH",
         "rates": rates_dict
     }
@@ -764,6 +767,14 @@ async def create_reservation(request: ReservationRequest, db: Session = Depends(
             if request.rate is not None:
                 rate = request.rate
     
+    # Enforce minimum 1000 limit for USD and EUR
+    foreign_currency = request.get_currency.upper() if request.give_currency.upper() == "UAH" else request.give_currency.upper()
+    
+    # Use request amounts instead of calculated ones to be strict on user input
+    foreign_amount = request.get_amount if request.give_currency.upper() == "UAH" and request.get_amount is not None else request.give_amount
+    if foreign_currency in ["USD", "EUR"] and foreign_amount < 1000:
+        raise HTTPException(status_code=400, detail=f"Бронювання курсу діє від 1000 {foreign_currency}")
+
     # Use Naive Kyiv Time to ensure correct string-based sorting with existing legacy data
     # and correct display on frontend (as local time).
     try:
@@ -809,6 +820,7 @@ async def create_reservation(request: ReservationRequest, db: Session = Depends(
         status=db_res.status,
         branch_id=db_res.branch_id,
         branch_address=branch.address if branch else None,
+        branch_number=branch.number if branch else None,
         created_at=db_res.created_at.isoformat(),
         updated_at=db_res.updated_at.isoformat() if db_res.updated_at else None,
         expires_at=db_res.expires_at.isoformat()
@@ -835,6 +847,7 @@ async def get_reservation(reservation_id: int, db: Session = Depends(get_db)):
         status=db_res.status,
         branch_id=db_res.branch_id,
         branch_address=branch.address if branch else None,
+        branch_number=branch.number if branch else None,
         created_at=db_res.created_at.isoformat(),
         updated_at=db_res.updated_at.isoformat() if db_res.updated_at else None,
         expires_at=db_res.expires_at.isoformat(),
@@ -864,16 +877,17 @@ async def login(user: User = Depends(verify_credentials)):
             "name": user.name,
             "role": user.role,
             "branch_id": user.branch_id,
-            "branch_address": branch.address if branch else None
+            "branch_address": branch.address if branch else None,
+            "branch_number": branch.number if branch else None
         }
     }
 
 @app.get("/api/auth/me")
-async def get_current_user(user: User = Depends(verify_credentials)):
+async def get_current_user(user: User = Depends(verify_credentials), db: Session = Depends(get_db)):
     """Get current user info"""
     branch = None
     if user.branch_id:
-        branch = next((b for b in branches_data if b.id == user.branch_id), None)
+        branch = db.query(models.Branch).filter(models.Branch.id == user.branch_id).first()
     
     return {
         "id": user.id,
@@ -881,7 +895,8 @@ async def get_current_user(user: User = Depends(verify_credentials)):
         "name": user.name,
         "role": user.role,
         "branch_id": user.branch_id,
-        "branch_address": branch.address if branch else None
+        "branch_address": branch.address if branch else None,
+        "branch_number": branch.number if branch else None
     }
 
 
@@ -926,7 +941,7 @@ async def upload_rates(
     1. Base rates: 'Курси' or first sheet
     2. Branch rates: 'Відділення' (Vertical format) or Sheet with branch columns (Matrix)
     """
-    global currencies_data, rates_updated_at
+    global currencies_data
     
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="File must be .xlsx or .xls")
@@ -1778,11 +1793,11 @@ async def upload_rates(
                 else:
                     cd.is_active = True
             
-        rates_updated_at = datetime.now()
+        set_rates_updated_at(db)
         
         return RatesUploadResponseV2(
             success=True,
-            message=f"Курси оновлено о {rates_updated_at.strftime('%H:%M:%S')}",
+            message=f"Курси оновлено о {get_rates_updated_at(db).strftime('%H:%M:%S')}",
             base_rates_updated=base_updated,
             branch_rates_updated=branch_updated,
             errors=errors[:10]
@@ -2075,10 +2090,8 @@ async def update_branch_rate(
             rate.wholesale2_threshold = data.wholesale2_threshold
         if data.is_active is not None:
             rate.is_active = data.is_active
-        if data.sell_rate is not None:
-            rate.sell_rate = data.sell_rate
-        if data.is_active is not None:
-            rate.is_active = data.is_active
+            
+    set_rates_updated_at(db)
             
     db.commit()
     return {"success": True}
@@ -2117,7 +2130,7 @@ async def get_all_rates_admin(user: models.User = Depends(require_admin), db: Se
         }
         
     return {
-        "updated_at": rates_updated_at.isoformat(),
+        "updated_at": get_rates_updated_at(db).isoformat(),
         "base_rates": base_rates,
         "branch_rates": branch_rates,
         "branches": branches_out
@@ -2129,33 +2142,44 @@ async def get_admin_dashboard(user: models.User = Depends(require_admin), db: Se
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
     total = db.query(models.Reservation).count()
-    pending = db.query(models.Reservation).filter(
+    
+    pending_query = db.query(models.Reservation).filter(
         models.Reservation.status.in_([models.ReservationStatus.PENDING, models.ReservationStatus.PENDING_ADMIN])
-    ).count()
+    )
+    pending = pending_query.count()
+    pending_ids = [r[0] for r in pending_query.with_entities(models.Reservation.id).all()]
+    
     confirmed = db.query(models.Reservation).filter(models.Reservation.status == models.ReservationStatus.CONFIRMED).count()
     completed_today = db.query(models.Reservation).filter(
         models.Reservation.status == models.ReservationStatus.COMPLETED,
         models.Reservation.completed_at >= today_start
     ).count()
     
-    total_volume = db.query(models.Reservation).filter(
-        models.Reservation.get_currency == "UAH",
+    # Volume Today
+    volume_today_reservations = db.query(models.Reservation).filter(
         models.Reservation.status == models.ReservationStatus.COMPLETED,
-        models.Reservation.completed_at >= today_start
-    ).with_entities(models.Reservation.get_amount).all()
+        models.Reservation.completed_at >= today_start,
+        (models.Reservation.get_currency == "UAH") | (models.Reservation.give_currency == "UAH")
+    ).all()
     
-    total_volume_uah = sum(r[0] for r in total_volume)
+    total_volume_uah = sum(
+        r.get_amount if r.get_currency == "UAH" else r.give_amount
+        for r in volume_today_reservations
+    )
     
     # Calculate MONTHLY volume
     month_start = today_start.replace(day=1)
     
-    total_volume_month = db.query(models.Reservation).filter(
-        models.Reservation.get_currency == "UAH",
+    volume_month_reservations = db.query(models.Reservation).filter(
         models.Reservation.status == models.ReservationStatus.COMPLETED,
-        models.Reservation.completed_at >= month_start
-    ).with_entities(models.Reservation.get_amount).all()
+        models.Reservation.completed_at >= month_start,
+        (models.Reservation.get_currency == "UAH") | (models.Reservation.give_currency == "UAH")
+    ).all()
     
-    total_volume_uah_month = sum(r[0] for r in total_volume_month)
+    total_volume_uah_month = sum(
+        r.get_amount if r.get_currency == "UAH" else r.give_amount
+        for r in volume_month_reservations
+    )
     
     return DashboardStats(
         total_reservations=total,
@@ -2163,8 +2187,27 @@ async def get_admin_dashboard(user: models.User = Depends(require_admin), db: Se
         confirmed_reservations=confirmed,
         completed_today=completed_today,
         total_volume_uah=total_volume_uah,
-        total_volume_uah_month=total_volume_uah_month
+        total_volume_uah_month=total_volume_uah_month,
+        pending_ids=pending_ids
     )
+
+def auto_expire_reservations(db: Session):
+    try:
+        from zoneinfo import ZoneInfo
+        kyiv = ZoneInfo("Europe/Kyiv")
+        now = datetime.now(kyiv).replace(tzinfo=None)
+    except ImportError:
+        now = datetime.utcnow() + timedelta(hours=2)
+
+    expired_res = db.query(models.Reservation).filter(
+        models.Reservation.status.in_([models.ReservationStatus.PENDING, models.ReservationStatus.PENDING_ADMIN]),
+        models.Reservation.expires_at < now
+    ).all()
+    
+    if expired_res:
+        for r in expired_res:
+             r.status = models.ReservationStatus.EXPIRED
+        db.commit()
 
 @app.get("/api/admin/reservations")
 async def get_all_reservations(
@@ -2178,6 +2221,7 @@ async def get_all_reservations(
     db: Session = Depends(get_db)
 ):
     """Get all reservations (Admin only)"""
+    auto_expire_reservations(db)
     query = db.query(models.Reservation)
     
     if status:
@@ -2222,6 +2266,7 @@ async def get_all_reservations(
             status=r.status,
             branch_id=r.branch_id,
             branch_address=branch.address if branch else None,
+            branch_number=branch.number if branch else None,
             created_at=r.created_at.isoformat(),
             updated_at=r.updated_at.isoformat() if r.updated_at else None,
             expires_at=r.expires_at.isoformat(),
@@ -2246,6 +2291,65 @@ class ReservationEdit(BaseModel):
     phone: Optional[str] = None
     status: Optional[str] = None
     operator_note: Optional[str] = None
+
+
+@app.post("/api/admin/reservations", response_model=ReservationResponse)
+async def admin_create_reservation(
+    data: AdminReservationCreate,
+    user: models.User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin manually creates a reservation (bypasses limits/SMS limits)"""
+    branch = db.query(models.Branch).filter(models.Branch.id == data.branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=400, detail="Branch not found")
+        
+    try:
+        from zoneinfo import ZoneInfo
+        kyiv = ZoneInfo("Europe/Kyiv")
+        now = datetime.now(kyiv).replace(tzinfo=None)
+    except ImportError:
+        now = datetime.utcnow() + timedelta(hours=2)
+
+    expires_at = now + timedelta(minutes=60)
+    
+    db_res = models.Reservation(
+        give_amount=data.give_amount,
+        give_currency=data.give_currency.upper(),
+        get_amount=data.get_amount,
+        get_currency=data.get_currency.upper(),
+        rate=data.rate,
+        phone=data.phone,
+        customer_name=data.customer_name,
+        status=models.ReservationStatus.PENDING_ADMIN,
+        branch_id=data.branch_id,
+        operator_note=data.operator_note,
+        created_at=now,
+        expires_at=expires_at
+    )
+    db.add(db_res)
+    db.commit()
+    db.refresh(db_res)
+    
+    return ReservationResponse(
+        id=db_res.id,
+        give_amount=db_res.give_amount,
+        give_currency=db_res.give_currency,
+        get_amount=db_res.get_amount,
+        get_currency=db_res.get_currency,
+        rate=db_res.rate,
+        phone=db_res.phone,
+        customer_name=db_res.customer_name,
+        status=db_res.status,
+        branch_id=db_res.branch_id,
+        branch_address=branch.address if branch else None,
+        branch_number=branch.number if branch else None,
+        created_at=db_res.created_at.isoformat(),
+        updated_at=db_res.updated_at.isoformat() if db_res.updated_at else None,
+        expires_at=db_res.expires_at.isoformat(),
+        completed_at=db_res.completed_at.isoformat() if db_res.completed_at else None,
+        operator_note=db_res.operator_note
+    )
 
 
 @app.put("/api/admin/reservations/{reservation_id}")
@@ -2277,7 +2381,18 @@ async def update_reservation(
         res.phone = data.phone
     if data.status is not None:
         try:
-            res.status = ReservationStatus(data.status)
+            new_status = ReservationStatus(data.status)
+            # If changing FROM expired TO a pending status, reset the expiration timer
+            if res.status == ReservationStatus.EXPIRED and new_status in [ReservationStatus.PENDING, ReservationStatus.PENDING_ADMIN]:
+                try:
+                    from zoneinfo import ZoneInfo
+                    kyiv = ZoneInfo("Europe/Kyiv")
+                    now = datetime.now(kyiv).replace(tzinfo=None)
+                except ImportError:
+                    now = datetime.utcnow() + timedelta(hours=2)
+                res.expires_at = now + timedelta(minutes=60)
+            
+            res.status = new_status
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid status: {data.status}")
     if data.operator_note is not None:
@@ -2299,6 +2414,7 @@ async def update_reservation(
         status=res.status,
         branch_id=res.branch_id,
         branch_address=branch.address if branch else None,
+        branch_number=branch.number if branch else None,
         created_at=res.created_at.isoformat(),
         updated_at=res.updated_at.isoformat() if res.updated_at else None,
         expires_at=res.expires_at.isoformat(),
@@ -2342,6 +2458,7 @@ async def assign_reservation_to_operator(
         status=res.status,
         branch_id=res.branch_id,
         branch_address=branch.address if branch else None,
+        branch_number=branch.number if branch else None,
         created_at=res.created_at.isoformat(),
         updated_at=res.updated_at.isoformat() if res.updated_at else None,
         expires_at=res.expires_at.isoformat(),
@@ -2362,7 +2479,11 @@ async def get_operator_dashboard(user: models.User = Depends(require_operator_or
         query = query.filter(models.Reservation.branch_id == user.branch_id)
     
     total = query.count()
-    pending = query.filter(models.Reservation.status == models.ReservationStatus.PENDING).count()
+    
+    pending_query = query.filter(models.Reservation.status == models.ReservationStatus.PENDING)
+    pending = pending_query.count()
+    pending_ids = [r[0] for r in pending_query.with_entities(models.Reservation.id).all()]
+    
     confirmed = query.filter(models.Reservation.status == models.ReservationStatus.CONFIRMED).count()
     completed_today = query.filter(
         models.Reservation.status == models.ReservationStatus.COMPLETED,
@@ -2371,20 +2492,26 @@ async def get_operator_dashboard(user: models.User = Depends(require_operator_or
     
     # Volume Today
     volume_today_query = query.filter(
-        models.Reservation.get_currency == "UAH",
+        (models.Reservation.get_currency == "UAH") | (models.Reservation.give_currency == "UAH"),
         models.Reservation.status == models.ReservationStatus.COMPLETED,
         models.Reservation.completed_at >= today_start
     )
-    total_volume_uah = sum(r.get_amount for r in volume_today_query.all())
+    total_volume_uah = sum(
+        r.get_amount if r.get_currency == "UAH" else r.give_amount 
+        for r in volume_today_query.all()
+    )
     
     # Volume Month
     month_start = today_start.replace(day=1)
     volume_month_query = query.filter(
-        models.Reservation.get_currency == "UAH",
+        (models.Reservation.get_currency == "UAH") | (models.Reservation.give_currency == "UAH"),
         models.Reservation.status == models.ReservationStatus.COMPLETED,
         models.Reservation.completed_at >= month_start
     )
-    total_volume_uah_month = sum(r.get_amount for r in volume_month_query.all())
+    total_volume_uah_month = sum(
+        r.get_amount if r.get_currency == "UAH" else r.give_amount 
+        for r in volume_month_query.all()
+    )
     
     return DashboardStats(
         total_reservations=total,
@@ -2392,7 +2519,8 @@ async def get_operator_dashboard(user: models.User = Depends(require_operator_or
         confirmed_reservations=confirmed,
         completed_today=completed_today,
         total_volume_uah=total_volume_uah,
-        total_volume_uah_month=total_volume_uah_month
+        total_volume_uah_month=total_volume_uah_month,
+        pending_ids=pending_ids
     )
 
 @app.get("/api/operator/reservations")
@@ -2406,6 +2534,7 @@ async def get_branch_reservations(
     db: Session = Depends(get_db)
 ):
     """Get reservations for operator's branch"""
+    auto_expire_reservations(db)
     query = db.query(models.Reservation)
     if user.role == models.UserRole.OPERATOR and user.branch_id:
         query = query.filter(models.Reservation.branch_id == user.branch_id)
@@ -2445,6 +2574,7 @@ async def get_branch_reservations(
             status=r.status,
             branch_id=r.branch_id,
             branch_address=branch.address if branch else None,
+            branch_number=branch.number if branch else None,
             created_at=r.created_at.isoformat(),
             updated_at=r.updated_at.isoformat() if r.updated_at else None,
             expires_at=r.expires_at.isoformat(),
@@ -2466,23 +2596,30 @@ async def update_reservation(
     user: models.User = Depends(require_operator_or_admin),
     db: Session = Depends(get_db)
 ):
-    """Update reservation status (Operator)"""
+    """Update reservation (Operator) — supports editing amounts, rate, branch transfer"""
     db_res = db.query(models.Reservation).filter(models.Reservation.id == reservation_id).first()
     if not db_res:
         raise HTTPException(status_code=404, detail="Reservation not found")
-    
-    # Check if operator has access to this reservation
-    if user.role == models.UserRole.OPERATOR and user.branch_id:
-        if db_res.branch_id != user.branch_id:
-            raise HTTPException(status_code=403, detail="Access denied to this reservation")
     
     if update.status:
         db_res.status = update.status
         if update.status == models.ReservationStatus.COMPLETED:
             db_res.completed_at = datetime.now()
     
-    if update.operator_note:
+    if update.operator_note is not None:
         db_res.operator_note = update.operator_note
+
+    if update.give_amount is not None:
+        db_res.give_amount = update.give_amount
+    if update.get_amount is not None:
+        db_res.get_amount = update.get_amount
+    if update.rate is not None:
+        db_res.rate = update.rate
+    if update.branch_id is not None:
+        branch = db.query(models.Branch).filter(models.Branch.id == update.branch_id).first()
+        if not branch:
+            raise HTTPException(status_code=400, detail="Branch not found")
+        db_res.branch_id = update.branch_id
     
     db.commit()
     db.refresh(db_res)
@@ -2501,6 +2638,7 @@ async def update_reservation(
         status=db_res.status,
         branch_id=db_res.branch_id,
         branch_address=branch.address if branch else None,
+        branch_number=branch.number if branch else None,
         created_at=db_res.created_at.isoformat(),
         updated_at=db_res.updated_at.isoformat() if db_res.updated_at else None,
         expires_at=db_res.expires_at.isoformat(),
@@ -2573,8 +2711,8 @@ async def cancel_reservation(
         if reservation.branch_id != user.branch_id:
             raise HTTPException(status_code=403, detail="Access denied")
     
-    if user.role != models.UserRole.ADMIN and reservation.status == models.ReservationStatus.COMPLETED:
-        raise HTTPException(status_code=400, detail="Cannot cancel completed reservation")
+    if user.role != models.UserRole.ADMIN and reservation.status in [models.ReservationStatus.COMPLETED, models.ReservationStatus.CANCELLED]:
+        raise HTTPException(status_code=400, detail="Cannot cancel completed or already cancelled reservation")
     
     reservation.status = models.ReservationStatus.CANCELLED
     db.commit()
@@ -2759,7 +2897,13 @@ async def create_service(item: ServiceItem, user: models.User = Depends(require_
         image_url=item.image_url,
         link_url=item.link_url,
         is_active=item.is_active,
-        order=item.order
+        order=item.order,
+        seo_h1=item.seo_h1,
+        seo_h2=item.seo_h2,
+        seo_title=item.seo_title,
+        seo_description=item.seo_description,
+        seo_text=item.seo_text,
+        seo_image=item.seo_image
     )
     db.add(db_item)
     db.commit()
@@ -2780,6 +2924,12 @@ async def update_service(service_id: int, item: ServiceItem, user: models.User =
     db_item.link_url = item.link_url
     db_item.is_active = item.is_active
     db_item.order = item.order
+    db_item.seo_h1 = item.seo_h1
+    db_item.seo_h2 = item.seo_h2
+    db_item.seo_title = item.seo_title
+    db_item.seo_description = item.seo_description
+    db_item.seo_text = item.seo_text
+    db_item.seo_image = item.seo_image
     
     db.commit()
     db.refresh(db_item)
@@ -3316,8 +3466,7 @@ async def update_currency(code: str, update: CurrencyUpdate, user: models.User =
     if update.wholesale_threshold is not None:
         c.wholesale_threshold = update.wholesale_threshold
     
-    global rates_updated_at
-    rates_updated_at = datetime.now()
+    set_rates_updated_at(db)
     
     db.commit()
     db.refresh(c)
@@ -3407,6 +3556,11 @@ async def download_operator_rates(user: models.User = Depends(require_operator_o
 async def admin_get_chat_sessions(user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     """Admin get all active chat sessions sorted by recent activity"""
     sessions = db.query(models.ChatSession).filter(models.ChatSession.status == models.ChatSessionStatus.ACTIVE).order_by(models.ChatSession.last_message_at.desc()).all()
+    for s in sessions:
+        if s.created_at and s.created_at.tzinfo is None:
+            s.created_at = s.created_at.replace(tzinfo=timezone.utc)
+        if s.last_message_at and s.last_message_at.tzinfo is None:
+            s.last_message_at = s.last_message_at.replace(tzinfo=timezone.utc)
     return sessions
 
 @app.get("/api/admin/chat/sessions/{session_id}/messages", response_model=List[ChatMessage])
@@ -3417,6 +3571,10 @@ async def admin_get_session_messages(session_id: str, user: models.User = Depend
         raise HTTPException(status_code=404, detail="Session not found")
     
     messages = db.query(models.ChatMessage).filter(models.ChatMessage.session_id == session.id).order_by(models.ChatMessage.created_at.asc()).all()
+    
+    for m in messages:
+        if m.created_at and m.created_at.tzinfo is None:
+            m.created_at = m.created_at.replace(tzinfo=timezone.utc)
     return messages
 
 @app.post("/api/admin/chat/sessions/{session_id}/messages", response_model=ChatMessage)
@@ -3437,6 +3595,8 @@ async def admin_send_chat_message(session_id: str, msg: ChatMessageCreate, user:
     db.commit()
     db.refresh(new_msg)
     
+    if new_msg.created_at and new_msg.created_at.tzinfo is None:
+        new_msg.created_at = new_msg.created_at.replace(tzinfo=timezone.utc)
     return new_msg
 
 @app.post("/api/admin/chat/sessions/{session_id}/read")
@@ -3457,7 +3617,36 @@ async def admin_mark_messages_read(session_id: str, user: models.User = Depends(
         
     db.commit()
     return {"success": True}
+
+class ChatMessageUpdate(BaseModel):
+    content: str
     
+@app.put("/api/admin/chat/messages/{message_id}", response_model=ChatMessage)
+async def admin_edit_message(message_id: int, update: ChatMessageUpdate, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin edits their own message"""
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id, models.ChatMessage.sender == 'admin').first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found or not editable")
+        
+    msg.content = update.content
+    db.commit()
+    db.refresh(msg)
+    
+    if msg.created_at and msg.created_at.tzinfo is None:
+        msg.created_at = msg.created_at.replace(tzinfo=timezone.utc)
+    return msg
+
+@app.delete("/api/admin/chat/messages/{message_id}")
+async def admin_delete_message(message_id: int, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin deletes their own message"""
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id, models.ChatMessage.sender == 'admin').first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found or not editable")
+        
+    db.delete(msg)
+    db.commit()
+    return {"success": True}
+
 @app.put("/api/admin/chat/sessions/{session_id}/close")
 async def admin_close_chat_session(session_id: str, user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     """Admin closes a chat session"""

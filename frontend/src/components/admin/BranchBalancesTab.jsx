@@ -64,6 +64,7 @@ export default function BranchBalancesTab({ branchId, readOnly = false }) {
         try {
             await branchService.updateBalances(branchId, balances);
             setMessage({ type: 'success', text: 'Залишки успішно збережені' });
+            await fetchData();
             setTimeout(() => setMessage(null), 3000);
         } catch (error) {
             setMessage({ type: 'error', text: 'Помилка збереження' });
@@ -74,17 +75,25 @@ export default function BranchBalancesTab({ branchId, readOnly = false }) {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center p-12">
+            <div className="flex items-center justify-center p-12 min-h-[500px] animate-in fade-in duration-300">
                 <RefreshCw className="w-8 h-8 text-accent-yellow animate-spin" />
             </div>
         );
     }
 
-    const usdTotal = USD_CATEGORIES.reduce((sum, cat) => sum + (parseFloat(getAmount('USD', cat.key)) || 0), 0);
-    const eurTotal = parseFloat(getAmount('EUR', 'amount')) || 0;
+    const usdTotal = USD_CATEGORIES.reduce((sum, cat) => sum + (parseFloat(getAmount('USD', cat.key)) || 0), 0) + (parseFloat(getAmount('USD', 'old_amount')) || 0);
+    const eurTotal = (parseFloat(getAmount('EUR', 'amount')) || 0) + (parseFloat(getAmount('EUR', 'old_amount')) || 0);
+
+    const validUpdatedTimes = balances && balances.length > 0
+        ? balances.map(b => b.updated_at ? new Date(b.updated_at).getTime() : 0).filter(t => !isNaN(t) && t > 0)
+        : [];
+
+    const latestUpdateTime = validUpdatedTimes.length > 0
+        ? new Date(Math.max(...validUpdatedTimes))
+        : null;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 min-h-[500px] animate-in fade-in duration-300">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-accent-yellow" />
@@ -111,6 +120,17 @@ export default function BranchBalancesTab({ branchId, readOnly = false }) {
                     )}
                 </div>
             </div>
+
+            {latestUpdateTime && (
+                <div className="flex justify-end -mt-4 mb-2">
+                    <span className="text-xs text-text-secondary bg-primary/50 px-3 py-1 rounded-full border border-white/5">
+                        Збережено: {latestUpdateTime.toLocaleString('uk-UA', {
+                            day: '2-digit', month: '2-digit', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit'
+                        })}
+                    </span>
+                </div>
+            )}
 
             {message && (
                 <div className={`p-4 rounded-xl flex items-center gap-3 ${message.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'

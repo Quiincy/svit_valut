@@ -91,6 +91,12 @@ class ServiceItemBase(BaseModel):
     link_url: Optional[str] = None
     is_active: bool = True
     order: int = 0
+    seo_h1: Optional[str] = None
+    seo_h2: Optional[str] = None
+    seo_title: Optional[str] = None
+    seo_description: Optional[str] = None
+    seo_text: Optional[str] = None
+    seo_image: Optional[str] = None
 
 class ServiceItem(ServiceItemBase):
     class Config:
@@ -130,6 +136,7 @@ class ReservationResponse(BaseModel):
     status: ReservationStatus
     branch_id: Optional[int]
     branch_address: Optional[str]
+    branch_number: Optional[int] = None
     created_at: str
     updated_at: Optional[str] = None
     expires_at: str
@@ -139,12 +146,27 @@ class ReservationResponse(BaseModel):
 class ReservationUpdate(BaseModel):
     status: Optional[ReservationStatus] = None
     operator_note: Optional[str] = None
+    give_amount: Optional[float] = None
+    get_amount: Optional[float] = None
+    rate: Optional[float] = None
+    branch_id: Optional[int] = None
 
 class ReservationEdit(BaseModel):
     give_amount: Optional[float] = None
     get_amount: Optional[float] = None
     rate: Optional[float] = None
     branch_id: Optional[int] = None
+
+class AdminReservationCreate(BaseModel):
+    give_amount: float
+    give_currency: str
+    get_amount: float
+    get_currency: str
+    rate: float
+    phone: str
+    customer_name: Optional[str] = None
+    branch_id: int
+    operator_note: Optional[str] = None
 
 # ============== CURRENCIES & RATES ==============
 class Currency(BaseModel):
@@ -336,11 +358,13 @@ class DashboardStats(BaseModel):
     completed_today: int
     total_volume_uah: float
     total_volume_uah_month: float
+    pending_ids: List[int] = []
 
 # ============== CHAT ==============
 class ChatMessageBase(BaseModel):
     sender: str
-    content: str
+    content: Optional[str] = None
+    image_url: Optional[str] = None
 
 class ChatMessageCreate(ChatMessageBase):
     pass
@@ -382,6 +406,7 @@ class ReservationResponse(BaseModel):
     status: ReservationStatus
     branch_id: Optional[int]
     branch_address: Optional[str]
+    branch_number: Optional[int] = None
     created_at: str
     updated_at: Optional[str] = None
     expires_at: str
@@ -473,6 +498,7 @@ class DashboardStats(BaseModel):
     completed_today: int
     total_volume_uah: float
     total_volume_uah_month: float
+    pending_ids: List[int] = []
 
 class BranchRate(BaseModel):
     branch_id: int
@@ -504,7 +530,8 @@ class RatesUploadResponseV2(BaseModel):
 # ============== CHAT ==============
 class ChatMessageBase(BaseModel):
     sender: str
-    content: str
+    content: Optional[str] = None
+    image_url: Optional[str] = None
 
 class ChatMessageCreate(ChatMessageBase):
     pass

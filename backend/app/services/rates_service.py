@@ -4,20 +4,21 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models import models
 from app.schemas import RatesUploadResponseV2
+from app.core.state import set_rates_updated_at, get_rates_updated_at
 from typing import Optional, List, Dict, Any
 
 # Constants
 MAJOR_CURRENCIES = ['USD', 'EUR', 'PLN', 'GBP', 'CHF']
-ORDERED_CURRENCIES = ['USD', 'EUR', 'PLN', 'GBP', 'CHF', 'CZK', 'AUD', 'BGN', 'BRL', 'CAD', 'CLP', 'CNY', 'COP', 'DKK', 'EGP', 'GEL', 'HKD', 'HUF', 'ILS', 'INR', 'JPY', 'KZT', 'MXN', 'MYR', 'NOK', 'NZD', 'PEN', 'PHP', 'RON', 'RSD', 'SAR', 'SEK', 'SGD', 'THB', 'TRY', 'TWD', 'ZAR']
+ORDERED_CURRENCIES = ['USD', 'EUR', 'PLN', 'GBP', 'CHF', 'CZK', 'AUD', 'BRL', 'CAD', 'CLP', 'CNY', 'COP', 'DKK', 'EGP', 'GEL', 'HKD', 'HUF', 'ILS', 'INR', 'JPY', 'KZT', 'MXN', 'MYR', 'NOK', 'NZD', 'PEN', 'PHP', 'RON', 'RSD', 'SAR', 'SEK', 'SGD', 'THB', 'TRY', 'TWD', 'ZAR']
 
 CURRENCY_FLAGS = {
     "USD": "🇺🇸", "EUR": "🇪🇺", "PLN": "🇵🇱", "GBP": "🇬🇧", "CHF": "🇨🇭",
     "EGP": "🇪🇬", "JPY": "🇯🇵", "INR": "🇮🇳", "AUD": "🇦🇺", "CAD": "🇨🇦",
     "CZK": "🇨🇿", "TRY": "🇹🇷", "CNY": "🇨🇳", "KRW": "🇰🇷", "SEK": "🇸🇪",
-    "NOK": "🇳🇴", "DKK": "🇩🇰", "HUF": "🇭🇺", "RON": "🇷🇴", "BGN": "🇧🇬",
+    "NOK": "🇳🇴", "DKK": "🇩🇰", "HUF": "🇭🇺", "RON": "🇷🇴",
     "UAH": "🇺🇦", "ILS": "🇮🇱", "AED": "🇦🇪", "SAR": "🇸🇦", "THB": "🇹🇭",
     "HKD": "🇭🇰", "SGD": "🇸🇬", "MXN": "🇲🇽", "NZD": "🇳🇿", "GEL": "🇬🇪",
-    "AZN": "🇦🇿", "KZT": "🇰🇿", "MDL": "🇲🇩", "MLD": "🇲🇩", "RSD": "🇷🇸",
+    "AZN": "🇦🇿", "KZT": "🇰🇿", "MDL": "🇲🇩", "RSD": "🇷🇸",
 }
 
 POPULAR_CURRENCIES = {"USD", "EUR", "PLN", "GBP", "CHF", "CZK"}
@@ -355,11 +356,11 @@ class RatesService:
             
             self.db.commit()
             
-        rates_updated_at = datetime.now()
+        set_rates_updated_at(self.db)
         
         return RatesUploadResponseV2(
             success=True,
-            message=f"Курси оновлено о {rates_updated_at.strftime('%H:%M:%S')}",
+            message=f"Курси оновлено о {get_rates_updated_at(self.db).strftime('%H:%M:%S')}",
             base_rates_updated=base_updated,
             branch_rates_updated=branch_updated,
             errors=errors[:10]

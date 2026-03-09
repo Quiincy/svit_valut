@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Send, MessageSquare, Minimize2, User } from 'lucide-react';
-import { chatService } from '../services/api';
+import { X, Send, MessageSquare, Minimize2, User, Paperclip, Loader2 } from 'lucide-react';
+import { chatService, getStaticUrl } from '../services/api';
 
 // Generate unique chat ID
 const getChatId = () => {
@@ -18,7 +18,9 @@ export default function LiveChat({ isOpen, onClose }) {
   const [customerName, setCustomerName] = useState('');
   const [nameSubmitted, setNameSubmitted] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const chatId = getChatId();
   const pollIntervalRef = useRef(null);
 
@@ -87,6 +89,30 @@ export default function LiveChat({ isOpen, onClose }) {
       fetchMessages();
     } catch (err) {
       console.error('Error sending message:', err);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate size (e.g. max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Файл занадто великий (максимум 5 МБ)');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      await chatService.uploadImage(chatId, file);
+      fetchMessages();
+    } catch (err) {
+      console.error('Upload failed:', err);
+      alert('Помилка завантаження файлу.');
+    } finally {
+      setIsUploading(false);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -204,7 +230,19 @@ export default function LiveChat({ isOpen, onClose }) {
                       : 'bg-primary border border-white/10 rounded-bl-sm text-white'
                       }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    {msg.image_url ? (
+                      <div className="mb-1 rounded-md overflow-hidden bg-black/10">
+                        <img
+                          src={getStaticUrl(msg.image_url)}
+                          alt="Прикріплене фото"
+                          className="max-w-full h-auto max-h-[200px] object-contain rounded-md cursor-pointer hover:opacity-90"
+                          onClick={() => window.open(getStaticUrl(msg.image_url), '_blank')}
+                        />
+                      </div>
+                    ) : null}
+
+                    {msg.content && <p className="text-sm whitespace-pre-wrap">{msg.content}</p>}
+
                     <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-primary/60' : 'text-text-secondary'}`}>
                       {new Date(msg.created_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}
                     </p>
@@ -218,7 +256,7 @@ export default function LiveChat({ isOpen, onClose }) {
           {/* Input */}
           <div className="p-4 border-t border-white/10">
             {chatOnline ? (
-              <div className="flex gap-2">
+              <div className="flex gap-2 relative">
                 <input
                   type="text"
                   value={input}
@@ -226,12 +264,30 @@ export default function LiveChat({ isOpen, onClose }) {
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Напишіть повідомлення..."
                   aria-label="Напишіть повідомлення"
-                  className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm text-white"
+                  className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm text-white pr-10"
                 />
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                />
+
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="absolute right-[65px] top-1/2 -translate-y-1/2 p-2 text-text-secondary hover:text-accent-yellow transition-colors disabled:opacity-50"
+                  aria-label="Прикріпити фото"
+                >
+                  {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
+                </button>
+
                 <button
                   onClick={handleSendMessage}
-                  disabled={!input.trim()}
-                  className="p-3 bg-accent-yellow rounded-xl text-primary hover:opacity-90 disabled:opacity-50"
+                  disabled={!input.trim() || isUploading}
+                  className="p-3 bg-accent-yellow rounded-xl text-primary hover:opacity-90 disabled:opacity-50 shrink-0"
                   aria-label="Надіслати повідомлення">
                   <Send className="w-5 h-5" />
                 </button>
@@ -240,7 +296,7 @@ export default function LiveChat({ isOpen, onClose }) {
               <div className="text-center py-2">
                 <p className="text-sm text-gray-400">Чат працює щодня з 08:00 до 20:00</p>
                 <p className="text-xs text-gray-500 mt-1">Залиште повідомлення і ми відповімо вранці</p>
-                <div className="flex gap-2 mt-2">
+                <div className="flex gap-2 mt-2 relative">
                   <input
                     type="text"
                     value={input}
@@ -248,13 +304,23 @@ export default function LiveChat({ isOpen, onClose }) {
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Залишити повідомлення..."
                     aria-label="Напишіть повідомлення"
-                    className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm text-white"
+                    className="flex-1 px-4 py-3 bg-primary rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none text-sm text-white pr-10"
                   />
+
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="absolute right-[65px] top-1/2 -translate-y-1/2 p-2 text-text-secondary hover:text-accent-yellow transition-colors disabled:opacity-50"
+                    aria-label="Прикріпити фото"
+                  >
+                    {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
+                  </button>
+
                   <button
                     onClick={handleSendMessage}
-                    disabled={!input.trim()}
+                    disabled={!input.trim() || isUploading}
                     aria-label="Надіслати повідомлення"
-                    className="p-3 bg-accent-yellow/60 rounded-xl text-primary hover:opacity-90 disabled:opacity-50"
+                    className="p-3 bg-accent-yellow/60 rounded-xl text-primary hover:opacity-90 disabled:opacity-50 shrink-0"
                   >
                     <Send className="w-5 h-5" />
                   </button>

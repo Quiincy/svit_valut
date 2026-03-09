@@ -3,6 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
+const log = console.log.bind(console);
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = process.env.PORT || 3000;
 const STATIC_DIR = __dirname;
@@ -30,7 +31,7 @@ const MIME_TYPES = {
 
 // Known static SPA routes
 const KNOWN_STATIC_ROUTES = new Set([
-    '/', '/rates', '/contacts', '/faq', '/login', '/panel', '/admin', '/operator'
+    '/', '/rates', '/contacts', '/contact', '/faq', '/login', '/panel', '/admin', '/operator', '/articles'
 ]);
 
 // Dynamic valid paths fetched from the backend (SEO URLs, currency info URLs, service URLs, etc.)
@@ -141,7 +142,8 @@ function isKnownRoute(urlPath) {
 
         // Common Cyrillic exchange patterns (buy/sell in UKR/RUS)
         if (p.includes('/купити-') || p.includes('/продати-') ||
-            p.includes('/купить-') || p.includes('/продать-')) return true;
+            p.includes('/купить-') || p.includes('/продать-') ||
+            p.includes('/обміняти-') || p.includes('/обменять-')) return true;
 
         return false;
     } catch (e) {

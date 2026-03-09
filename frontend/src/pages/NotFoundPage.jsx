@@ -1,9 +1,14 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Home, ArrowRight } from 'lucide-react';
 
 export default function NotFoundPage() {
+    useEffect(() => {
+        document.title = "404 page not found";
+    }, []);
+
     return (
-        <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <div className="min-h-[80vh] flex items-center justify-center p-4 pt-24 md:pt-32">
             <div className="max-w-xl w-full text-center relative z-10">
                 {/* Glowing background effect */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-accent-yellow/20 rounded-full blur-[100px] -z-10" />
@@ -30,7 +35,7 @@ export default function NotFoundPage() {
                     </Link>
 
                     <Link
-                        to="/contacts"
+                        to="/contact"
                         className="flex items-center gap-2 px-8 py-4 bg-white/5 border border-white/10 text-white rounded-xl font-medium text-lg hover:bg-white/10 transition-colors w-full sm:w-auto justify-center"
                     >
                         Контакти

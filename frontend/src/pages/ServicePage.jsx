@@ -1,6 +1,7 @@
 import { useParams, Link, useOutletContext } from 'react-router-dom';
 import { Phone, MessageSquare } from 'lucide-react';
 import { getStaticUrl } from '../services/api';
+import { Helmet } from 'react-helmet-async';
 
 export default function ServicePage() {
   const { slug } = useParams();
@@ -23,6 +24,20 @@ export default function ServicePage() {
 
   return (
     <div className="bg-primary pb-12 pt-20 lg:pt-24">
+      <Helmet>
+        <title>{service.seo_title || `${service.title} | Світ Валют`}</title>
+        {service.seo_description && (
+          <meta name="description" content={service.seo_description} />
+        )}
+        {service.seo_image && (
+          <meta property="og:image" content={getStaticUrl(service.seo_image)} />
+        )}
+        <meta property="og:title" content={service.seo_title || service.title} />
+        {service.seo_description && (
+          <meta property="og:description" content={service.seo_description} />
+        )}
+      </Helmet>
+
       {/* Hero Image - Full width on mobile, constrained on desktop */}
       {service.image_url && (
         <div className="w-full lg:max-w-6xl lg:mx-auto lg:px-8 mb-6 lg:mb-10">
@@ -37,7 +52,7 @@ export default function ServicePage() {
       <main className="max-w-4xl mx-auto px-4 lg:px-8 bg-primary">
 
         <h1 className="text-3xl lg:text-5xl font-bold mb-6 text-white leading-tight">
-          {service.title}
+          {service.seo_h1 || service.title}
         </h1>
 
         {/* Manager Contact Banner - Prominent in first screen */}
@@ -99,6 +114,14 @@ export default function ServicePage() {
             </Link>
           </div>
         </div>
+
+        {/* SEO Text Block */}
+        {service.seo_text && (
+          <div className="mt-16 text-sm text-text-secondary prose prose-sm prose-invert max-w-none">
+            {service.seo_h2 && <h2 className="text-xl font-bold text-white mb-4">{service.seo_h2}</h2>}
+            <div dangerouslySetInnerHTML={{ __html: service.seo_text }} />
+          </div>
+        )}
       </main>
     </div>
   );
