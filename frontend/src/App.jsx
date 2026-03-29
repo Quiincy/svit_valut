@@ -34,10 +34,11 @@ const ServicePage = lazy(() => import('./pages/ServicePage'));
 const ContactsPage = lazy(() => import('./pages/ContactsPage'));
 const FAQPage = lazy(() => import('./pages/FAQPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const SeoPageView = lazy(() => import('./pages/SeoPageView'));
 
 import {
   currencyService, branchService, settingsService, faqService, servicesService,
-  reservationService, authService, restoreAuth, clearAuthCredentials, seoService
+  reservationService, authService, restoreAuth, clearAuthCredentials, seoService, seoPageService
 } from './services/api';
 
 // Minimal loading fallback
@@ -63,6 +64,7 @@ function PublicLayout() {
   const [currencyInfoMap, setCurrencyInfoMap] = useState({});
   const [headerCurrencies, setHeaderCurrencies] = useState([]);
   const [seoList, setSeoList] = useState([]);
+  const [seoPages, setSeoPages] = useState([]);
   const [ratesUpdated, setRatesUpdated] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -400,7 +402,7 @@ function PublicLayout() {
   const fetchData = async (isBackground = false) => {
     try {
       if (!isBackground) setLoading(true);
-      const [currenciesRes, branchesRes, settingsRes, faqRes, servicesRes, crossRatesRes, ratesRes, currInfoRes, seoRes] = await Promise.all([
+      const [currenciesRes, branchesRes, settingsRes, faqRes, servicesRes, crossRatesRes, ratesRes, currInfoRes, seoRes, seoPagesRes] = await Promise.all([
         currencyService.getAll(),
         branchService.getAll(),
         settingsService.get(),
@@ -410,10 +412,12 @@ function PublicLayout() {
         currencyService.getRates(),
         currencyService.getAllCurrencyInfo().catch(() => ({ data: {} })),
         seoService.getPublicAll().catch(() => ({ data: [] })),
+        seoPageService.getPublicAll().catch(() => ({ data: [] })),
       ]);
 
       setCurrencyInfoMap(currInfoRes.data || {});
       setSeoList(seoRes.data || []);
+      setSeoPages(seoPagesRes.data || []);
 
       const allCurrs = currenciesRes.data;
       const currencyMeta = {};
@@ -888,7 +892,7 @@ function PublicLayout() {
       setGetCurrency(uah);
       setSellCurrency(defaultFx);
       setBuyCurrency(defaultFx);
-      setGiveAmount(1000);
+      setGiveAmount(1000); // Only reset on explicit 'reset' action
       setPresetAction(null);
       navigate('/');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -909,6 +913,7 @@ function PublicLayout() {
     setBuyCurrency(targetCurrency);
     setSellCurrency(targetCurrency);
 
+    // GiveAmount reset removed here so the form maintains its state
     setPresetAction({ type, currency: targetCurrency, timestamp: Date.now() });
 
     // Check if current path is already the correct SEO URL for this currency/mode
@@ -961,6 +966,7 @@ function PublicLayout() {
     branchCurrencyMap,
     currencyInfoMap,
     seoList,
+    seoPages,
     ratesUpdated,
     giveAmount, setGiveAmount,
     giveCurrency, setGiveCurrency,
@@ -980,7 +986,7 @@ function PublicLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent">
+    <div className="min-h-screen bg-transparent flex flex-col">
       <Header
         onMenuToggle={() => setMobileMenuOpen(true)}
         onOpenChat={handleOpenChatAction}
@@ -1003,11 +1009,9 @@ function PublicLayout() {
         />
       </Suspense>
 
-      <main>
+      <main className="flex-grow flex flex-col">
         <Outlet context={contextValue} />
       </main>
-
-
 
       {/* Global Homepage SEO section — before footer */}
       {pathname === '/' && settings?.homepage_seo_text && (
@@ -1124,6 +1128,7 @@ function HomePage() {
     crossRates,
     ratesUpdated,
     seoList,
+    seoPages,
     services,
     faqItems,
     loading,
@@ -1211,6 +1216,12 @@ function HomePage() {
   });
   if (slug && matchedService) {
     return <ServicePage />;
+  }
+
+  // Check if slug matches an SEO page
+  const matchedSeoPage = seoPages?.find(p => p.slug === slug);
+  if (slug && matchedSeoPage) {
+    return <SeoPageView />;
   }
 
   // White-list dedicated React Router paths so they don't get intercepted by the catch-all /:slug 404

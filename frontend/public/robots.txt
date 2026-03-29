@@ -3,5 +3,6 @@ Allow: /
 Disallow: /admin
 Disallow: /operator
 Disallow: /login
+Disallow: /panel
 
 Sitemap: https://mirvalut.com/sitemap.xml

@@ -159,6 +159,40 @@ async def admin_close_chat_session(session_id: str, user: models.User = Depends(
 UPLOAD_DIR = "static/uploads/chat"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+def validate_image_file(file: UploadFile):
+    """Validate uploaded file is a safe image"""
+    # 1. Check extension
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Дозволені лише зображення ({', '.join(ALLOWED_EXTENSIONS)})")
+
+    # 2. Check MIME type
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail="Невірний тип файлу. Дозволені лише зображення.")
+
+    # 3. Check file size (read content)
+    content = file.file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="Файл занадто великий (максимум 5 МБ)")
+
+    # 4. Check magic bytes (first bytes of real image files)
+    magic = content[:8]
+    is_jpeg = magic[:2] == b'\xff\xd8'
+    is_png = magic[:4] == b'\x89PNG'
+    is_gif = magic[:3] in (b'GIF', )
+    is_webp = magic[:4] == b'RIFF' and content[8:12] == b'WEBP' if len(content) > 12 else False
+
+    if not (is_jpeg or is_png or is_gif or is_webp):
+        raise HTTPException(status_code=400, detail="Файл не є справжнім зображенням")
+
+    # Reset file position for saving
+    file.file.seek(0)
+    return ext
+
 @router.post("/messages/image", response_model=ChatMessage)
 async def upload_chat_image_user(
     session_id: str = Form(...),
@@ -169,16 +203,16 @@ async def upload_chat_image_user(
     session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-        
-    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+
+    ext = validate_image_file(file)
     filename = f"{uuid.uuid4()}.{ext}"
     file_path = os.path.join(UPLOAD_DIR, filename)
-    
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
+
     image_url = f"/{file_path}"
-    
+
     new_msg = models.ChatMessage(
         session_id=session.id,
         sender="user",
@@ -186,14 +220,14 @@ async def upload_chat_image_user(
         image_url=image_url
     )
     db.add(new_msg)
-    
+
     session.last_message_at = datetime.now(timezone.utc)
     if session.status == models.ChatSessionStatus.CLOSED:
         session.status = models.ChatSessionStatus.ACTIVE
-        
+
     db.commit()
     db.refresh(new_msg)
-    
+
     if new_msg.created_at and new_msg.created_at.tzinfo is None:
         new_msg.created_at = new_msg.created_at.replace(tzinfo=timezone.utc)
     return new_msg
@@ -209,16 +243,16 @@ async def admin_upload_chat_image(
     session = db.query(models.ChatSession).filter(models.ChatSession.session_id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-        
-    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+
+    ext = validate_image_file(file)
     filename = f"{uuid.uuid4()}.{ext}"
     file_path = os.path.join(UPLOAD_DIR, filename)
-    
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
+
     image_url = f"/{file_path}"
-    
+
     new_msg = models.ChatMessage(
         session_id=session.id,
         sender="admin",
@@ -226,11 +260,12 @@ async def admin_upload_chat_image(
         image_url=image_url
     )
     db.add(new_msg)
-    
+
     session.last_message_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(new_msg)
-    
+
     if new_msg.created_at and new_msg.created_at.tzinfo is None:
         new_msg.created_at = new_msg.created_at.replace(tzinfo=timezone.utc)
     return new_msg
+

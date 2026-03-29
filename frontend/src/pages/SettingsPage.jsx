@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import {
   Save, Plus, Trash2, Edit2, X, Phone, Mail, Clock,
   MapPin, MessageSquare, Send, Globe, HelpCircle, Briefcase,
-  Users, Upload, Loader2
+  Users, Upload, Loader2, FileText
 } from 'lucide-react';
-import { settingsService, faqService, servicesService, branchService, adminService, seoService, getStaticUrl } from '../services/api';
+import { settingsService, faqService, servicesService, branchService, adminService, seoService, seoPageService, getStaticUrl } from '../services/api';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [editingSeo, setEditingSeo] = useState(null);
   const [message, setMessage] = useState(null);
   const [seoItems, setSeoItems] = useState([]);
+  const [seoPages, setSeoPages] = useState([]);
+  const [editingSeoPage, setEditingSeoPage] = useState(null);
 
   // Operators state
   const [users, setUsers] = useState([]);
@@ -76,7 +78,7 @@ export default function SettingsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [settingsRes, faqRes, servicesRes, branchesRes, usersRes, seoRes, currenciesRes] = await Promise.all([
+      const [settingsRes, faqRes, servicesRes, branchesRes, usersRes, seoRes, currenciesRes, seoPagesRes] = await Promise.all([
         settingsService.get(),
         faqService.getAll(),
         servicesService.getAll(),
@@ -84,6 +86,7 @@ export default function SettingsPage() {
         adminService.getUsers(),
         seoService.getAll(),
         adminService.getCurrencies(),
+        seoPageService.getAll().catch(() => ({ data: [] })),
       ]);
       setSettings(settingsRes.data);
       setFaqItems(faqRes.data);
@@ -92,6 +95,7 @@ export default function SettingsPage() {
       setUsers(usersRes.data);
       setSeoItems(seoRes.data);
       setCurrencies(currenciesRes?.data || []);
+      setSeoPages(seoPagesRes?.data || []);
     } catch (error) {
       console.error('Error fetching settings:', error);
     } finally {
@@ -283,6 +287,33 @@ export default function SettingsPage() {
     }
   };
 
+  // SEO Pages handlers
+  const handleSaveSeoPage = async (item) => {
+    try {
+      if (item.id) {
+        await seoPageService.update(item.id, item);
+      } else {
+        await seoPageService.create(item);
+      }
+      fetchData();
+      setEditingSeoPage(null);
+      showMessage('SEO сторінку збережено');
+    } catch (error) {
+      showMessage(error.response?.data?.detail || 'Помилка збереження', 'error');
+    }
+  };
+
+  const handleDeleteSeoPage = async (id) => {
+    if (!confirm('Видалити цю SEO сторінку?')) return;
+    try {
+      await seoPageService.delete(id);
+      fetchData();
+      showMessage('Видалено');
+    } catch (error) {
+      showMessage('Помилка видалення', 'error');
+    }
+  };
+
 
 
   if (loading) {
@@ -314,6 +345,7 @@ export default function SettingsPage() {
           { id: 'faq', label: 'FAQ', icon: HelpCircle },
           { id: 'services', label: 'Послуги', icon: Briefcase },
           { id: 'seo', label: 'SEO', icon: Globe },
+          { id: 'seo-pages', label: 'SEO Сторінки', icon: FileText },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1361,6 +1393,229 @@ export default function SettingsPage() {
                   </button>
                   <button
                     onClick={() => handleSaveSeo(editingSeo)}
+                    className="flex-1 py-3 bg-accent-yellow rounded-xl text-primary font-bold hover:opacity-90"
+                  >
+                    Зберегти
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SEO Pages Tab */}
+      {activeTab === 'seo-pages' && (
+        <div className="bg-primary-light rounded-2xl p-6 border border-white/10">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold">SEO Сторінки</h3>
+            <button
+              onClick={() => setEditingSeoPage({ slug: '', h1: '', h2: '', meta_title: '', meta_description: '', seo_text: '', image_url: '', is_active: true })}
+              className="flex items-center gap-2 px-4 py-2 bg-accent-yellow rounded-xl text-primary font-medium hover:opacity-90 transition-opacity"
+            >
+              <Plus className="w-4 h-4" />
+              Створити сторінку
+            </button>
+          </div>
+
+          {!editingSeoPage ? (
+            <div className="space-y-4">
+              {seoPages.map((page) => (
+                <div key={page.id} className="p-4 bg-primary rounded-xl border border-white/10 group">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="inline-block px-3 py-1 bg-white/5 rounded-lg text-sm font-mono text-accent-yellow">
+                          /{page.slug}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${page.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                          {page.is_active ? 'Активна' : 'Неактивна'}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-lg mb-1">{page.h1 || page.meta_title || 'Без назви'}</h4>
+                      <p className="text-sm text-text-secondary">{page.meta_description || 'Немає опису'}</p>
+                    </div>
+                    <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => setEditingSeoPage(page)}
+                        className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSeoPage(page.id)}
+                        className="p-2 bg-white/5 rounded-xl hover:bg-red-500/20 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {seoPages.length === 0 && (
+                <p className="text-center text-text-secondary py-8">Немає жодної SEO сторінки.</p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="p-6 bg-primary rounded-xl border border-white/10">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2">
+                    <label htmlFor="seopage_slug" className="block text-sm text-text-secondary mb-2">URL slug (наприклад: obmin-dolariv-kyiv)</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-text-secondary text-sm">/</span>
+                      <input id="seopage_slug"
+                        type="text"
+                        value={editingSeoPage.slug || ''}
+                        onChange={(e) => setEditingSeoPage({ ...editingSeoPage, slug: e.target.value.replace(/\s+/g, '-').toLowerCase() })}
+                        placeholder="obmin-dolariv-kyiv"
+                        className="flex-1 px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label htmlFor="seopage_meta_title" className="block text-sm text-text-secondary mb-2">Meta Title</label>
+                    <input id="seopage_meta_title"
+                      type="text"
+                      value={editingSeoPage.meta_title || ''}
+                      onChange={(e) => setEditingSeoPage({ ...editingSeoPage, meta_title: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label htmlFor="seopage_meta_desc" className="block text-sm text-text-secondary mb-2">Meta Description</label>
+                    <textarea id="seopage_meta_desc"
+                      value={editingSeoPage.meta_description || ''}
+                      onChange={(e) => setEditingSeoPage({ ...editingSeoPage, meta_description: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="seopage_h1" className="block text-sm text-text-secondary mb-2">H1 Заголовок</label>
+                    <input id="seopage_h1"
+                      type="text"
+                      value={editingSeoPage.h1 || ''}
+                      onChange={(e) => setEditingSeoPage({ ...editingSeoPage, h1: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="seopage_h2" className="block text-sm text-text-secondary mb-2">H2 Заголовок</label>
+                    <input id="seopage_h2"
+                      type="text"
+                      value={editingSeoPage.h2 || ''}
+                      onChange={(e) => setEditingSeoPage({ ...editingSeoPage, h2: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-text-secondary mb-2">Зображення</label>
+                    <div className="flex gap-4 items-start">
+                      {editingSeoPage.image_url && (
+                        <div className="relative w-32 h-24 rounded-lg overflow-hidden border border-white/10">
+                          <img src={getStaticUrl(editingSeoPage.image_url)} alt="Preview" className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => setEditingSeoPage({ ...editingSeoPage, image_url: '' })}
+                            className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-500/80 rounded transition-colors"
+                            aria-label="Видалити зображення">
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <label className={`
+                          flex flex-col items-center justify-center w-full h-24
+                          border-2 border-dashed border-white/20 rounded-xl
+                          hover:border-accent-yellow hover:bg-white/5 transition-all
+                          cursor-pointer ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}
+                        `}>
+                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            {uploadingImage ? (
+                              <Loader2 className="w-6 h-6 text-accent-yellow animate-spin mb-2" />
+                            ) : (
+                              <Upload className="w-6 h-6 text-text-secondary mb-2" />
+                            )}
+                            <p className="text-xs text-text-secondary">
+                              {uploadingImage ? 'Завантаження...' : 'Натисніть для завантаження'}
+                            </p>
+                          </div>
+                          <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploadingImage(true);
+                            try {
+                              const res = await adminService.uploadImage(file);
+                              if (res.data && res.data.url) {
+                                setEditingSeoPage(prev => ({ ...prev, image_url: res.data.url }));
+                              }
+                            } catch (error) {
+                              showMessage('Помилка завантаження зображення', 'error');
+                            } finally {
+                              setUploadingImage(false);
+                            }
+                          }} aria-label="Завантажити зображення" />
+                        </label>
+                        <input
+                          type="text"
+                          value={editingSeoPage.image_url || ''}
+                          onChange={(e) => setEditingSeoPage({ ...editingSeoPage, image_url: e.target.value })}
+                          placeholder="Або вставте посилання (URL) на зображення"
+                          aria-label="URL зображення"
+                          className="w-full mt-2 px-4 py-2 text-sm bg-white/5 rounded-xl border border-white/10 focus:border-accent-yellow focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-text-secondary mb-2">SEO Текст</label>
+                    <div className="seo-quill-editor bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                      <ReactQuill
+                        theme="snow"
+                        value={editingSeoPage.seo_text || ''}
+                        onChange={(value) => setEditingSeoPage({ ...editingSeoPage, seo_text: value })}
+                        modules={{
+                          toolbar: [
+                            [{ header: [2, 3, false] }],
+                            ['bold', 'italic', 'underline'],
+                            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                            ['link', 'clean']
+                          ]
+                        }}
+                        className="text-white min-h-[200px]"
+                        placeholder="Текст SEO сторінки..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2 flex items-center gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingSeoPage.is_active ?? true}
+                        onChange={(e) => setEditingSeoPage({ ...editingSeoPage, is_active: e.target.checked })}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 accent-accent-yellow"
+                      />
+                      <span className="text-sm text-text-secondary">Активна сторінка</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setEditingSeoPage(null)}
+                    className="flex-1 py-3 bg-white/5 rounded-xl hover:bg-white/10 font-medium"
+                  >
+                    Скасувати
+                  </button>
+                  <button
+                    onClick={() => handleSaveSeoPage(editingSeoPage)}
                     className="flex-1 py-3 bg-accent-yellow rounded-xl text-primary font-bold hover:opacity-90"
                   >
                     Зберегти

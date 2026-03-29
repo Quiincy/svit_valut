@@ -229,6 +229,19 @@ class SeoMetadata(Base):
     text = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
 
+class SeoPage(Base):
+    __tablename__ = "seo_pages"
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String, unique=True, index=True, nullable=False)  # e.g. 'obmin-dolariv-kyiv'
+    h1 = Column(String, nullable=True)
+    h2 = Column(String, nullable=True)
+    meta_title = Column(String, nullable=True)
+    meta_description = Column(String, nullable=True)
+    seo_text = Column(Text, nullable=True)
+    image_url = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 class CrossRate(Base):
     __tablename__ = "cross_rates"
     id = Column(Integer, primary_key=True, index=True)

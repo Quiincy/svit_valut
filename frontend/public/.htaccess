@@ -23,7 +23,19 @@ RewriteEngine On
   </FilesMatch>
 </IfModule>
 
-# Роутинг React SPA (якщо файл не знайдено - віддаємо index.html)
+# Block indexing of admin/operator/login/panel pages
+<IfModule mod_headers.c>
+  <If "%{REQUEST_URI} =~ m#^/(admin|operator|login|panel)#">
+    Header set X-Robots-Tag "noindex, nofollow"
+  </If>
+</IfModule>
+
+# Forward API and static files to api.php proxy
+RewriteRule ^api/(.*)$ /api.php [L,QSA]
+RewriteRule ^static/(.*)$ /api.php [L,QSA]
+
+# SPA routing — route through index.php for proper 404 status codes
+# index.php checks routes_cache.json and returns HTTP 404 for unknown routes
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ /index.php [L]

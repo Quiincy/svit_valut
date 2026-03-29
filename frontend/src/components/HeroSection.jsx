@@ -48,7 +48,22 @@ export default function HeroSection({
   // React to header dropdown preset selections
   useEffect(() => {
     if (!presetAction) return;
-    const defaultAmount = '1000';
+    
+    // Check if user already entered an amount in the input fields
+    const currentSell = Number(sellInputValue.replace(/[^\d.]/g, '')) || 0;
+    const currentBuy = Number(buyInputValue.replace(/[^\d.]/g, '')) || 0;
+    
+    // Choose the active amount to preserve, or fallback to 1000
+    let targetAmount = 1000;
+    if (presetAction.type === 'sell' && currentSell > 0) targetAmount = currentSell;
+    else if (presetAction.type === 'buy' && currentBuy > 0) targetAmount = currentBuy;
+    else if (giveAmount > 0) {
+        // If we only have giveAmount (from UAH side), try to convert it roughly or just use 1000 if too complex
+        targetAmount = 1000;
+    }
+
+    const defaultAmount = targetAmount.toString();
+    
     if (presetAction.type === 'sell') {
       // User wants to SELL foreign currency
       setSellInputValue(defaultAmount);
@@ -350,8 +365,35 @@ export default function HeroSection({
     }
   }, [giveAmount, isSellMode, presetAction, buyInputValue, sellInputValue]);
 
+  // Use refs to track previous currency codes to avoid resetting inputs on rate updates
+  const prevCurrencyCodes = useRef({
+    sell: sellCurrency?.code,
+    buy: buyCurrency?.code,
+    mode: isSellMode ? 'sell' : 'buy'
+  });
+
   // Sync Global giveAmount with Local Inputs when Currency/Mode Changes
   useEffect(() => {
+    // Only recalculate if the actual currency selection changed, not on background rate updates
+    const currentMode = isSellMode ? 'sell' : 'buy';
+    const currencyChanged = 
+      prevCurrencyCodes.current.sell !== sellCurrency?.code ||
+      prevCurrencyCodes.current.buy !== buyCurrency?.code ||
+      prevCurrencyCodes.current.mode !== currentMode;
+
+    if (!currencyChanged && (sellInputValue || buyInputValue)) {
+      // If user typed something and currency hasn't changed, 
+      // just let the user's input stand (rates will recalculate dynamically elsewhere)
+      
+      // Update refs for next render
+      prevCurrencyCodes.current = {
+        sell: sellCurrency?.code,
+        buy: buyCurrency?.code,
+        mode: currentMode
+      };
+      return; 
+    }
+
     // Determine the best rate currency object to use
     // getAvailableBranches sorts them by best rate first!
     const { available } = getAvailableBranches();
@@ -369,7 +411,18 @@ export default function HeroSection({
       const rate = getEffectiveRate(activeCurrObj, num, 'sell');
       setGiveAmount(num * rate);
     }
-  }, [sellCurrency, buyCurrency, isSellMode, sellInputValue, buyInputValue, setGiveAmount, branchCurrencyMap, branches]);
+
+    // Update refs
+    prevCurrencyCodes.current = {
+      sell: sellCurrency?.code,
+      buy: buyCurrency?.code,
+      mode: currentMode
+    };
+
+  // Explicitly ignore branch updates modifying the ref objects unless activeBranch ID changes. 
+  // It's safer to just rely on sellCurrency/buyCurrency refs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sellCurrency, buyCurrency, isSellMode]);
 
 
 

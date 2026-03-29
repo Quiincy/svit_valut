@@ -51,7 +51,7 @@ echo ""
 read -p "🔄 Перезапустити сервер? (y/n): " RESTART
 if [ "$RESTART" = "y" ] || [ "$RESTART" = "Y" ]; then
     echo "   Перезапуск..."
-    $SSH_CMD "$SSH_HOST" "cd $REMOTE_DIR && chmod +x start.sh stop.sh restart.sh && ./restart.sh"
+    $SSH_CMD "$SSH_HOST" "cd $REMOTE_DIR && chmod +x start.sh stop.sh restart.sh && chmod -R +x frontend/node_modules/.bin/ && chmod +x frontend/node_modules/@esbuild/linux-x64/bin/esbuild && ./restart.sh"
     echo "✅ Сервер перезапущено!"
 else
     echo "ℹ️  Для перезапуску: $SSH_CMD $SSH_HOST 'cd $REMOTE_DIR && ./restart.sh'"

@@ -3311,6 +3311,85 @@ async def admin_delete_seo_metadata(seo_id: int, user: User = Depends(require_ad
     db.commit()
     return {"success": True}
 
+# ============== SEO PAGES (Standalone SEO Content Pages) ==============
+
+@app.get("/api/seo-pages", response_model=List[SeoPage])
+async def public_get_seo_pages(db: Session = Depends(get_db)):
+    """Public: get all active SEO pages."""
+    return db.query(models.SeoPage).filter(models.SeoPage.is_active == True).all()
+
+@app.get("/api/seo-pages/{slug}")
+async def public_get_seo_page(slug: str, db: Session = Depends(get_db)):
+    """Public: get a single SEO page by slug."""
+    page = db.query(models.SeoPage).filter(models.SeoPage.slug == slug, models.SeoPage.is_active == True).first()
+    if not page:
+        raise HTTPException(status_code=404, detail="SEO page not found")
+    return {
+        "id": page.id,
+        "slug": page.slug,
+        "h1": page.h1,
+        "h2": page.h2,
+        "meta_title": page.meta_title,
+        "meta_description": page.meta_description,
+        "seo_text": page.seo_text,
+        "image_url": page.image_url,
+        "is_active": page.is_active,
+        "created_at": page.created_at.isoformat() if page.created_at else None,
+    }
+
+@app.get("/api/admin/seo-pages", response_model=List[SeoPage])
+async def admin_get_seo_pages(user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin: get all SEO pages."""
+    return db.query(models.SeoPage).all()
+
+@app.post("/api/admin/seo-pages", response_model=SeoPage)
+async def admin_create_seo_page(item: SeoPageCreate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin: create a new SEO page."""
+    slug = item.slug.strip().strip('/')
+    existing = db.query(models.SeoPage).filter_by(slug=slug).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="SEO page with this slug already exists")
+    
+    data = item.dict()
+    data['slug'] = slug
+    new_page = models.SeoPage(**data)
+    db.add(new_page)
+    db.commit()
+    db.refresh(new_page)
+    return new_page
+
+@app.put("/api/admin/seo-pages/{page_id}", response_model=SeoPage)
+async def admin_update_seo_page(page_id: int, item: SeoPageUpdate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin: update an SEO page."""
+    page = db.query(models.SeoPage).filter(models.SeoPage.id == page_id).first()
+    if not page:
+        raise HTTPException(status_code=404, detail="SEO page not found")
+    
+    slug = item.slug.strip().strip('/')
+    dup = db.query(models.SeoPage).filter(models.SeoPage.slug == slug, models.SeoPage.id != page_id).first()
+    if dup:
+        raise HTTPException(status_code=400, detail="Another SEO page with this slug already exists")
+    
+    for key, value in item.dict(exclude_unset=True).items():
+        if key == 'slug':
+            setattr(page, key, slug)
+        else:
+            setattr(page, key, value)
+    
+    db.commit()
+    db.refresh(page)
+    return page
+
+@app.delete("/api/admin/seo-pages/{page_id}")
+async def admin_delete_seo_page(page_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin: delete an SEO page."""
+    page = db.query(models.SeoPage).filter(models.SeoPage.id == page_id).first()
+    if not page:
+        raise HTTPException(status_code=404, detail="SEO page not found")
+    db.delete(page)
+    db.commit()
+    return {"success": True}
+
 # ============== ADMIN CURRENCY MANAGEMENT ==============
 
 class CurrencyUpdate(BaseModel):

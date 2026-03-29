@@ -30,6 +30,16 @@ const formatKyivTime = (isoString) => {
 };
 
 export default function OperatorDashboard({ user, onLogout }) {
+  // Prevent indexing of operator pages
+  useEffect(() => {
+    document.title = 'Панель оператора | Світ Валют';
+    const meta = document.createElement('meta');
+    meta.name = 'robots';
+    meta.content = 'noindex, nofollow';
+    document.head.appendChild(meta);
+    return () => { document.head.removeChild(meta); };
+  }, []);
+
   const [activeTab, setActiveTab] = useState('reservations');
   const [dashboard, setDashboard] = useState(null);
   const [reservations, setReservations] = useState([]);

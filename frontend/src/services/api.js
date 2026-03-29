@@ -16,13 +16,20 @@ const getApiUrl = () => {
 // Helper to resolve static file URLs (images, etc.) through the API domain
 export const getStaticUrl = (path) => {
   if (!path) return null;
-  // Already a full URL (http/https) — return as-is
-  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  // Already a full URL (http/https/data) — return as-is
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+  
+  // Custom check: if the path lacks slashes at the start and contains a domain-like string (e.g. "imgur.com/xxx")
+  // we should assume it's an external URL that the user pasted without http://
+  if (!path.startsWith('/') && path.includes('.') && !path.includes('static/')) {
+    return 'https://' + path;
+  }
+
   // Relative path like /static/uploads/xxx.webp — prepend API domain
   if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL + path;
+    return import.meta.env.VITE_API_URL + (path.startsWith('/') ? path : '/' + path);
   }
-  return path;
+  return path.startsWith('/') ? path : '/' + path;
 };
 
 const API_BASE_URL = getApiUrl();
@@ -175,6 +182,15 @@ export const seoService = {
   create: (data) => api.post('/admin/seo', data),
   update: (id, data) => api.put(`/admin/seo/${id}`, data),
   delete: (id) => api.delete(`/admin/seo/${id}`),
+};
+
+export const seoPageService = {
+  getAll: () => api.get('/admin/seo-pages'),
+  getPublicAll: () => api.get('/seo-pages'),
+  getOne: (slug) => api.get(`/seo-pages/${slug}`),
+  create: (data) => api.post('/admin/seo-pages', data),
+  update: (id, data) => api.put(`/admin/seo-pages/${id}`, data),
+  delete: (id) => api.delete(`/admin/seo-pages/${id}`),
 };
 
 export const adminService = {

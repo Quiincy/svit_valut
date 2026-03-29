@@ -5,6 +5,16 @@ import { Home, ArrowRight } from 'lucide-react';
 export default function NotFoundPage() {
     useEffect(() => {
         document.title = "404 page not found";
+
+        // Tell search engines not to index this page
+        const meta = document.createElement('meta');
+        meta.name = 'robots';
+        meta.content = 'noindex, nofollow';
+        document.head.appendChild(meta);
+
+        return () => {
+            document.head.removeChild(meta);
+        };
     }, []);
 
     return (

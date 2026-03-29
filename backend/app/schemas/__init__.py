@@ -43,6 +43,30 @@ class SeoMetadata(SeoMetadataBase):
     class Config:
         from_attributes = True
 
+# ============== SEO PAGES ==============
+class SeoPageBase(BaseModel):
+    slug: str
+    h1: Optional[str] = None
+    h2: Optional[str] = None
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
+    seo_text: Optional[str] = None
+    image_url: Optional[str] = None
+    is_active: bool = True
+
+class SeoPageCreate(SeoPageBase):
+    pass
+
+class SeoPageUpdate(SeoPageBase):
+    pass
+
+class SeoPage(SeoPageBase):
+    id: int
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # ============== SITE SETTINGS ==============
 class SiteSettingsBase(BaseModel):
     company_name: str = "Світ Валют"

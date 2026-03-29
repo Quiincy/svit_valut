@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Lock, User, AlertCircle } from 'lucide-react';
 
 export default function LoginPage({ onLogin }) {
@@ -6,6 +6,16 @@ export default function LoginPage({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Prevent indexing of login page
+  useEffect(() => {
+    document.title = 'Вхід | Світ Валют';
+    const meta = document.createElement('meta');
+    meta.name = 'robots';
+    meta.content = 'noindex, nofollow';
+    document.head.appendChild(meta);
+    return () => { document.head.removeChild(meta); };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

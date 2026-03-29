@@ -46,10 +46,12 @@ nohup python -m uvicorn app.main:app \
     --host 127.0.0.1 \
     --port 8000 \
     --workers 2 \
-    > "$LOG_DIR/backend.log" 2>&1 &
+    > "$LOG_DIR/backend.log" 2>&1 < /dev/null &
 
-echo $! > "$PID_DIR/backend.pid"
-echo "   ✅ Backend запущено (PID: $(cat "$PID_DIR/backend.pid"))"
+BACKEND_PID=$!
+echo $BACKEND_PID > "$PID_DIR/backend.pid"
+disown $BACKEND_PID
+echo "   ✅ Backend запущено (PID: $BACKEND_PID)"
 
 cd "$PROJECT_DIR"
 

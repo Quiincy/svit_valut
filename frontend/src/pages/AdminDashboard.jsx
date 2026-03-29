@@ -50,6 +50,16 @@ const DEFAULT_BRANCHES = [
 ];
 
 export default function AdminDashboard({ user, onLogout }) {
+  // Prevent indexing of admin pages
+  useEffect(() => {
+    document.title = 'Адмін-панель | Світ Валют';
+    const meta = document.createElement('meta');
+    meta.name = 'robots';
+    meta.content = 'noindex, nofollow';
+    document.head.appendChild(meta);
+    return () => { document.head.removeChild(meta); };
+  }, []);
+
   const [activeTab, setActiveTab] = useState('rates');
   const [balancesBranchId, setBalancesBranchId] = useState(null);
   const [ratesSubTab, setRatesSubTab] = useState('base');
