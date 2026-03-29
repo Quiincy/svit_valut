@@ -178,7 +178,7 @@ export default function Footer({ settings }) {
 
         {/* Bottom Bar */}
         <div className="py-4 border-t border-white/10 text-center text-sm text-text-secondary">
-          <p>Політика конфіденційності</p>
+          <p><Link to="/privacy-policy" className="hover:text-accent-yellow transition-colors underline underline-offset-2">Політика конфіденційності</Link></p>
           <p className="mt-2">© {new Date().getFullYear()} {settings?.company_name || 'Світ Валют'}. Всі права захищено.</p>
         </div>
       </div>

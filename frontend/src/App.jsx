@@ -35,6 +35,7 @@ const ContactsPage = lazy(() => import('./pages/ContactsPage'));
 const FAQPage = lazy(() => import('./pages/FAQPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const SeoPageView = lazy(() => import('./pages/SeoPageView'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 
 import {
   currencyService, branchService, settingsService, faqService, servicesService,
@@ -1228,6 +1229,7 @@ function HomePage() {
   const dedicatedSPA_Routes = [
     'login', 'admin', 'operator', 'panel',
     'rates', 'services', 'contact', 'faq', 'articles',
+    'privacy-policy',
     contactsPath, faqPath, ratesPath
   ];
 
@@ -1424,6 +1426,7 @@ function App() {
             <Route path="contact" element={<ContactsPage />} />
             <Route path="faq" element={<FAQPage />} />
             <Route path="articles/:id" element={<FAQPage />} />
+            <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
             <Route path=":slug" element={<HomePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

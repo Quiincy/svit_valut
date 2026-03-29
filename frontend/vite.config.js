@@ -10,7 +10,7 @@ import path from 'path'
 function spaStatusPlugin() {
   const KNOWN_STATIC = [
     '/', '/rates', '/contact', '/contacts', '/faq', '/services',
-    '/login', '/panel', '/admin', '/operator',
+    '/login', '/panel', '/admin', '/operator', '/privacy-policy',
   ]
 
   // File extensions that are NOT SPA routes

@@ -27,7 +27,8 @@ $knownStaticRoutes = [
     '/обмен-',
     '/obmenyat-',
     '/obmen-',
-    '/obmenyat-'
+    '/obmenyat-',
+    '/privacy-policy'
 ];
 
 
